@@ -1,0 +1,17 @@
+# BẢO MẬT: Bỏ qua tất cả các file chứa biến môi trường ở bất kỳ đâu
+.env
+.env.*
+!.env.example
+
+# Bỏ qua thư mục thư viện (phòng trường hợp lỡ tay chạy npm install ở root)
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Bỏ qua các thư mục cấu hình của trình soạn thảo (VSCode, WebStorm)
+.vscode/
+.idea/
+
+# Bỏ qua các file rác do Hệ điều hành tự sinh ra
+.DS_Store
+Thumbs.db
