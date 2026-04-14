@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { CodeAuthDto, ChangePasswordAuthDto } from '@/auth/dto/create-auth.dto';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { User } from './schemas/user.schema';
@@ -20,7 +21,7 @@ export class UsersService {
     @InjectModel(User.name)
     private userModel: Model<User>,
     private mailerService: MailerService,
-  ) {}
+  ) { }
 
   //  Chỉ trả về true/false, KHÔNG throw error ở đây
   isEmailExist = async (email: string) => {
@@ -168,19 +169,133 @@ export class UsersService {
       codeExpired: dayjs().add(5, 'minutes').toDate(), // Code hết hạn sau 5 phút
     });
     //send email
-    this.mailerService.sendMail({
-      to: user.email, // list of receivers
-      subject: 'Kích hoạt tài khoản amit group ✔', // Subject line
-      template: 'register',
-      context: {
-        name : user?.name ?? user.email,
-        activationCode: user.codeId,
-      },
-    });
+    try {
+      await this.mailerService.sendMail({
+        to: user.email, // list of receivers
+        subject: 'Kích hoạt tài khoản amit group ✔', // Subject line
+        template: 'register',
+        context: {
+          name: user?.name ?? user.email,
+          activationCode: user.codeId,
+        },
+      });
+    } catch (error) {
+      console.error('Gửi email thất bại:', error.message);
+    }
     //trả ra phản hồi
     return {
       _id: user._id,
     };
   }
+
+  async handleActive(data: CodeAuthDto) {
+    //ham' findOne tra ve Oject
+    const user = await this.userModel.findOne({
+      _id: data._id,
+      codeId: data.code
+    })
+    if (!user) {
+      throw new BadRequestException(
+        `Code không chính xác hoặc đã hết hạn `,
+      );
+    }
+    //check expire code
+    const isBeforecheck = dayjs().isBefore(user.codeExpired);
+    if (isBeforecheck) {
+      await this.userModel.updateOne({
+        _id: data._id,
+        codeId: data.code
+      }, {
+        isActive: true
+      })
+    } else {
+      throw new BadRequestException(
+        `Code không chính xác hoặc đã hết hạn `,
+      );
+    }
+    return { isBeforecheck };
+  }
+
+  async retryActive(email: string) {
+    const user = await this.userModel.findOne({ email })
+    if (!user) {
+      throw new BadRequestException(
+        `Tài Khoản Không Tồn Tại`,
+      );
+    }
+    if (user.isActive) {
+      throw new BadRequestException(
+        `Tài Khoản Đã Được Kích Hoạt`,
+      );
+    }
+    const codeId = uuidv4();
+    //update user
+    await user.updateOne({
+      codeId: codeId,
+      codeExpired: dayjs().add(5, 'minutes').toDate(),
+    })
+    //send email
+    this.mailerService.sendMail({
+      to: user.email, // list of receivers
+      subject: 'Kích hoạt tài khoản amit group ', // Subject line
+      template: 'register',
+      context: {
+        name: user?.name ?? user.email,
+        activationCode: codeId,
+      },
+    });
+
+    return { _id: user._id }
+  }
+  async forgotPassword(email: string) {
+    const user = await this.userModel.findOne({ email });
+    if (!user) {
+      throw new BadRequestException(`Tài Khoản Không Tồn Tại`);
+    }
+
+    const codeId = uuidv4();
+    //update user
+    await user.updateOne({
+      codeId: codeId,
+      codeExpired: dayjs().add(5, 'minutes').toDate(),
+    });
+    
+    //send email
+    this.mailerService.sendMail({
+      to: user.email,
+      subject: 'Mã xác nhận đổi mật khẩu Amit Group',
+      template: 'forgot-password',
+      context: {
+        name: user?.name ?? user.email,
+        activationCode: codeId,
+      },
+    });
+
+    return { _id: user._id };
+  }
+
+  async changePassword(data: ChangePasswordAuthDto) {
+    const user = await this.userModel.findOne({
+      _id: data._id,
+      codeId: data.code
+    });
+    
+    if (!user) {
+      throw new BadRequestException(`Code không chính xác hoặc đã hết hạn`);
+    }
+    
+    const isBeforeCheck = dayjs().isBefore(user.codeExpired);
+    if (isBeforeCheck) {
+      const hashPassword = await hashPasswordHelper(data.password);
+      await user.updateOne({
+        password: hashPassword,
+        codeId: null,
+        codeExpired: null
+      });
+    } else {
+      throw new BadRequestException(`Code không chính xác hoặc đã hết hạn`);
+    }
+    
+    return { isBeforeCheck };
+  }
 }
- 

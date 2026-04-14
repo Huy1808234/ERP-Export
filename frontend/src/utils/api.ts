@@ -20,7 +20,7 @@ export const sendRequest = async <T>(props: IRequest) => { //type
     };
     if (useCredentials) options.credentials = "include";
 
-    if (queryParams) {
+    if (queryParams && Object.keys(queryParams).length > 0) {
         url = `${url}?${queryString.stringify(queryParams)}`;
     }
 
@@ -60,7 +60,7 @@ export const sendRequestFile = async <T>(props: IRequest) => { //type
     };
     if (useCredentials) options.credentials = "include";
 
-    if (queryParams) {
+    if (queryParams && Object.keys(queryParams).length > 0) {
         url = `${url}?${queryString.stringify(queryParams)}`;
     }
 

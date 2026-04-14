@@ -7,8 +7,10 @@ import { DownOutlined, SmileOutlined } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
 import { Dropdown, Space } from 'antd';
 import { useSession } from 'next-auth/react';
-const AdminHeader = () => {
-    const { data: session, status } = useSession();
+import { signOut } from 'next-auth/react';
+const AdminHeader = (props: any) => {
+    // const { data: session, status } = useSession();
+    const { session } = props;
     const { Header } = Layout;
     const { collapseMenu, setCollapseMenu } = useContext(AdminContext)!;
     console.log("data: ", session);
@@ -16,34 +18,15 @@ const AdminHeader = () => {
         {
             key: '1',
             label: (
-                <a target="_blank" rel="noopener noreferrer" href="https://www.antgroup.com">
-                    1st menu item
-                </a>
+                <span onClick={() => { }}>
+                    Settings
+                </span>
             ),
-        },
-        {
-            key: '2',
-            label: (
-                <a target="_blank" rel="noopener noreferrer" href="https://www.aliyun.com">
-                    2nd menu item (disabled)
-                </a>
-            ),
-            icon: <SmileOutlined />,
-            disabled: true,
-        },
-        {
-            key: '3',
-            label: (
-                <a target="_blank" rel="noopener noreferrer" href="https://www.luohanacademy.com">
-                    3rd menu item (disabled)
-                </a>
-            ),
-            disabled: true,
         },
         {
             key: '4',
             danger: true,
-            label: 'a danger item',
+            label: <span onClick={() => signOut()}>Logout</span>,
         },
     ];
 
@@ -73,7 +56,7 @@ const AdminHeader = () => {
                         style={{ color: "unset", lineHeight: "0 !important", marginRight: 20 }}
                     >
                         <Space>
-                            Welcome { session?.user?.name ?? ""}
+                            Welcome {session?.user?.email ?? ""}
                             <DownOutlined />
                         </Space>
                     </a>

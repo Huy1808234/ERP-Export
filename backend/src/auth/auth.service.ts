@@ -2,14 +2,14 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { UsersService } from '@/modules/users/users.service';
 import { JwtService } from '@nestjs/jwt';
 import { comparePasswordHelper } from '@/helpers/util';
-import { CreateAuthDto } from './dto/create-auth.dto';
+import { CreateAuthDto, CodeAuthDto, ChangePasswordAuthDto } from './dto/create-auth.dto';
 
 @Injectable()
 export class AuthService {
   constructor(
     private usersService: UsersService,
     private jwtService: JwtService,
-  ) {}
+  ) { }
 
   // Đã sửa đổi để nhận cả username hoặc email
   async validateUser(usernameOrEmail: string, pass: string): Promise<any> {
@@ -54,7 +54,23 @@ export class AuthService {
     };
   }
 
-  async register(registerDto: CreateAuthDto) {
+  async handleRegister(registerDto: CreateAuthDto) {
     return await this.usersService.handleRegister(registerDto);
+  }
+
+  async checkCode(data: CodeAuthDto) {
+    return await this.usersService.handleActive(data);
+  }
+
+  async retryActive(data: string) {
+    return await this.usersService.retryActive(data);
+  }
+
+  async forgotPassword(data: string) {
+    return await this.usersService.forgotPassword(data);
+  }
+
+  async changePassword(data: ChangePasswordAuthDto) {
+    return await this.usersService.changePassword(data);
   }
 }
