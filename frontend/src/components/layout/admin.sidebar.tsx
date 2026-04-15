@@ -6,17 +6,29 @@ import {
     MailOutlined,
     SettingOutlined,
     TeamOutlined,
+    BarcodeOutlined,
+    ApartmentOutlined,
 
 } from '@ant-design/icons';
 import React, { useContext } from 'react';
 import { AdminContext } from "@/library/admin.context";
 import type { MenuProps } from 'antd';
 import Link from 'next/link'
+import { usePathname } from 'next/navigation';
 
 type MenuItem = Required<MenuProps>['items'][number];
 const AdminSideBar = () => {
     const { Sider } = Layout;
     const { collapseMenu } = useContext(AdminContext)!;
+    const pathname = usePathname();
+
+    const selectedKey = pathname?.includes('/dashboard/product')
+        ? 'products'
+        : pathname?.includes('/dashboard/partner')
+            ? 'partners'
+        : pathname?.includes('/dashboard/user')
+            ? 'users'
+            : 'dashboard';
 
     const items: MenuItem[] = [
 
@@ -34,6 +46,16 @@ const AdminSideBar = () => {
                     key: "users",
                     label: <Link href={"/dashboard/user"}>Manage Users</Link>,
                     icon: <TeamOutlined />,
+                },
+                {
+                    key: "products",
+                    label: <Link href={"/dashboard/product"}>Manage Products</Link>,
+                    icon: <BarcodeOutlined />,
+                },
+                {
+                    key: "partners",
+                    label: <Link href={"/dashboard/partner"}>Manage Partners</Link>,
+                    icon: <ApartmentOutlined />,
                 },
                 {
                     key: 'sub1',
@@ -102,7 +124,7 @@ const AdminSideBar = () => {
 
             <Menu
                 mode="inline"
-                defaultSelectedKeys={['dashboard']}
+                selectedKeys={[selectedKey]}
                 items={items}
                 style={{ height: '100vh' }}
             />

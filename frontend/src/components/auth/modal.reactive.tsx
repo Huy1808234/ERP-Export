@@ -60,6 +60,25 @@ const ModalReactive = (props: any) => {
             });
         }
     }
+
+    const resendCode = async () => {
+        const res = await sendRequest<IBackendRes<any>>({
+            method: "POST",
+            url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/auth/retry-active`,
+            body: { email: useEmail }
+        })
+        if (res?.data) {
+            notification.success({
+                title: "Thành công",
+                description: "Mã kích hoạt mới đã được gửi vào email của bạn.",
+            });
+        } else {
+            notification.error({
+                title: "Có lỗi xảy ra",
+                description: res?.message,
+            });
+        }
+    }
     return (
         <>
             <Modal
@@ -130,9 +149,14 @@ const ModalReactive = (props: any) => {
                             </Form.Item>
 
                             <Form.Item>
-                                <Button type="primary" htmlType="submit">
-                                    Kích Hoạt
-                                </Button>
+                                <div style={{ display: 'flex', gap: '15px' }}>
+                                    <Button type="primary" htmlType="submit">
+                                        Kích Hoạt
+                                    </Button>
+                                    <Button onClick={resendCode} htmlType="button">
+                                        Gửi lại mã
+                                    </Button>
+                                </div>
                             </Form.Item>
                         </Form>
                     </>

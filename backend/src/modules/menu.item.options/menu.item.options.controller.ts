@@ -29,7 +29,7 @@ export class MenuItemOptionsController {
 
   @Get(':id')
   findOne(@Param('id') id: string) {
-    return this.menuItemOptionsService.findOne(+id);
+    return this.menuItemOptionsService.findOne(id);
   }
 
   @Patch(':id')
@@ -37,11 +37,11 @@ export class MenuItemOptionsController {
     @Param('id') id: string,
     @Body() updateMenuItemOptionDto: UpdateMenuItemOptionDto,
   ) {
-    return this.menuItemOptionsService.update(+id, updateMenuItemOptionDto);
+    return this.menuItemOptionsService.update(id, updateMenuItemOptionDto);
   }
 
   @Delete(':id')
   remove(@Param('id') id: string) {
-    return this.menuItemOptionsService.remove(+id);
+    return this.menuItemOptionsService.remove(id);
   }
 }

@@ -1,13 +1,15 @@
 services:
-  mongodb:
-    image: mongo:5.0.15
+  postgres:
+    image: postgres:15
+    container_name: mini-erp
     environment:
-      MONGO_INITDB_ROOT_USERNAME: root
-      MONGO_INITDB_ROOT_PASSWORD: 123456
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 123456
+      POSTGRES_DB: mini_erp
     ports:
-      - 27017:27017
+      - "5433:5432"
     volumes:
-      - mini_erp_data:/data/db
+      - mini_erp_pg_data:/var/lib/postgresql/data
 
 volumes:
-  mini_erp_data:
+  mini_erp_pg_data:

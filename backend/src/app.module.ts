@@ -4,10 +4,12 @@ import { AppService } from '@/app.service';
 import { UsersModule } from '@/modules/users/users.module';
 import { LikesModule } from '@/modules/likes/likes.module';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { MongooseModule } from '@nestjs/mongoose';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { MenuItemOptionsModule } from '@/modules/menu.item.options/menu.item.options.module';
 import { MenuItemsModule } from '@/modules/menu.items/menu.items.module';
 import { MenusModule } from '@/modules/menus/menus.module';
+import { PartnersModule } from '@/modules/partners/partners.module';
+import { ProductsModule } from '@/modules/products/products.module';
 import { OrderDetailModule } from '@/modules/order.detail/order.detail.module';
 import { OrdersModule } from '@/modules/orders/orders.module';
 import { RestaurantsModule } from '@/modules/restaurants/restaurants.module';
@@ -25,16 +27,25 @@ import { TransformInterceptor } from './core/transform.interceptor';
     MenuItemOptionsModule,
     MenuItemsModule,
     MenusModule,
+    PartnersModule,
+    ProductsModule,
     OrderDetailModule,
     OrdersModule,
     RestaurantsModule,
     ReviewsModule,
     AuthModule,
     ConfigModule.forRoot({ isGlobal: true }),
-    MongooseModule.forRootAsync({
+    TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({
-        uri: configService.get<string>('MONGODB_URI'),
+        type: 'postgres',
+        host: configService.get<string>('POSTGRES_HOST'),
+        port: configService.get<number>('POSTGRES_PORT'),
+        username: configService.get<string>('POSTGRES_USER'),
+        password: configService.get<string>('POSTGRES_PASSWORD'),
+        database: configService.get<string>('POSTGRES_DATABASE'),
+        autoLoadEntities: true,
+        synchronize: true,
       }),
       inject: [ConfigService],
     }),

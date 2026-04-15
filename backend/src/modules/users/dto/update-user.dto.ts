@@ -1,7 +1,7 @@
-import { IsEmail, IsMongoId, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { IsEmail, IsUUID, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 export class UpdateUserDto {
-  @IsMongoId({ message: 'ID Không Hợp Lệ' })
+  @IsUUID('all', { message: 'ID Không Hợp Lệ' })
   @IsNotEmpty({ message: 'ID Không Được Để Trống' })
   _id: string;
 
@@ -24,4 +24,11 @@ export class UpdateUserDto {
   @IsOptional()
   @IsString({ message: 'Image phải là chuỗi' })
   image?: string;
+
+  @IsOptional()
+  @IsString({ message: 'Role phải là chuỗi' })
+  role?: string;
+
+  @IsOptional()
+  isActive?: boolean;
 }

@@ -27,16 +27,16 @@ export class MenusController {
 
   @Get(':id')
   findOne(@Param('id') id: string) {
-    return this.menusService.findOne(+id);
+    return this.menusService.findOne(id);
   }
 
   @Patch(':id')
   update(@Param('id') id: string, @Body() updateMenuDto: UpdateMenuDto) {
-    return this.menusService.update(+id, updateMenuDto);
+    return this.menusService.update(id, updateMenuDto);
   }
 
   @Delete(':id')
   remove(@Param('id') id: string) {
-    return this.menusService.remove(+id);
+    return this.menusService.remove(id);
   }
 }
