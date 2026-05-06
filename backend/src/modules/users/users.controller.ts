@@ -11,8 +11,9 @@ import {
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
-import { Public } from '@/decorator/customize';
+import { Roles } from '@/decorator/customize';
 
+@Roles('ADMIN')
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
@@ -23,7 +24,6 @@ export class UsersController {
   }
 
   @Get()
-  @Public()
   async findAll(
     @Query() query: string,
     @Query('current') current: string,
@@ -42,6 +42,11 @@ export class UsersController {
   update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
     return this.usersService.update(id, updateUserDto);
   }
+  @Post('bulk-delete')
+  bulkRemove(@Body('ids') ids: string[]) {
+    return this.usersService.bulkRemove(ids);
+  }
+
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.usersService.remove(id);

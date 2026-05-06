@@ -1,0 +1,821 @@
+{
+  "Sidebar": {
+    "groups": {
+      "main": "SYSTEM",
+      "masterData": "MASTER DATA",
+      "sales": "SALES (O2C)",
+      "purchase": "PURCHASE (P2P)",
+      "logistics": "LOGISTICS",
+      "finance": "FINANCE & TRADE",
+      "admin": "ADMINISTRATION"
+    },
+    "items": {
+      "overview": "Overview",
+      "approvals": "Approvals",
+      "products": "Products",
+      "partners": "Partners",
+      "inventory": "Inventory",
+      "inventoryLedger": "Inventory Ledger",
+      "quotations": "Quotations",
+      "proformaInvoices": "Proforma Invoices",
+      "salesContracts": "Sales Contracts (O2C)",
+      "purchaseRequests": "Purchase Requests",
+      "purchaseOrders": "Purchase Orders (PO)",
+      "goodsReceipts": "Goods Receipts (GRN)",
+      "vendorInvoices": "Vendor Invoices",
+      "purchaseReturns": "Purchase Returns",
+      "threeWayMatching": "3-Way Matching",
+      "shipments": "Shipments & Booking",
+      "documents": "Documents & Files",
+      "reports": "Reports & Analytics",
+      "settings": "Settings",
+      "users": "Users",
+      "currencies": "Currencies",
+      "lc": "Letter of Credit (L/C)",
+      "paymentTT": "Payment (T/T, D/P, D/A)",
+      "finance": "Finance & Accounting"
+    }
+  },
+  "Header": {
+    "settings": "Settings",
+    "logout": "Logout",
+    "expandMenu": "Expand Menu",
+    "collapseMenu": "Collapse Menu",
+    "notifications": "Notifications",
+    "role": "ADMINISTRATOR"
+  },
+  "Auth": {
+    "login": {
+      "legend": "Enterprise Resource Planning (ERP) system specialized for export",
+      "fields": {
+        "username": {
+          "label": "Username (Email)",
+          "required": "Please input your email!"
+        },
+        "password": {
+          "label": "Password",
+          "required": "Please input your password!"
+        }
+      },
+      "forgotPassword": "Forgot password?",
+      "submit": "Login Now",
+      "backToHome": "Back to Home",
+      "noAccount": "Don't have an account?",
+      "registerLink": "Register Now",
+      "notifications": {
+        "failTitle": "Login Failed",
+        "successTitle": "Success",
+        "successDesc": "Welcome back!"
+      }
+    },
+    "register": {
+      "legend": "Create Account",
+      "fields": {
+        "name": {
+          "label": "Full Name"
+        },
+        "email": {
+          "label": "Email",
+          "required": "Please input your email!"
+        },
+        "password": {
+          "label": "Password",
+          "required": "Please input your password!"
+        }
+      },
+      "submit": "Register Now",
+      "backToHome": "Back to Home",
+      "hasAccount": "Already have an account?",
+      "loginLink": "Login Now"
+    }
+  },
+  "Dashboard": {
+    "title": "Executive Dashboard",
+    "subtitle": "Business Intelligence & Operation Control",
+    "exportReport": "Export Intelligence Report",
+    "revenue": "REVENUE",
+    "orders": "PURCHASE ORDERS (PO)",
+    "shipments": "ACTIVE SHIPMENTS",
+    "customers": "CUSTOMERS",
+    "lowStock": "LOW STOCK ALERTS",
+    "upcomingShipments": "UPCOMING SHIPMENTS",
+    "topPartners": "TOP PARTNERS",
+    "monthlySales": "MONTHLY SALES INTELLIGENCE",
+    "viewAll": "View All",
+    "reorder": "REORDER",
+    "refresh": "Refresh",
+    "settings": "Settings",
+    "upcoming": "Upcoming",
+    "expiringLC": "Expiring LC",
+    "buyer": "CUSTOMERS",
+    "supplier": "SUPPLIERS",
+    "analytics": "Analytics",
+    "vipBuyer": "VIP Buyer",
+    "keySupplier": "Key Supplier",
+    "purchaseTotal": "Purchase Total",
+    "supplyTotal": "Supply Total",
+    "upcomingShipments7D": "UPCOMING SHIPMENTS (7D)",
+    "inTransit": "In Transit",
+    "noShipments": "No shipments in the next 7 days",
+    "createNewShipment": "Create New Shipment",
+    "units": "Units",
+    "stockSafe": "Inventory Safe",
+    "stockOptimized": "All products are at optimal stock levels",
+    "charts": {
+      "revenueTitle": "Revenue Growth & Orders",
+      "revenue": "Revenue (million VND)",
+      "orders": "Orders"
+    },
+    "shipmentStatus": "Shipment Status",
+    "recentActivities": "Recent Activities",
+    "booked": "Booked",
+    "loading": "Loading",
+    "customs_cleared": "Customs Cleared",
+    "on_board": "On Board",
+    "arrived": "Arrived",
+    "closed": "Completed"
+  },
+  "PurchaseOrder": {
+    "title": "Purchase Order Management (PO)",
+    "description": "Comprehensive Procure-to-Pay (P2P) lifecycle: From purchase requests, vendor ordering to goods receipt & invoice matching.",
+    "isoStandard": "ISO STANDARD OPERATION",
+    "stats": {
+      "totalOrders": "TOTAL PURCHASE ORDERS",
+      "pendingReceipt": "PENDING RECEIPT",
+      "totalValue": "PURCHASE VALUE (VND)",
+      "completionRate": "COMPLETION RATE"
+    },
+    "filters": {
+      "searchPlaceholder": "Search by PO number...",
+      "statusPlaceholder": "Filter by status",
+      "refresh": "Refresh Data"
+    },
+    "status": {
+      "DRAFT": "Draft",
+      "SENT": "Sent to Vendor",
+      "PARTIAL_RECEIPT": "Partial Receipt",
+      "RECEIVED": "Fully Received",
+      "COMPLETED": "Completed",
+      "CANCELLED": "Cancelled"
+    },
+    "detail": {
+      "modalTitle": "Purchase Order Details",
+      "orderStatusLabel": "Order Status:",
+      "printTitle": "PURCHASE ORDER",
+      "poNumberLabel": "PO No.",
+      "vendorLabel": "Vendor",
+      "phoneLabel": "SĐT",
+      "orderDateLabel": "Order Date",
+      "expectedDeliveryLabel": "Expected Delivery (Est.)",
+      "currencyLabel": "Loại tiền tệ",
+      "prRefLabel": "Tham chiếu PR",
+      "itemsTitle": "Line Items Detail",
+      "subtotalLabel": "Subtotal (Excl. Tax)",
+      "vatLabel": "VAT Tax",
+      "totalLabel": "Total Amount",
+      "noteLabel": "Notes",
+      "closeBtn": "Close",
+      "printBtn": "Export PDF / Print",
+      "columns": {
+        "index": "NO.",
+        "product": "Product",
+        "qtyOrdered": "Qty Ordered",
+        "qtyReceived": "Received",
+        "unit": "Unit",
+        "unitPrice": "Unit Price",
+        "amount": "Amount"
+      }
+    },
+    "createFromPI": {
+      "modalTitle": "Create PO from Proforma Invoice",
+      "okText": "Confirm Create Purchase Order",
+      "cancelText": "Cancel",
+      "piInfoTitle": "Original PI Info:",
+      "customerLabel": "Customer:",
+      "totalPiLabel": "Total PI:",
+      "depositCollectedLabel": "Deposit Collected:",
+      "form": {
+        "supplierLabel": "Supplier (Vendor/Factory)",
+        "supplierRequired": "Please select a production factory!",
+        "supplierPlaceholder": "Select factory",
+        "currencyLabel": "Currency",
+        "depositPercentLabel": "% Deposit to Factory",
+        "deliveryDateLabel": "Expected Delivery Date",
+        "itemsDetailTitle": "Product Details (Purchase Price in {currency})",
+        "columnProduct": "Product",
+        "columnQty": "Qty",
+        "columnUnit": "Unit",
+        "columnPurchasePrice": "Purchase Price ({currency})",
+        "notesLabel": "Additional notes for factory",
+        "notesPlaceholder": "Requirements for packaging, pallets, labeling..."
+      },
+      "notifications": {
+        "rateError": "Exchange rate conversion error",
+        "createSuccess": "PO created successfully!",
+        "poNumber": "PO Number: {poNumber}",
+        "errorTitle": "An error occurred"
+      }
+    },
+    "steps": {
+      "draft": "Draft",
+      "ordered": "Ordered",
+      "receiving": "Receiving",
+      "received": "Received",
+      "completed": "Completed"
+    },
+    "table": {
+      "columns": {
+        "poNumber": "PO NO.",
+        "vendor": "VENDOR",
+        "orderDate": "ORDER DATE",
+        "expectedDelivery": "EXPECTED DELIVERY",
+        "totalAmount": "TOTAL AMOUNT",
+        "status": "STATUS",
+        "actions": "ACTIONS"
+      },
+      "totalCount": "Total {total} orders"
+    },
+    "tooltips": {
+      "viewDetail": "View details",
+      "sendOrder": "Send order",
+      "goodsReceipt": "Goods Receipt",
+      "createInvoice": "Create Invoice",
+      "threeWayMatching": "3-Way Matching"
+    },
+    "popconfirm": {
+      "deleteTitle": "Delete Purchase Order",
+      "deleteDesc": "This action cannot be undone. Continue?",
+      "okText": "Delete",
+      "cancelText": "Cancel"
+    },
+    "notifications": {
+      "fetchError": "Cannot load PO details",
+      "updateSuccess": "P2P status updated successfully",
+      "updateError": "Error updating status"
+    }
+  },
+  "PurchaseRequest": {
+    "title": "Purchase Request (PR)",
+    "description": "Consolidating procurement needs from all departments",
+    "createBtn": "Create New Request",
+    "filters": {
+      "searchPlaceholder": "Search by PR number...",
+      "statusPlaceholder": "Filter by status"
+    },
+    "modal": {
+      "titleView": "Request Details",
+      "titleEdit": "Update Request",
+      "titleCreate": "Create New Request",
+      "closeBtn": "Close",
+      "submitBtn": "Submit for Approval",
+      "cancelBtn": "Cancel",
+      "infoDivider": "BASIC INFORMATION",
+      "summaryDivider": "VALUE OVERVIEW",
+      "itemsDivider": "PRODUCT ITEMS DETAIL",
+      "form": {
+        "requestDate": "Request Date",
+        "expectedDate": "Expected Receipt Date",
+        "priority": "Priority",
+        "department": "Requesting Department",
+        "project": "Project / Cost Center",
+        "projectPlaceholder": "e.g. Export 2024, Marketing Q2...",
+        "purpose": "Purpose / Justification",
+        "purposePlaceholder": "Reason for purchasing items for work...",
+        "required": "Required",
+        "deptPlaceholder": "Select or enter department...",
+        "newDeptPlaceholder": "Add new department...",
+        "addBtn": "Add",
+        "datePlaceholder": "Select date",
+        "totalEstimated": "TOTAL ESTIMATED VALUE",
+        "itemCount": "Item Count:",
+        "requestor": "Requestor:",
+        "product": "Product",
+        "productPlaceholder": "Select product...",
+        "quantity": "Qty",
+        "unit": "Unit",
+        "unitPlaceholder": "PCS, KG...",
+        "estimatedPrice": "Estimated Price",
+        "lineSubtotal": "Subtotal:",
+        "addLineBtn": "Add new line item"
+      }
+    },
+    "departments": {
+      "KHO": "Warehouse",
+      "SANXUAT": "Production",
+      "MARKETING": "Marketing / Sales",
+      "HANHCHINH": "HR / Admin",
+      "KETOAN": "Accounting",
+      "KYTHUAT": "Technical / IT",
+      "NEW": " (New)"
+    },
+    "priorities": {
+      "LOW": "Low",
+      "MEDIUM": "Medium",
+      "HIGH": "High",
+      "URGENT": "Urgent"
+    },
+    "table": {
+      "columns": {
+        "prNumber": "PR NO.",
+        "date": "DATE",
+        "department": "DEPT",
+        "totalAmount": "TOTAL AMOUNT",
+        "status": "STATUS",
+        "createdBy": "REQUESTOR",
+        "actions": "ACTIONS"
+      }
+    },
+    "tooltips": {
+      "viewDetail": "View details",
+      "submitApproval": "Submit for Approval",
+      "edit": "Edit",
+      "delete": "Delete",
+      "approve": "Approve",
+      "createPO": "Create Purchase Order (PO)"
+    },
+    "popconfirm": {
+      "deleteTitle": "Confirm Delete",
+      "deleteContent": "Are you sure you want to delete this purchase request?",
+      "deleteOk": "Delete",
+      "deleteCancel": "Cancel"
+    },
+    "notifications": {
+      "addItemWarning": "Please add at least 1 item",
+      "createSuccess": "Purchase request created successfully",
+      "updateSuccess": "Request updated successfully",
+      "createPOSuccess": "Purchase Order (PO) created from this request",
+      "createPOError": "Error creating PO from PR",
+      "submitSuccess": "Approval request submitted successfully",
+      "submitError": "Error submitting for approval",
+      "deleteSuccess": "Request deleted successfully",
+      "deleteError": "Error deleting request",
+      "errorTitle": "Error",
+      "systemError": "System error"
+    },
+    "status": {
+      "DRAFT": "Draft",
+      "PENDING": "Pending Approval",
+      "APPROVED": "Approved",
+      "REJECTED": "Rejected",
+      "PO_CREATED": "PO Created",
+      "PARTIAL_PO": "Partial PO Created",
+      "COMPLETED": "Completed",
+      "CANCELLED": "Cancelled"
+    }
+  },
+  "GoodsReceipt": {
+    "title": "Goods Receipt (GRN)",
+    "description": "Recording goods received into warehouse from purchase orders",
+    "createBtn": "New Goods Receipt",
+    "filters": {
+      "searchPlaceholder": "Search by GRN number..."
+    },
+    "modal": {
+      "titleCreate": "Create Goods Receipt (GRN) from {poNumber}",
+      "okText": "Confirm Goods Receipt",
+      "cancelText": "Cancel",
+      "form": {
+        "receivedDate": "Received Date",
+        "receivedDateRequired": "Please select a date",
+        "note": "Receipt Notes",
+        "notePlaceholder": "Enter notes if any...",
+        "itemsDivider": "Goods Items Details",
+        "product": "Product",
+        "orderedQty": "Qty Ordered",
+        "receivedQty": "Qty Received",
+        "unit": "Unit",
+        "qtyRequired": "Input Qty",
+        "qtyNumberError": "Must be a number",
+        "qtyIntegerError": "Must be an integer",
+        "qtyMaxError": "Max: {max}",
+        "qtyPlaceholder": "Input Qty"
+      }
+    },
+    "table": {
+      "columns": {
+        "grNumber": "GRN NO.",
+        "poNumber": "PO NO.",
+        "date": "RECEIVED DATE",
+        "status": "STATUS",
+        "receivedBy": "RECEIVER",
+        "actions": "ACTIONS"
+      }
+    },
+    "status": {
+      "DRAFT": "Draft",
+      "COMPLETED": "Received",
+      "CANCELLED": "Cancelled"
+    },
+    "tooltips": {
+      "viewDetail": "View details"
+    },
+    "notifications": {
+      "fetchPODetailError": "Error loading PO details",
+      "noItemsWarning": "Warning",
+      "noItemsWarningDesc": "No goods items data to receive",
+      "createSuccess": "Goods receipt created successfully",
+      "createSuccessDesc": "Goods receipt {grnNumber} has been created.",
+      "grNumber": "Goods receipt {grNumber} has been created.",
+      "createSuccessGeneric": "Goods items data has been recorded successfully.",
+      "businessError": "Business error",
+      "businessErrorDesc": "Cannot create goods receipt",
+      "systemError": "System error",
+      "systemErrorDesc": "Please check your connection"
+    },
+    "poSelect": {
+      "modalTitle": "Select Purchase Order for Receipt",
+      "searchPlaceholder": "Search by PO number (e.g. PO-2026...)",
+      "columns": {
+        "poNumber": "PO NO.",
+        "vendor": "VENDOR",
+        "date": "ORDER DATE",
+        "actions": "ACTIONS"
+      },
+      "selectBtn": "Select"
+    },
+    "detail": {
+      "modalTitle": "Goods Receipt Details: {grnNumber}",
+      "receivedDate": "Received Date",
+      "poNumber": "PO NO.",
+      "receivedBy": "Receiver",
+      "status": "Status",
+      "note": "Notes",
+      "itemsDivider": "Goods Items List",
+      "columns": {
+        "product": "Product",
+        "qtyReceived": "Qty Received",
+        "unit": "Unit"
+      },
+      "statusLabels": {
+        "DRAFT": "Draft",
+        "COMPLETED": "Completed"
+      }
+    }
+  },
+  "VendorInvoice": {
+    "title": "Vendor Invoices",
+    "description": "Managing payables and payment invoices for suppliers",
+    "createBtn": "Record New Invoice",
+    "filters": {
+      "searchPlaceholder": "Search by invoice number..."
+    },
+    "table": {
+      "columns": {
+        "invoiceNumber": "INVOICE NO.",
+        "vendor": "VENDOR",
+        "poNumber": "PO NO.",
+        "totalAmount": "TOTAL AMOUNT",
+        "date": "INVOICE DATE",
+        "status": "STATUS",
+        "actions": "ACTIONS"
+      }
+    },
+    "status": {
+      "PENDING": "Pending Payment",
+      "PAID": "Paid",
+      "CANCELLED": "Cancelled"
+    },
+    "tooltips": {
+      "viewDetail": "View details"
+    },
+    "modal": {
+      "titleCreate": "Record Vendor Invoice from {poNumber}",
+      "okText": "Save Invoice",
+      "form": {
+        "invoiceNumber": "VAT Invoice No.",
+        "invoiceNumberPlaceholder": "Enter invoice number...",
+        "invoiceDate": "Invoice Date",
+        "totalAmount": "Total Amount (Excl. Tax)",
+        "taxAmount": "Tax Amount (VAT)",
+        "dueDate": "Due Date",
+        "note": "Notes",
+        "currency": "Currency"
+      }
+    },
+    "notifications": {
+      "fetchPODetailError": "Error loading PO details",
+      "createSuccess": "Vendor invoice recorded successfully",
+      "createError": "Error recording invoice"
+    },
+    "detail": {
+      "modalTitle": "Vendor Invoice Details: {invoiceNumber}",
+      "invoiceDate": "Invoice Date",
+      "poNumber": "PO NO.",
+      "vendor": "Vendor",
+      "amount": "Amount (Excl. Tax)",
+      "taxAmount": "Tax Amount (VAT)",
+      "totalAmount": "Total Amount",
+      "dueDate": "Due Date",
+      "status": "Status",
+      "note": "Notes"
+    },
+    "poSelect": {
+      "modalTitle": "Select Purchase Order for Invoice",
+      "searchPlaceholder": "Search by PO number...",
+      "columns": {
+        "poNumber": "PO NO.",
+        "vendor": "VENDOR",
+        "status": "STATUS",
+        "actions": "ACTIONS"
+      },
+      "selectBtn": "Select for Invoice"
+    }
+  },
+  "PurchaseReturn": {
+    "title": "Purchase Returns",
+    "description": "Manage returning defective or non-compliant goods to suppliers",
+    "createBtn": "Create Return Note",
+    "table": {
+      "columns": {
+        "returnNumber": "RETURN NO.",
+        "returnDate": "RETURN DATE",
+        "poNumber": "RELATED PO NO.",
+        "reason": "REASON",
+        "actions": "ACTIONS"
+      },
+      "tooltips": {
+        "viewDetail": "View details"
+      }
+    },
+    "modal": {
+      "titleCreate": "Create Supplier Return Note",
+      "okText": "Confirm Return",
+      "form": {
+        "returnDate": "Return Date",
+        "reason": "Reason for return",
+        "reasonPlaceholder": "e.g. Defective goods, incorrect specification...",
+        "itemsDivider": "Returned Items List",
+        "product": "Product",
+        "productPlaceholder": "Select product",
+        "quantity": "Qty",
+        "unit": "Unit",
+        "addLineBtn": "Add returned item"
+      },
+      "rules": {
+        "productRequired": "Please select product",
+        "qtyRequired": "Qty",
+        "unitRequired": "Unit"
+      }
+    },
+    "notifications": {
+      "createSuccess": "Return note created successfully",
+      "createError": "Error creating return note"
+    }
+  },
+  "ThreeWayMatching": {
+    "title": "3-Way Matching",
+    "description": "Control variance between Purchase Orders, Goods Receipts, and Vendor Invoices",
+    "stats": {
+      "matchedPO": "POs Matched with GRN",
+      "waitingInvoice": "Awaiting Invoices"
+    },
+    "ruleAlert": {
+      "title": "3-Way Matching Principle",
+      "description": "Payment validity: (1) PO Quantity = Actual Received Quantity (GRN) and (2) PO Unit Price = Vendor Invoice Unit Price."
+    },
+    "table": {
+      "columns": {
+        "po": "PURCHASE ORDER (PO)",
+        "poValue": "PO VALUE",
+        "matchingStatus": "MATCHING STATUS",
+        "actions": "ACTIONS"
+      },
+      "actionBtn": "Detail Matching",
+      "emptyText": "No purchase orders require matching"
+    },
+    "expand": {
+      "title": "Detailed Variance Analysis: {poNumber}",
+      "loading": "Loading matching data from system...",
+      "syncStatus": "Feature is synchronizing real-time data with warehouse..."
+    }
+  },
+  "Partner": {
+    "type": {
+      "CUSTOMER": "Customer (Buyer)",
+      "SUPPLIER": "Supplier (Vendor)",
+      "LOGISTICS": "Forwarder / Logistics"
+    },
+    "regions": {
+      "EU": "Europe (EU)",
+      "US": "United States (US)",
+      "ASEAN": "Southeast Asia (ASEAN)",
+      "APAC": "Asia-Pacific (APAC)",
+      "MIDDLE_EAST": "Middle East",
+      "OTHER": "Other Regions"
+    },
+    "paymentTerms": {
+      "TT": "Telegraphic Transfer (T/T)",
+      "LC": "Letter of Credit (L/C)",
+      "DP": "Documents against Payment (D/P)",
+      "DA": "Documents against Acceptance (D/A)",
+      "NET_30": "Net 30 (30 days after invoice)",
+      "NET_60": "Net 60 (60 days after invoice)",
+      "COD": "Cash on Delivery (COD)",
+      "PREPAID": "Prepaid (100% upfront)",
+      "GỐI ĐẦU": "Deferred Payment (Net on next order)"
+    },
+    "riskLevels": {
+      "LOW": "Low (Safe)",
+      "MEDIUM": "Medium",
+      "HIGH": "High (Risk)"
+    },
+    "form": {
+      "title": "Create New Partner",
+      "basicInfo": "BASIC INFORMATION",
+      "financeInfo": "FINANCE & PAYMENT TERMS",
+      "contactInfo": "CONTACT INFORMATION",
+      "fields": {
+        "name": "Partner Name (Company)",
+        "partnerType": "Partner Type",
+        "region": "Geographical Region",
+        "address": "Headquarters Address",
+        "taxCode": "Tax Code / VAT",
+        "defaultCurrency": "Default Currency",
+        "defaultPaymentTerm": "Default Payment Term",
+        "creditLimit": "Credit Limit",
+        "riskLevel": "Risk Level",
+        "contactName": "Primary Contact Person",
+        "email": "Contact Email",
+        "phone": "Phone Number",
+        "position": "Job Position"
+      }
+    }
+  },
+  "HomePage": {
+    "title": "Mini ERP System",
+    "description": "Optimal export business management solution",
+    "features": {
+      "inventory": "Real-time inventory",
+      "sales": "O2C Sales Process",
+      "purchase": "P2P Purchase Process",
+      "finance": "Accounting & Cashflow"
+    }
+  },
+  "Common": {
+    "add": "Add New",
+    "edit": "Edit",
+    "delete": "Delete",
+    "save": "Save",
+    "cancel": "Cancel",
+    "search": "Search",
+    "actions": "Actions",
+    "status": "Status",
+    "createdAt": "Created At",
+    "updatedAt": "Updated At",
+    "loading": "Loading...",
+    "noData": "No Data",
+    "confirmDelete": "Are you sure you want to delete?",
+    "success": "Success",
+    "error": "Error",
+    "warning": "Warning"
+  },
+  "Quotation": {
+    "status": {
+      "DRAFT": "Draft",
+      "SENT": "Sent",
+      "ACCEPTED": "Accepted",
+      "REJECTED": "Rejected",
+      "EXPIRED": "Expired"
+    }
+  },
+  "Incoterms": {
+    "EXW": "EXW — Ex Works",
+    "FOB": "FOB — Free On Board",
+    "CIF": "CIF — Cost, Insurance & Freight",
+    "CFR": "CFR — Cost & Freight",
+    "DAP": "DAP — Delivered At Place",
+    "DDP": "DDP — Delivered Duty Paid"
+  },
+  "ShipmentStatus": {
+    "BOOKED": "Booked",
+    "LOADING": "Loading",
+    "CUSTOMS_CLEARED": "Customs Cleared",
+    "ON_BOARD": "On Board",
+    "ARRIVED": "Arrived",
+    "CLOSED": "Closed"
+  },
+  "UOM": {
+    "PCS": "Pieces (PCS)",
+    "KGS": "Kgs",
+    "TONS": "Tons",
+    "CARTONS": "Cartons",
+    "BAGS": "Bags",
+    "BOXES": "Boxes",
+    "UNITS": "Units",
+    "SETS": "Sets"
+  },
+  "ShipmentDetail": {
+    "docs": {
+      "SALES_CONTRACT": "Sales Contract (SC)",
+      "COMMERCIAL_INVOICE": "Commercial Invoice (CI)",
+      "PACKING_LIST": "Packing List (PL)",
+      "BILL_OF_LADING": "Bill of Lading (B/L)",
+      "CERTIFICATE_OF_ORIGIN": "Certificate of Origin (C/O)",
+      "PHYTOSANITARY": "Phytosanitary Certificate"
+    },
+    "docStatus": {
+      "PENDING": "Pending",
+      "DONE": "Completed",
+      "NA": "N/A"
+    },
+    "contTypes": {
+      "20DC": "20ft Dry Container (20DC)",
+      "40DC": "40ft Dry Container (40DC)",
+      "40HC": "40ft High Cube (40HC)",
+      "LCL": "Less than Container Load (LCL)"
+    }
+  },
+  "ProductTable": {
+    "status": {
+      "ACTIVE": "ACTIVE",
+      "INACTIVE": "SUSPENDED"
+    },
+    "actions": {
+      "adjust": "Stock Adjustment",
+      "ledger": "View Stock Ledger",
+      "delete": "Permanent Delete"
+    }
+  },
+  "PaymentTerms": {
+    "TT_30_70_BL": "30% T/T Deposit, 70% against BL copy",
+    "TT_100_ADVANCE": "100% T/T in advance",
+    "LC_AT_SIGHT": "100% L/C at sight (Irrevocable)",
+    "TT_30_70_SHIPMENT": "30% T/T Deposit, 70% before shipment",
+    "CAD": "CAD — Giao chứng từ trả tiền",
+    "DP_AT_SIGHT": "D/P — Nhờ thu kèm chứng từ trả ngay",
+    "TT": "T/T (Telegraphic Transfer)"
+  },
+  "ShipmentTable": {
+    "title": "Shipments & Booking",
+    "description": "Track packing schedule, vessel booking and transportation"
+  },
+  "SalesContract": {
+    "title": "Sales Contract Management (O2C)",
+    "description": "Manage export contract lifecycle and trade terms",
+    "subtitle": "Automated State Machine Approval & Stock Reservation",
+    "stats": {
+      "totalValue": "Total Value"
+    },
+    "filters": {
+      "searchPlaceholder": "Search contracts...",
+      "advancedFilter": "Advanced Filter"
+    },
+    "buttons": {
+      "createNew": "CREATE NEW CONTRACT"
+    },
+    "table": {
+      "columns": {
+        "contract": "Contract",
+        "buyer": "Customer",
+        "value": "Value & Incoterm",
+        "status": "Status",
+        "actions": "Actions"
+      }
+    },
+    "status": {
+      "DRAFT": "Draft",
+      "CONFIRMED": "Confirmed",
+      "SHIPPED": "Shipped",
+      "PAID": "Paid",
+      "CANCELLED": "Cancelled"
+    },
+    "actions": {
+      "confirm": "APPROVE SC",
+      "ship": "SHIP OUT",
+      "view": "Detail",
+      "pdf": "Export PDF"
+    },
+    "messages": {
+      "fetchError": "Cannot load contract list",
+      "confirmSuccess": "Approved and stock reserved successfully",
+      "shipSuccess": "Shipment confirmed successfully",
+      "actionFailed": "Action failed",
+      "confirmTitle": "System will automatically RESERVE stock. Are you sure?",
+      "shipTitle": "Confirm shipment for this order?",
+      "confirmOk": "Approve Now",
+      "shipOk": "Ship Now",
+      "cancel": "Cancel"
+    },
+    "modal": {
+      "title": "Create New O2C Contract",
+      "contractNumber": "Contract Number",
+      "buyer": "Customer (Buyer)",
+      "incoterm": "Incoterms",
+      "currency": "Currency",
+      "rate": "Exchange Rate",
+      "logisticsDivider": "Logistics Costs (Auto-calculated based on Incoterm)",
+      "transport": "Domestic Transport",
+      "port": "Port Charges (THC...)",
+      "freight": "Sea Freight",
+      "insurance": "Insurance",
+      "itemsDivider": "Line Items List",
+      "product": "Product",
+      "quantity": "Quantity",
+      "price": "Unit Price",
+      "addBtn": "Add Product",
+      "preview": "Preview Incoterm Price",
+      "save": "Save Contract",
+      "success": "Contract created successfully!"
+    }
+  }
+}

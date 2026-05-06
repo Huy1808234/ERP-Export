@@ -3,7 +3,7 @@ import { IsEmail, IsUUID, IsNotEmpty, IsOptional, IsString } from 'class-validat
 export class UpdateUserDto {
   @IsUUID('all', { message: 'ID Không Hợp Lệ' })
   @IsNotEmpty({ message: 'ID Không Được Để Trống' })
-  _id: string;
+  id: string;
 
   @IsOptional()
   @IsString({ message: 'Name phải là chuỗi' })
@@ -26,8 +26,8 @@ export class UpdateUserDto {
   image?: string;
 
   @IsOptional()
-  @IsString({ message: 'Role phải là chuỗi' })
-  role?: string;
+  @IsString({ message: 'RoleId phải là chuỗi' })
+  roleId?: string;
 
   @IsOptional()
   isActive?: boolean;

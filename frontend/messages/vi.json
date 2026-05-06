@@ -1,0 +1,821 @@
+{
+  "Sidebar": {
+    "groups": {
+      "main": "HỆ THỐNG",
+      "masterData": "DANH MỤC GỐC",
+      "sales": "BÁN HÀNG (O2C)",
+      "purchase": "MUA HÀNG (P2P)",
+      "logistics": "GIAO NHẬN & LOGISTICS",
+      "finance": "TÀI CHÍNH & THANH TOÁN",
+      "admin": "QUẢN TRỊ"
+    },
+    "items": {
+      "overview": "Tổng quan",
+      "approvals": "Chờ Phê Duyệt",
+      "products": "Sản phẩm",
+      "partners": "Đối tác",
+      "inventory": "Kho hàng",
+      "inventoryLedger": "Sổ nhật ký kho",
+      "quotations": "Báo giá",
+      "proformaInvoices": "Hóa đơn (PI)",
+      "salesContracts": "Hợp đồng (O2C)",
+      "purchaseRequests": "Yêu cầu mua hàng",
+      "purchaseOrders": "Đơn đặt hàng (PO)",
+      "goodsReceipts": "Nhập kho (GRN)",
+      "vendorInvoices": "Hóa đơn mua",
+      "purchaseReturns": "Trả hàng NCC",
+      "threeWayMatching": "Đối chiếu 3 bên",
+      "shipments": "Lô hàng & Booking",
+      "documents": "Chứng từ & File",
+      "reports": "Báo cáo & Phân tích",
+      "settings": "Cài đặt hệ thống",
+      "users": "Người dùng",
+      "currencies": "Tiền tệ",
+      "lc": "Thư tín dụng (L/C)",
+      "paymentTT": "Thanh toán (T/T, D/P, D/A)",
+      "finance": "Tài chính & Kế toán"
+    }
+  },
+  "Header": {
+    "settings": "Cài đặt",
+    "logout": "Đăng xuất",
+    "expandMenu": "Mở rộng menu",
+    "collapseMenu": "Thu gọn menu",
+    "notifications": "Thông báo",
+    "role": "QUẢN TRỊ VIÊN"
+  },
+  "Auth": {
+    "login": {
+      "legend": "Hệ thống quản lý doanh nghiệp (ERP) chuyên dụng cho xuất khẩu",
+      "fields": {
+        "username": {
+          "label": "Tài khoản (Email)",
+          "required": "Vui lòng nhập email!"
+        },
+        "password": {
+          "label": "Mật khẩu",
+          "required": "Vui lòng nhập mật khẩu!"
+        }
+      },
+      "forgotPassword": "Quên mật khẩu?",
+      "submit": "Đăng nhập ngay",
+      "backToHome": "Quay lại trang chủ",
+      "noAccount": "Chưa có tài khoản?",
+      "registerLink": "Đăng ký ngay",
+      "notifications": {
+        "failTitle": "Đăng nhập thất bại",
+        "successTitle": "Thành công",
+        "successDesc": "Chào mừng bạn quay trở lại!"
+      }
+    },
+    "register": {
+      "legend": "Đăng ký tài khoản",
+      "fields": {
+        "name": {
+          "label": "Họ và tên"
+        },
+        "email": {
+          "label": "Email",
+          "required": "Vui lòng nhập email!"
+        },
+        "password": {
+          "label": "Mật khẩu",
+          "required": "Vui lòng nhập mật khẩu!"
+        }
+      },
+      "submit": "Đăng ký ngay",
+      "backToHome": "Quay lại trang chủ",
+      "hasAccount": "Đã có tài khoản?",
+      "loginLink": "Đăng nhập ngay"
+    }
+  },
+  "Dashboard": {
+    "title": "Bảng Điều Khiển Quản Trị",
+    "subtitle": "Phân Tích Kinh Doanh & Kiểm Soát Vận Hành",
+    "exportReport": "Xuất Báo Cáo Phân Tích",
+    "revenue": "DOANH THU",
+    "orders": "ĐƠN MUA (PO)",
+    "shipments": "VẬN ĐƠN LIVE",
+    "customers": "KHÁCH HÀNG",
+    "lowStock": "CẢNH BÁO TỒN KHO THẤP",
+    "upcomingShipments": "LÔ HÀNG SẮP TỚI",
+    "topPartners": "ĐỐI TÁC HÀNG ĐẦU",
+    "monthlySales": "PHÂN TÍCH DOANH SỐ HÀNG THÁNG",
+    "viewAll": "Xem tất cả",
+    "reorder": "ĐẶT HÀNG LẠI",
+    "refresh": "Làm mới",
+    "settings": "Cài đặt",
+    "upcoming": "Sắp tới",
+    "expiringLC": "LC sắp hết hạn",
+    "buyer": "KHÁCH HÀNG",
+    "supplier": "NHÀ CUNG CẤP",
+    "analytics": "Phân tích",
+    "vipBuyer": "Khách hàng VIP",
+    "keySupplier": "NCC Chiến lược",
+    "purchaseTotal": "Tổng mua",
+    "supplyTotal": "Tổng cung",
+    "upcomingShipments7D": "VẬN ĐƠN SẮP TỚI (7D)",
+    "inTransit": "Đang vận chuyển",
+    "noShipments": "Không có vận đơn trong 7 ngày tới",
+    "createNewShipment": "Tạo vận đơn mới",
+    "units": "Đơn vị",
+    "stockSafe": "Tồn kho an toàn",
+    "stockOptimized": "Tất cả sản phẩm đều đạt ngưỡng tối ưu",
+    "charts": {
+      "revenueTitle": "Tăng trưởng doanh thu & Đơn hàng",
+      "revenue": "Doanh thu (triệu VND)",
+      "orders": "Đơn hàng"
+    },
+    "shipmentStatus": "Trạng thái vận chuyển",
+    "recentActivities": "Hoạt động gần đây",
+    "booked": "Đã đặt chỗ",
+    "loading": "Đang đóng hàng",
+    "customs_cleared": "Đã thông quan",
+    "on_board": "Tàu đã chạy",
+    "arrived": "Đã cập cảng",
+    "closed": "Hoàn tất"
+  },
+  "PurchaseOrder": {
+    "title": "Quản Lý Thu Mua & Đơn Đặt Hàng (PO)",
+    "description": "Quản lý toàn diện chu kỳ Procure-to-Pay (P2P): Từ yêu cầu mua hàng, đặt hàng NCC đến nhập kho & đối soát quyết toán.",
+    "isoStandard": "QUY TRÌNH VẬN HÀNH CHUẨN ISO",
+    "stats": {
+      "totalOrders": "TỔNG ĐƠN MUA",
+      "pendingReceipt": "ĐANG CHỜ NHẬN HÀNG",
+      "totalValue": "GIÁ TRỊ THU MUA (VND)",
+      "completionRate": "TỶ LỆ HOÀN TẤT"
+    },
+    "filters": {
+      "searchPlaceholder": "Tìm theo số PO...",
+      "statusPlaceholder": "Lọc trạng thái",
+      "refresh": "Làm mới dữ liệu"
+    },
+    "status": {
+      "DRAFT": "Bản nháp",
+      "SENT": "Đã gửi NCC",
+      "PARTIAL_RECEIPT": "Nhận một phần",
+      "RECEIVED": "Đã nhận đủ",
+      "COMPLETED": "Hoàn tất",
+      "CANCELLED": "Đã hủy"
+    },
+    "detail": {
+      "modalTitle": "Chi tiết Đơn Đặt Hàng",
+      "orderStatusLabel": "Trạng thái đơn hàng:",
+      "printTitle": "ĐƠN ĐẶT HÀNG (PURCHASE ORDER)",
+      "poNumberLabel": "Số PO",
+      "vendorLabel": "Nhà cung cấp",
+      "phoneLabel": "SĐT",
+      "orderDateLabel": "Ngày đặt hàng",
+      "expectedDeliveryLabel": "Ngày giao (Dự kiến)",
+      "currencyLabel": "Loại tiền tệ",
+      "prRefLabel": "Tham chiếu PR",
+      "itemsTitle": "Chi Tiết Hàng Hóa",
+      "subtotalLabel": "Tổng tiền chưa thuế:",
+      "vatLabel": "Thuế VAT:",
+      "totalLabel": "Tổng cộng:",
+      "noteLabel": "Ghi chú:",
+      "closeBtn": "Đóng",
+      "printBtn": "Xuất PDF / In",
+      "columns": {
+        "index": "STT",
+        "product": "Sản phẩm",
+        "qtyOrdered": "SL Đặt",
+        "qtyReceived": "Đã nhận",
+        "unit": "ĐV",
+        "unitPrice": "Đơn giá",
+        "amount": "Thành tiền"
+      }
+    },
+    "createFromPI": {
+      "modalTitle": "Tạo Purchase Order (PO) Từ Hóa Đơn Chiếu Lệ",
+      "okText": "Xác nhận tạo Purchase Order",
+      "cancelText": "Hủy",
+      "piInfoTitle": "Thông tin PI gốc:",
+      "customerLabel": "Khách hàng:",
+      "totalPiLabel": "Tổng PI:",
+      "depositCollectedLabel": "Đã thu cọc:",
+      "form": {
+        "supplierLabel": "Nhà cung cấp (Supplier/Xưởng)",
+        "supplierRequired": "Vui lòng chọn xưởng sản xuất!",
+        "supplierPlaceholder": "Chọn xưởng",
+        "currencyLabel": "Tiền tệ",
+        "depositPercentLabel": "% Cọc cho xưởng",
+        "deliveryDateLabel": "Ngày giao (Dự kiến)",
+        "itemsDetailTitle": "Chi tiết hàng hóa (Đơn giá theo {currency})",
+        "columnProduct": "Sản phẩm",
+        "columnQty": "SL",
+        "columnUnit": "Đơn vị",
+        "columnPurchasePrice": "Giá nhập ({currency})",
+        "notesLabel": "Ghi chú thêm cho xưởng",
+        "notesPlaceholder": "Yêu cầu về bao bì, pallet, dán tem nhãn..."
+      },
+      "notifications": {
+        "rateError": "Lỗi quy đổi tỷ giá",
+        "createSuccess": "Tạo PO thành công!",
+        "poNumber": "Số PO: {poNumber}",
+        "errorTitle": "Có lỗi xảy ra"
+      }
+    },
+    "steps": {
+      "draft": "Nháp",
+      "ordered": "Đã đặt",
+      "receiving": "Đang nhận",
+      "received": "Đã nhận",
+      "completed": "Hoàn tất"
+    },
+    "table": {
+      "columns": {
+        "poNumber": "SỐ PO",
+        "vendor": "NHÀ CUNG CẤP",
+        "orderDate": "NGÀY ĐẶT",
+        "expectedDelivery": "DỰ KIẾN GIAO",
+        "totalAmount": "TỔNG TIỀN",
+        "status": "TRẠNG THÁI",
+        "actions": "THAO TÁC"
+      },
+      "totalCount": "Tổng cộng {total} đơn hàng"
+    },
+    "tooltips": {
+      "viewDetail": "Xem chi tiết",
+      "sendOrder": "Gửi đơn hàng",
+      "goodsReceipt": "Nhập kho",
+      "createInvoice": "Tạo hóa đơn",
+      "threeWayMatching": "Đối soát 3 chiều"
+    },
+    "popconfirm": {
+      "deleteTitle": "Xóa đơn hàng",
+      "deleteDesc": "Thao tác này không thể hoàn tác. Tiếp tục?",
+      "okText": "Xóa",
+      "cancelText": "Hủy"
+    },
+    "notifications": {
+      "fetchError": "Không thể tải chi tiết PO",
+      "updateSuccess": "Cập nhật trạng thái P2P thành công",
+      "updateError": "Lỗi cập nhật trạng thái"
+    }
+  },
+  "PurchaseRequest": {
+    "title": "Yêu Cầu Mua Hàng (PR)",
+    "description": "Tập hợp các nhu cầu mua sắm vật tư từ các bộ phận",
+    "createBtn": "Tạo Yêu Cầu Mới",
+    "filters": {
+      "searchPlaceholder": "Tìm theo số YCMH...",
+      "statusPlaceholder": "Lọc trạng thái"
+    },
+    "modal": {
+      "titleView": "Chi Tiết Yêu Cầu",
+      "titleEdit": "Cập Nhật Yêu Cầu",
+      "titleCreate": "Tạo Yêu Cầu Mới",
+      "closeBtn": "Đóng",
+      "submitBtn": "Gửi phê duyệt",
+      "cancelBtn": "Hủy bỏ",
+      "infoDivider": "THÔNG TIN CƠ BẢN",
+      "summaryDivider": "TỔNG QUAN GIÁ TRỊ",
+      "itemsDivider": "CHI TIẾT DANH MỤC HÀNG HÓA",
+      "form": {
+        "requestDate": "Ngày yêu cầu",
+        "expectedDate": "Ngày mong muốn nhận",
+        "priority": "Độ ưu tiên",
+        "department": "Bộ phận yêu cầu",
+        "project": "Dự án / Trung tâm chi phí",
+        "projectPlaceholder": "VD: Dự án Export 2024, Marketing Q2...",
+        "purpose": "Mục đích mua hàng / Giải trình",
+        "purposePlaceholder": "Lý do cần mua hàng phục vụ công việc...",
+        "required": "Bắt buộc",
+        "deptPlaceholder": "Chọn hoặc nhập phòng ban...",
+        "newDeptPlaceholder": "Thêm phòng ban mới...",
+        "addBtn": "Thêm",
+        "datePlaceholder": "Chọn ngày",
+        "totalEstimated": "TỔNG CỘNG TẠM TÍNH",
+        "itemCount": "Số lượng mặt hàng:",
+        "requestor": "Người yêu cầu:",
+        "product": "Sản phẩm",
+        "productPlaceholder": "Chọn sản phẩm...",
+        "quantity": "Số lượng",
+        "unit": "Đơn vị",
+        "unitPlaceholder": "PCS, KG...",
+        "estimatedPrice": "Giá dự kiến",
+        "lineSubtotal": "Thành tiền:",
+        "addLineBtn": "Thêm dòng hàng mới"
+      }
+    },
+    "departments": {
+      "KHO": "Kho (Warehouse)",
+      "SANXUAT": "Sản xuất (Production)",
+      "MARKETING": "Marketing / Sales",
+      "HANHCHINH": "Hành chính / Nhân sự (HR)",
+      "KETOAN": "Kế toán (Accounting)",
+      "KYTHUAT": "Kỹ thuật / IT",
+      "NEW": " (Mới)"
+    },
+    "priorities": {
+      "LOW": "Thấp (Low)",
+      "MEDIUM": "Trung bình (Medium)",
+      "HIGH": "Cao (High)",
+      "URGENT": "Khẩn cấp (Urgent)"
+    },
+    "table": {
+      "columns": {
+        "prNumber": "SỐ YCMH",
+        "date": "NGÀY YÊU CẦU",
+        "department": "BỘ PHẬN",
+        "totalAmount": "TỔNG TIỀN",
+        "status": "TRẠNG THÁI",
+        "createdBy": "NGƯỜI TẠO",
+        "actions": "HÀNH ĐỘNG"
+      }
+    },
+    "tooltips": {
+      "viewDetail": "Xem chi tiết",
+      "submitApproval": "Gửi phê duyệt",
+      "edit": "Chỉnh sửa",
+      "delete": "Xóa",
+      "approve": "Phê duyệt",
+      "createPO": "Tạo Đơn đặt hàng (PO)"
+    },
+    "popconfirm": {
+      "deleteTitle": "Xác nhận xóa",
+      "deleteContent": "Bạn có chắc chắn muốn xóa yêu cầu mua hàng này?",
+      "deleteOk": "Xóa",
+      "deleteCancel": "Hủy"
+    },
+    "notifications": {
+      "addItemWarning": "Vui lòng thêm ít nhất 1 mặt hàng",
+      "createSuccess": "Tạo yêu cầu mua hàng thành công",
+      "updateSuccess": "Cập nhật yêu cầu thành công",
+      "createPOSuccess": "Đã tạo Đơn đặt hàng (PO) từ yêu cầu này",
+      "createPOError": "Lỗi khi tạo PO từ PR",
+      "submitSuccess": "Đã gửi yêu cầu phê duyệt thành công",
+      "submitError": "Lỗi khi gửi phê duyệt",
+      "deleteSuccess": "Đã xóa yêu cầu thành công",
+      "deleteError": "Lỗi khi xóa yêu cầu",
+      "errorTitle": "Lỗi",
+      "systemError": "Lỗi hệ thống"
+    },
+    "status": {
+      "DRAFT": "Bản nháp",
+      "PENDING": "Chờ phê duyệt",
+      "APPROVED": "Đã phê duyệt",
+      "REJECTED": "Từ chối",
+      "PO_CREATED": "Đã tạo PO",
+      "PARTIAL_PO": "Đã tạo PO một phần",
+      "COMPLETED": "Hoàn tất",
+      "CANCELLED": "Đã hủy"
+    }
+  },
+  "GoodsReceipt": {
+    "title": "Nhập Kho (Goods Receipt)",
+    "description": "Ghi nhận hàng hóa nhập kho từ các đơn thu mua",
+    "createBtn": "Nhập Kho Mới",
+    "filters": {
+      "searchPlaceholder": "Tìm theo số phiếu nhập..."
+    },
+    "modal": {
+      "titleCreate": "Tạo Phiếu Nhập Kho (GRN) từ {poNumber}",
+      "okText": "Xác nhận nhập kho",
+      "cancelText": "Hủy bỏ",
+      "form": {
+        "receivedDate": "Ngày thực nhận",
+        "receivedDateRequired": "Vui lòng chọn ngày",
+        "note": "Ghi chú nhập hàng",
+        "notePlaceholder": "Nhập ghi chú nếu có...",
+        "itemsDivider": "Chi tiết hàng hóa thực nhận",
+        "product": "Sản phẩm",
+        "orderedQty": "SL Đặt",
+        "receivedQty": "SL Thực Nhận",
+        "unit": "ĐVT",
+        "qtyRequired": "Nhập SL",
+        "qtyNumberError": "Phải là số",
+        "qtyIntegerError": "Phải là số nguyên",
+        "qtyMaxError": "Tối đa: {max}",
+        "qtyPlaceholder": "Nhập SL"
+      }
+    },
+    "table": {
+      "columns": {
+        "grNumber": "SỐ PHIẾU NHẬP",
+        "poNumber": "SỐ PO",
+        "date": "NGÀY NHẬP",
+        "status": "TRẠNG THÁI",
+        "receivedBy": "NGƯỜI NHẬN",
+        "actions": "HÀNH ĐỘNG"
+      }
+    },
+    "status": {
+      "DRAFT": "Bản nháp",
+      "COMPLETED": "Đã nhập kho",
+      "CANCELLED": "Đã hủy"
+    },
+    "tooltips": {
+      "viewDetail": "Xem chi tiết"
+    },
+    "notifications": {
+      "fetchPODetailError": "Lỗi tải chi tiết PO",
+      "noItemsWarning": "Cảnh báo",
+      "noItemsWarningDesc": "Không có dữ liệu hàng hóa",
+      "createSuccess": "Nhập kho thành công",
+      "createSuccessDesc": "Phiếu nhập kho {grnNumber} đã được tạo.",
+      "grNumber": "Phiếu nhập kho {grNumber} đã được tạo.",
+      "createSuccessGeneric": "Dữ liệu hàng hóa đã được ghi nhận vào kho thành công.",
+      "businessError": "Lỗi nghiệp vụ",
+      "businessErrorDesc": "Không thể tạo phiếu nhập kho",
+      "systemError": "Lỗi hệ thống",
+      "systemErrorDesc": "Vui lòng kiểm tra lại kết nối"
+    },
+    "poSelect": {
+      "modalTitle": "Chọn Đơn Mua Hàng để Nhập Kho",
+      "searchPlaceholder": "Tìm theo số PO (ví dụ: PO-2026...)",
+      "columns": {
+        "poNumber": "SỐ PO",
+        "vendor": "NHÀ CUNG CẤP",
+        "date": "NGÀY ĐẶT",
+        "actions": "HÀNH ĐỘNG"
+      },
+      "selectBtn": "Chọn"
+    },
+    "detail": {
+      "modalTitle": "Chi tiết Phiếu Nhập Kho: {grnNumber}",
+      "receivedDate": "Ngày nhận",
+      "poNumber": "Số PO",
+      "receivedBy": "Người thực hiện",
+      "status": "Trạng thái",
+      "note": "Ghi chú",
+      "itemsDivider": "Danh sách hàng hóa",
+      "columns": {
+        "product": "Sản phẩm",
+        "qtyReceived": "Số lượng nhập",
+        "unit": "Đơn vị"
+      },
+      "statusLabels": {
+        "DRAFT": "Bản nháp",
+        "COMPLETED": "Đã hoàn thành"
+      }
+    }
+  },
+  "VendorInvoice": {
+    "title": "Hóa Đơn Nhà Cung Cấp",
+    "description": "Quản lý công nợ và hóa đơn thanh toán cho nhà cung cấp",
+    "createBtn": "Ghi Nhận Hóa Đơn",
+    "filters": {
+      "searchPlaceholder": "Tìm theo số hóa đơn..."
+    },
+    "table": {
+      "columns": {
+        "invoiceNumber": "SỐ HÓA ĐƠN",
+        "vendor": "NHÀ CUNG CẤP",
+        "poNumber": "SỐ PO",
+        "totalAmount": "TỔNG CỘNG",
+        "date": "NGÀY HÓA ĐƠN",
+        "status": "TRẠNG THÁI",
+        "actions": "THAO TÁC"
+      }
+    },
+    "status": {
+      "PENDING": "Chờ thanh toán",
+      "PAID": "Đã thanh toán",
+      "CANCELLED": "Đã hủy"
+    },
+    "tooltips": {
+      "viewDetail": "Xem chi tiết"
+    },
+    "modal": {
+      "titleCreate": "Ghi Nhận Hóa Đơn Mua từ {poNumber}",
+      "okText": "Lưu hóa đơn",
+      "form": {
+        "invoiceNumber": "Số hóa đơn GTGT",
+        "invoiceNumberPlaceholder": "Nhập số hóa đơn...",
+        "invoiceDate": "Ngày hóa đơn",
+        "totalAmount": "Tổng tiền (trước thuế)",
+        "taxAmount": "Tiền thuế (VAT)",
+        "dueDate": "Ngày hạn thanh toán",
+        "note": "Ghi chú",
+        "currency": "Tiền tệ"
+      }
+    },
+    "notifications": {
+      "fetchPODetailError": "Lỗi tải chi tiết PO",
+      "createSuccess": "Ghi nhận hóa đơn mua thành công",
+      "createError": "Lỗi khi ghi nhận hóa đơn"
+    },
+    "detail": {
+      "modalTitle": "Chi tiết Hóa Đơn NCC: {invoiceNumber}",
+      "invoiceDate": "Ngày hóa đơn",
+      "poNumber": "Số PO",
+      "vendor": "Nhà cung cấp",
+      "amount": "Tiền trước thuế",
+      "taxAmount": "Tiền thuế (VAT)",
+      "totalAmount": "Tổng cộng",
+      "dueDate": "Ngày hạn thanh toán",
+      "status": "Trạng thái",
+      "note": "Ghi chú"
+    },
+    "poSelect": {
+      "modalTitle": "Chọn Đơn Mua Hàng để Ghi Nhận Hóa Đơn",
+      "searchPlaceholder": "Tìm theo số PO...",
+      "columns": {
+        "poNumber": "SỐ PO",
+        "vendor": "NHÀ CUNG CẤP",
+        "status": "TRẠNG THÁI",
+        "actions": "HÀNH ĐỘNG"
+      },
+      "selectBtn": "Chọn làm hóa đơn"
+    }
+  },
+  "PurchaseReturn": {
+    "title": "Trả Hàng Nhà Cung Cấp (Purchase Returns)",
+    "description": "Quản lý việc trả hàng lỗi hoặc không đạt chất lượng cho nhà cung cấp",
+    "createBtn": "Tạo Phiếu Trả Hàng",
+    "table": {
+      "columns": {
+        "returnNumber": "SỐ PHIẾU TRẢ",
+        "returnDate": "NGÀY TRẢ HÀNG",
+        "poNumber": "SỐ PO LIÊN QUAN",
+        "reason": "LÝ DO",
+        "actions": "HÀNH ĐỘNG"
+      },
+      "tooltips": {
+        "viewDetail": "Xem chi tiết"
+      }
+    },
+    "modal": {
+      "titleCreate": "Tạo Phiếu Trả Hàng Nhà Cung Cấp",
+      "okText": "Xác nhận trả hàng",
+      "form": {
+        "returnDate": "Ngày trả hàng",
+        "reason": "Lý do trả hàng",
+        "reasonPlaceholder": "VD: Hàng lỗi, sai quy cách...",
+        "itemsDivider": "Danh sách hàng trả",
+        "product": "Sản phẩm",
+        "productPlaceholder": "Chọn sản phẩm",
+        "quantity": "SL",
+        "unit": "ĐVT",
+        "addLineBtn": "Thêm hàng trả"
+      },
+      "rules": {
+        "productRequired": "Chọn hàng",
+        "qtyRequired": "SL",
+        "unitRequired": "ĐVT"
+      }
+    },
+    "notifications": {
+      "createSuccess": "Tạo phiếu trả hàng thành công",
+      "createError": "Lỗi khi tạo phiếu trả hàng"
+    }
+  },
+  "ThreeWayMatching": {
+    "title": "Đối Chiếu 3 Bên (3-Way Matching)",
+    "description": "Kiểm soát chênh lệch giữa Đơn đặt hàng, Phiếu nhập kho và Hóa đơn nhà cung cấp",
+    "stats": {
+      "matchedPO": "PO đã khớp GRN",
+      "waitingInvoice": "Đang chờ Hóa đơn"
+    },
+    "ruleAlert": {
+      "title": "Nguyên tắc 3-Way Matching",
+      "description": "Hợp lệ thanh toán khi: (1) Số lượng trên PO = Số lượng nhập kho thực tế (GRN) và (2) Đơn giá trên PO = Đơn giá trên Hóa đơn NCC."
+    },
+    "table": {
+      "columns": {
+        "po": "ĐƠN ĐẶT HÀNG (PO)",
+        "poValue": "GIÁ TRỊ PO",
+        "matchingStatus": "TRẠNG THÁI ĐỐI CHIẾU",
+        "actions": "THAO TÁC"
+      },
+      "actionBtn": "Đối soát chi tiết",
+      "emptyText": "Không có đơn hàng nào cần đối chiếu"
+    },
+    "expand": {
+      "title": "Phân tích chi tiết chênh lệch: {poNumber}",
+      "loading": "Đang tải dữ liệu đối soát từ hệ thống...",
+      "syncStatus": "Tính năng đang được đồng bộ dữ liệu real-time với kho..."
+    }
+  },
+  "Partner": {
+    "type": {
+      "CUSTOMER": "Khách hàng (Buyer)",
+      "SUPPLIER": "Nhà cung cấp (Vendor)",
+      "LOGISTICS": "Đơn vị vận chuyển"
+    },
+    "regions": {
+      "EU": "Châu Âu (EU)",
+      "US": "Hoa Kỳ (US)",
+      "ASEAN": "Đông Nam Á (ASEAN)",
+      "APAC": "Châu Á - Thái Bình Dương",
+      "MIDDLE_EAST": "Trung Đông",
+      "OTHER": "Khu vực khác"
+    },
+    "paymentTerms": {
+      "TT": "Chuyển tiền điện tử (T/T)",
+      "LC": "Tín dụng thư (L/C)",
+      "DP": "Nhờ thu kèm chứng từ (D/P)",
+      "DA": "Chấp nhận thanh toán chứng từ (D/A)",
+      "NET_30": "Net 30 (Thanh toán sau 30 ngày)",
+      "NET_60": "Net 60 (Thanh toán sau 60 ngày)",
+      "COD": "COD (Thanh toán khi nhận hàng)",
+      "PREPAID": "Prepaid (Thanh toán trước 100%)",
+      "GỐI ĐẦU": "Gối đầu (Thanh toán theo lô kế tiếp)"
+    },
+    "riskLevels": {
+      "LOW": "Thấp (An toàn)",
+      "MEDIUM": "Trung bình",
+      "HIGH": "Cao (Rủi ro)"
+    },
+    "form": {
+      "title": "Tạo Đối Tác Mới",
+      "basicInfo": "THÔNG TIN CƠ BẢN",
+      "financeInfo": "THÔNG TIN TÀI CHÍNH & THANH TOÁN",
+      "contactInfo": "THÔNG TIN LIÊN HỆ",
+      "fields": {
+        "name": "Tên đối tác (Công ty)",
+        "partnerType": "Loại đối tác",
+        "region": "Khu vực địa lý",
+        "address": "Địa chỉ trụ sở",
+        "taxCode": "Mã số thuế / VAT",
+        "defaultCurrency": "Tiền tệ mặc định",
+        "defaultPaymentTerm": "Điều khoản thanh toán mặc định",
+        "creditLimit": "Hạn mức tín dụng",
+        "riskLevel": "Mức độ rủi ro",
+        "contactName": "Người liên hệ trực tiếp",
+        "email": "Email liên hệ",
+        "phone": "Số điện thoại",
+        "position": "Chức vụ"
+      }
+    }
+  },
+  "HomePage": {
+    "title": "Hệ thống Mini ERP",
+    "description": "Giải pháp quản lý doanh nghiệp xuất khẩu tối ưu",
+    "features": {
+      "inventory": "Quản lý kho thời gian thực",
+      "sales": "Quy trình bán hàng O2C",
+      "purchase": "Quy trình mua hàng P2P",
+      "finance": "Kế toán & Dòng tiền"
+    }
+  },
+  "Common": {
+    "add": "Thêm mới",
+    "edit": "Chỉnh sửa",
+    "delete": "Xóa",
+    "save": "Lưu lại",
+    "cancel": "Hủy bỏ",
+    "search": "Tìm kiếm",
+    "actions": "Thao tác",
+    "status": "Trạng thái",
+    "createdAt": "Ngày tạo",
+    "updatedAt": "Cập nhật cuối",
+    "loading": "Đang tải...",
+    "noData": "Không có dữ liệu",
+    "confirmDelete": "Bạn có chắc chắn muốn xóa?",
+    "success": "Thành công",
+    "error": "Lỗi",
+    "warning": "Cảnh báo"
+  },
+  "Quotation": {
+    "status": {
+      "DRAFT": "Bản nháp",
+      "SENT": "Đã gửi khách",
+      "ACCEPTED": "Khách đã chốt",
+      "REJECTED": "Từ chối",
+      "EXPIRED": "Hết hạn"
+    }
+  },
+  "Incoterms": {
+    "EXW": "EXW — Giao tại xưởng",
+    "FOB": "FOB — Giao lên tàu",
+    "CIF": "CIF — Tiền hàng, Bảo hiểm & Cước phí",
+    "CFR": "CFR — Tiền hàng & Cước phí",
+    "DAP": "DAP — Giao tại nơi đến",
+    "DDP": "DDP — Giao hàng đã nộp thuế"
+  },
+  "ShipmentStatus": {
+    "BOOKED": "Đã book tàu",
+    "LOADING": "Đang đóng hàng",
+    "CUSTOMS_CLEARED": "Đã thông quan",
+    "ON_BOARD": "Tàu đã chạy",
+    "ARRIVED": "Đã cập cảng đích",
+    "CLOSED": "Hoàn tất"
+  },
+  "UOM": {
+    "PCS": "Cái/Chiếc",
+    "KGS": "Kg",
+    "TONS": "Tấn",
+    "CARTONS": "Thùng",
+    "BAGS": "Bao",
+    "BOXES": "Thùng/Hộp",
+    "UNITS": "Cái/Chiếc",
+    "SETS": "Bộ"
+  },
+  "ShipmentDetail": {
+    "docs": {
+      "SALES_CONTRACT": "Hợp đồng ngoại",
+      "COMMERCIAL_INVOICE": "Hóa đơn thương mại",
+      "PACKING_LIST": "Phiếu đóng gói",
+      "BILL_OF_LADING": "Vận đơn",
+      "CERTIFICATE_OF_ORIGIN": "Chứng nhận xuất xứ",
+      "PHYTOSANITARY": "Kiểm dịch thực vật"
+    },
+    "docStatus": {
+      "PENDING": "Đang chờ",
+      "DONE": "Đã có",
+      "NA": "N/A"
+    },
+    "contTypes": {
+      "20DC": "Container 20 feet (20DC)",
+      "40DC": "Container 40 feet (40DC)",
+      "40HC": "Container 40 feet cao (40HC)",
+      "LCL": "Hàng lẻ (LCL)"
+    }
+  },
+  "ProductTable": {
+    "status": {
+      "ACTIVE": "ĐANG KINH DOANH",
+      "INACTIVE": "TẠM NGƯNG"
+    },
+    "actions": {
+      "adjust": "Điều chỉnh kho",
+      "ledger": "Xem lịch sử kho",
+      "delete": "Xóa vĩnh viễn"
+    }
+  },
+  "PaymentTerms": {
+    "TT_30_70_BL": "30% T/T đặt cọc, 70% sau khi nhận bản sao B/L",
+    "TT_100_ADVANCE": "100% T/T trả trước",
+    "LC_AT_SIGHT": "100% L/C trả ngay (Không hủy ngang)",
+    "TT_30_70_SHIPMENT": "30% T/T đặt cọc, 70% trước khi giao hàng",
+    "CAD": "CAD — Giao chứng từ trả tiền",
+    "DP_AT_SIGHT": "D/P — Nhờ thu kèm chứng từ trả ngay",
+    "TT": "T/T — Chuyển tiền bằng điện"
+  },
+  "ShipmentTable": {
+    "title": "Lô Hàng & Booking",
+    "description": "Theo dõi lịch trình đóng hàng, booking tàu và vận chuyển"
+  },
+  "SalesContract": {
+    "title": "Quản Lý Hợp Đồng Bán Hàng (O2C)",
+    "description": "Quản lý vòng đời hợp đồng xuất khẩu và các điều khoản thương mại",
+    "subtitle": "Luồng phê duyệt State Machine & Reserve Stock tự động",
+    "stats": {
+      "totalValue": "Tổng giá trị"
+    },
+    "filters": {
+      "searchPlaceholder": "Tìm kiếm hợp đồng...",
+      "advancedFilter": "Lọc nâng cao"
+    },
+    "buttons": {
+      "createNew": "TẠO HỢP ĐỒNG MỚI"
+    },
+    "table": {
+      "columns": {
+        "contract": "Hợp Đồng",
+        "buyer": "Khách Hàng",
+        "value": "Giá Trị & Incoterm",
+        "status": "Trạng Thái",
+        "actions": "Thao Tác"
+      }
+    },
+    "status": {
+      "DRAFT": "Bản nháp",
+      "CONFIRMED": "Đã duyệt",
+      "SHIPPED": "Đã xuất",
+      "PAID": "Đã thanh toán",
+      "CANCELLED": "Đã hủy"
+    },
+    "actions": {
+      "confirm": "DUYỆT HĐ",
+      "ship": "XUẤT KHO",
+      "view": "Chi tiết",
+      "pdf": "Xuất PDF"
+    },
+    "messages": {
+      "fetchError": "Không thể tải danh sách hợp đồng",
+      "confirmSuccess": "Đã duyệt và giữ hàng thành công",
+      "shipSuccess": "Đã xác nhận xuất kho",
+      "actionFailed": "Thao tác thất bại",
+      "confirmTitle": "Hệ thống sẽ tự động RESERVE hàng trong kho. Bạn chắc chắn?",
+      "shipTitle": "Xác nhận xuất kho cho lô hàng này?",
+      "confirmOk": "Duyệt ngay",
+      "shipOk": "Xuất ngay",
+      "cancel": "Hủy"
+    },
+    "modal": {
+      "title": "Tạo Hợp Đồng O2C Mới",
+      "contractNumber": "Mã Hợp Đồng",
+      "buyer": "Khách Hàng (Buyer)",
+      "incoterm": "Điều kiện (Incoterms)",
+      "currency": "Đồng tiền",
+      "rate": "Tỷ giá",
+      "logisticsDivider": "Chi Phí Logistics (Sẽ tự động tính vào HĐ tùy Incoterm)",
+      "transport": "Vận tải nội địa",
+      "port": "Phí cảng (THC...)",
+      "freight": "Cước tàu (Sea Freight)",
+      "insurance": "Bảo hiểm",
+      "itemsDivider": "Danh sách hàng hóa",
+      "product": "Sản phẩm",
+      "quantity": "Số lượng",
+      "price": "Đơn giá",
+      "addBtn": "Thêm sản phẩm",
+      "preview": "Preview Giá Incoterm",
+      "save": "Lưu Hợp Đồng",
+      "success": "Tạo hợp đồng thành công!"
+    }
+  }
+}

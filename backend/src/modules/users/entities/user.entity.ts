@@ -1,9 +1,10 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { Role } from '../../roles/entities/role.entity';
 
 @Entity()
 export class User {
-  @PrimaryGeneratedColumn('uuid', { name: 'id' })
-  _id: string;
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
 
   @Column()
   name: string;
@@ -23,8 +24,12 @@ export class User {
   @Column({ type: 'varchar', nullable: true })
   image: string | null;
 
-  @Column({ default: 'USER' })
-  role: string;
+  @Column({ nullable: true })
+  roleId: string;
+
+  @ManyToOne(() => Role, role => role.users, { eager: true, nullable: true })
+  @JoinColumn({ name: 'roleId' })
+  role: Role;
 
   @Column({ default: 'LOCAL' })
   accountType: string;

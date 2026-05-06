@@ -1,90 +1,157 @@
-import { IsBoolean, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Min } from 'class-validator';
+import { Transform } from 'class-transformer';
+import { IsBoolean, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Min } from 'class-validator';
+
+const trimString = () =>
+  Transform(({ value }) => {
+    if (value === undefined || value === null) return value;
+    return typeof value === 'string' ? value.trim() : value;
+  });
+
+const toOptionalNumber = () =>
+  Transform(({ value }) => {
+    if (value === undefined || value === null || value === '') return undefined;
+    const parsed = Number(value);
+    return Number.isNaN(parsed) ? undefined : parsed;
+  });
 
 export class CreateProductDto {
-  @IsNotEmpty({ message: 'SKU Không Được Để Trống' })
-  @IsString({ message: 'SKU phải là chuỗi' })
+  @trimString()
+  @IsNotEmpty({ message: 'SKU không được để trống' })
+  @IsString()
   sku: string;
 
-  @IsNotEmpty({ message: 'Tên tiếng Việt Không Được Để Trống' })
-  @IsString({ message: 'Tên tiếng Việt phải là chuỗi' })
+  @trimString()
+  @IsNotEmpty({ message: 'Tên tiếng Việt không được để trống' })
+  @IsString()
   vietnameseName: string;
 
+  @trimString()
   @IsOptional()
-  @IsString({ message: 'Tên tiếng Anh phải là chuỗi' })
+  @IsString()
   englishName?: string;
 
+  @trimString()
   @IsOptional()
-  @IsString({ message: 'HS Code phải là chuỗi' })
+  @IsString()
   hsCode?: string;
 
+  @trimString()
   @IsOptional()
-  @IsString({ message: 'Category phải là chuỗi' })
+  @IsString()
   category?: string;
 
+  @trimString()
   @IsOptional()
-  @IsString({ message: 'Brand phải là chuỗi' })
+  @IsString()
   brand?: string;
 
+  @trimString()
   @IsOptional()
-  @IsString({ message: 'Origin Country phải là chuỗi' })
+  @IsString()
   originCountry?: string;
 
+  @trimString()
   @IsOptional()
-  @IsString({ message: 'Unit Of Measure phải là chuỗi' })
+  @IsString()
   unitOfMeasure?: string;
 
+  @trimString()
   @IsOptional()
-  @IsString({ message: 'Packing Type phải là chuỗi' })
+  @IsString()
   packingType?: string;
 
+  @toOptionalNumber()
   @IsOptional()
-  @IsInt({ message: 'Pieces Per Carton phải là số nguyên' })
-  @Min(0, { message: 'Pieces Per Carton không được âm' })
+  @IsNumber({ allowNaN: false, allowInfinity: false })
+  @Min(0)
   piecesPerCarton?: number;
 
+  @toOptionalNumber()
   @IsOptional()
-  @IsInt({ message: 'Cartons Per Pallet phải là số nguyên' })
-  @Min(0, { message: 'Cartons Per Pallet không được âm' })
+  @IsNumber({ allowNaN: false, allowInfinity: false })
+  @Min(0)
   cartonsPerPallet?: number;
 
+  @toOptionalNumber()
   @IsOptional()
-  @IsNumber({}, { message: 'CBM Per Carton phải là số' })
-  @Min(0, { message: 'CBM Per Carton không được âm' })
+  @IsNumber({ allowNaN: false, allowInfinity: false })
+  @Min(0)
+  cartonLengthCm?: number;
+
+  @toOptionalNumber()
+  @IsOptional()
+  @IsNumber({ allowNaN: false, allowInfinity: false })
+  @Min(0)
+  cartonWidthCm?: number;
+
+  @toOptionalNumber()
+  @IsOptional()
+  @IsNumber({ allowNaN: false, allowInfinity: false })
+  @Min(0)
+  cartonHeightCm?: number;
+
+  @toOptionalNumber()
+  @IsOptional()
+  @IsNumber({ allowNaN: false, allowInfinity: false })
+  @Min(0)
   cbmPerCarton?: number;
 
+  @toOptionalNumber()
   @IsOptional()
-  @IsNumber({}, { message: 'Net Weight Per Carton phải là số' })
-  @Min(0, { message: 'Net Weight Per Carton không được âm' })
+  @IsNumber({ allowNaN: false, allowInfinity: false })
+  @Min(0)
   netWeightPerCarton?: number;
 
+  @toOptionalNumber()
   @IsOptional()
-  @IsNumber({}, { message: 'Gross Weight Per Carton phải là số' })
-  @Min(0, { message: 'Gross Weight Per Carton không được âm' })
+  @IsNumber({ allowNaN: false, allowInfinity: false })
+  @Min(0)
   grossWeightPerCarton?: number;
 
+  @toOptionalNumber()
   @IsOptional()
-  @IsInt({ message: 'Pallet Layers phải là số nguyên' })
-  @Min(0, { message: 'Pallet Layers không được âm' })
+  @IsNumber({ allowNaN: false, allowInfinity: false })
+  @Min(0)
   palletLayers?: number;
 
+  @toOptionalNumber()
   @IsOptional()
-  @IsInt({ message: 'Cartons Per Layer phải là số nguyên' })
-  @Min(0, { message: 'Cartons Per Layer không được âm' })
+  @IsNumber({ allowNaN: false, allowInfinity: false })
+  @Min(0)
   cartonsPerLayer?: number;
 
+  @toOptionalNumber()
   @IsOptional()
-  @IsString({ message: 'Description phải là chuỗi' })
-  description?: string;
+  @IsNumber({ allowNaN: false, allowInfinity: false })
+  @Min(0)
+  purchasePriceVnd?: number;
+
+  @toOptionalNumber()
+  @IsOptional()
+  @IsNumber({ allowNaN: false, allowInfinity: false })
+  @Min(0)
+  defaultExportPrice?: number;
+
+  @trimString()
+  @IsOptional()
+  @IsString()
+  exportCurrency?: string;
 
   @IsOptional()
-  @IsString({ message: 'Note phải là chuỗi' })
+  @IsUUID('4', { message: 'preferredSupplierId không hợp lệ' })
+  preferredSupplierId?: string;
+
+  @trimString()
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @trimString()
+  @IsOptional()
+  @IsString()
   note?: string;
 
   @IsOptional()
-  @IsBoolean({ message: 'isActive phải là kiểu boolean' })
+  @IsBoolean()
   isActive?: boolean;
-
-  @IsOptional()
-  @IsUUID('all', { message: 'Preferred Supplier ID không hợp lệ' })
-  preferredSupplierId?: string;
 }

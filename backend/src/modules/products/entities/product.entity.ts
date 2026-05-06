@@ -1,10 +1,12 @@
-import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+import { Column, CreateDateColumn, DeleteDateColumn, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+import { ColumnNumericTransformer } from '@/helpers/typeorm.util';
 import { Partner } from '@/modules/partners/entities/partner.entity';
 
-@Entity()
+@Entity('products')
+@Index('idx_products_hscode', ['hsCode'])
 export class Product {
-  @PrimaryGeneratedColumn('uuid', { name: 'id' })
-  _id: string;
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
 
   @Column({ unique: true })
   sku: string;
@@ -39,14 +41,23 @@ export class Product {
   @Column({ type: 'int', nullable: true })
   cartonsPerPallet: number | null;
 
-  @Column({ type: 'numeric', precision: 12, scale: 4, nullable: true })
-  cbmPerCarton: string | null;
+  @Column({ type: 'numeric', precision: 12, scale: 4, nullable: true, transformer: new ColumnNumericTransformer() })
+  cartonLengthCm: number | null;
 
-  @Column({ type: 'numeric', precision: 12, scale: 4, nullable: true })
-  netWeightPerCarton: string | null;
+  @Column({ type: 'numeric', precision: 12, scale: 4, nullable: true, transformer: new ColumnNumericTransformer() })
+  cartonWidthCm: number | null;
 
-  @Column({ type: 'numeric', precision: 12, scale: 4, nullable: true })
-  grossWeightPerCarton: string | null;
+  @Column({ type: 'numeric', precision: 12, scale: 4, nullable: true, transformer: new ColumnNumericTransformer() })
+  cartonHeightCm: number | null;
+
+  @Column({ type: 'numeric', precision: 12, scale: 4, nullable: true, transformer: new ColumnNumericTransformer() })
+  cbmPerCarton: number | null;
+
+  @Column({ type: 'numeric', precision: 12, scale: 4, nullable: true, transformer: new ColumnNumericTransformer() })
+  netWeightPerCarton: number | null;
+
+  @Column({ type: 'numeric', precision: 12, scale: 4, nullable: true, transformer: new ColumnNumericTransformer() })
+  grossWeightPerCarton: number | null;
 
   @Column({ type: 'int', nullable: true })
   palletLayers: number | null;
@@ -54,25 +65,46 @@ export class Product {
   @Column({ type: 'int', nullable: true })
   cartonsPerLayer: number | null;
 
-  @Column({ type: 'varchar', nullable: true })
-  description: string | null;
+  @Column({ type: 'numeric', precision: 15, scale: 2, nullable: true, transformer: new ColumnNumericTransformer() })
+  purchasePriceVnd: number | null;
+
+  @Column({ type: 'numeric', precision: 15, scale: 2, nullable: true, transformer: new ColumnNumericTransformer() })
+  defaultExportPrice: number | null;
 
   @Column({ type: 'varchar', nullable: true })
-  note: string | null;
+  exportCurrency: string | null;
 
-  @Column({ default: true })
-  isActive: boolean;
+  @Column({ type: 'varchar', nullable: true })
+  preferredSupplierId: string | null;
 
-  @ManyToOne(() => Partner, { nullable: true, eager: true, onDelete: 'SET NULL' })
+  @ManyToOne(() => Partner, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'preferredSupplierId' })
   preferredSupplier: Partner | null;
 
-  @Column({ type: 'uuid', nullable: true })
-  preferredSupplierId: string | null;
+  @Column({ type: 'text', nullable: true })
+  description: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  note: string | null;
+
+  @Column({ type: 'numeric', precision: 12, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  currentStock: number;
+
+  @Column({ type: 'numeric', precision: 12, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  reservedStock: number;
+
+  @Column({ type: 'numeric', precision: 12, scale: 2, default: 5, transformer: new ColumnNumericTransformer() })
+  minimumStock: number;
+
+  @Column({ default: true })
+  isActive: boolean;
 
   @CreateDateColumn()
   createdAt: Date;
 
   @UpdateDateColumn()
   updatedAt: Date;
+
+  @DeleteDateColumn({ nullable: true })
+  deletedAt: Date | null;
 }

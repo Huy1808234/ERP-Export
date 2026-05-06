@@ -1,0 +1,20 @@
+Luồng Test Ghi Nợ (O2C Workflow):
+Bước 1: Tạo Hợp đồng (DRAFT)
+
+Vào mục "Hợp đồng (O2C)" trên sidebar.
+Nhấn "TẠO HỢP ĐỒNG MỚI", điền đầy đủ thông tin khách hàng, sản phẩm và giá trị.
+Lúc này: Trạng thái là DRAFT, chưa có ghi nợ.
+Bước 2: Duyệt Hợp đồng (CONFIRM)
+
+Tìm hợp đồng vừa tạo, nhấn nút "DUYỆT HĐ".
+Hệ thống sẽ thực hiện: Giữ hàng trong kho (Reserve Stock). Trạng thái chuyển sang CONFIRMED. Vẫn chưa có ghi nợ.
+Bước 3: Xuất kho (SHIP)
+
+Sau khi duyệt, nút "XUẤT KHO" sẽ xuất hiện. Nhấn vào nút này.
+Đây là bước quan trọng nhất kích hoạt ghi nợ. Hệ thống sẽ:
+Trừ tồn kho thực tế.
+Tự động tạo bút toán kế toán: Nợ TK 131 (Phải thu khách hàng) / Có TK 511 (Doanh thu).
+Bước 4: Kiểm tra kết quả
+
+Quay lại trang "Đối tác" (Partner).
+Bạn sẽ thấy cột "Dư nợ (Phải thu)" của khách hàng đó không còn là 0 nữa, mà sẽ tăng lên đúng bằng giá trị hợp đồng bạn vừa xuất.

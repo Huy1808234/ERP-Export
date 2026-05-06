@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { Modal, Steps, Button, Input, Form, notification } from 'antd'
+import { Modal, Steps, Button, Input, Form } from 'antd'
+import { notification } from '@/library/antd.static';
 import { useHasMounted } from '@/utils/customHook';
 import { SmileOutlined, SolutionOutlined, UserOutlined } from '@ant-design/icons';
 import { sendRequest } from '@/utils/api';
@@ -34,7 +35,7 @@ const ModalReactive = (props: any) => {
             body: { email: username }
         })
         if (res?.data) {
-            setUserId(res?.data?._id)
+            setUserId(res?.data?.id)
             setCurrent(1);
         } else {
             notification.error({
@@ -49,7 +50,7 @@ const ModalReactive = (props: any) => {
         const res = await sendRequest<IBackendRes<any>>({
             method: "POST",
             url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/auth/check-code`,
-            body: { _id: userId, code: code }
+            body: { id: userId, code: code }
         })
         if (res?.data) {
             setCurrent(2);
@@ -87,6 +88,7 @@ const ModalReactive = (props: any) => {
                 onOk={() => setIsModalOpen(false)}
                 onCancel={() => setIsModalOpen(false)}
                 mask={{ closable: false }}
+                destroyOnHidden
                 footer={null}
             >
                 <Steps

@@ -10,7 +10,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from './entities/user.entity';
 import { hashPasswordHelper } from '@/helpers/util';
-import aqp from 'api-query-params';
+
 import { v4 as uuidv4 } from 'uuid';
 import dayjs from 'dayjs';
 import { MailerService } from '@nestjs-modules/mailer';
@@ -33,7 +33,7 @@ export class UsersService {
   };
 
   async create(createUserDto: CreateUserDto) {
-    const { name, email, password, phone, address, image } = createUserDto;
+    const { name, email, password, phone, address, image, roleId, isActive } = createUserDto;
 
     const isExist = await this.isEmailExist(email);
     if (isExist) {
@@ -51,17 +51,19 @@ export class UsersService {
       phone,
       address,
       image,
-      isActive: false,
+      roleId,
+      isActive: isActive ?? false,
     });
 
     const savedUser = await this.userRepository.save(user);
 
     return {
-      _id: savedUser._id,
+      id: savedUser.id,
     };
   }
 
   async findAll(query: string, current: number, pageSize: number) {
+    const aqp = (await import('api-query-params')).default;
     const { filter, sort } = aqp(query);
     if (filter.current) delete filter.current;
     if (filter.pageSize) delete filter.pageSize;
@@ -72,20 +74,24 @@ export class UsersService {
 
     const skip = (current - 1) * pageSize;
 
-    const queryBuilder = this.userRepository.createQueryBuilder('user');
+    const queryBuilder = this.userRepository.createQueryBuilder('user')
+      .leftJoinAndSelect('user.role', 'role');
 
     for (const key in filter) {
+      const aliasKey = key.includes('.') ? key : `user.${key}`;
+      const paramKey = key.replace('.', '_');
+
       if (filter[key] instanceof RegExp) {
-        queryBuilder.andWhere(`user.${key} ILIKE :${key}`, { [key]: `%${filter[key].source}%` });
+        queryBuilder.andWhere(`${aliasKey} ILIKE :${paramKey}`, { [paramKey]: `%${filter[key].source}%` });
       } else {
-        queryBuilder.andWhere(`user.${key} = :${key}`, { [key]: filter[key] });
+        queryBuilder.andWhere(`${aliasKey} = :${paramKey}`, { [paramKey]: filter[key] });
       }
     }
 
     if (sort) {
-       for (const key in sort) {
-           queryBuilder.addOrderBy(`user.${key}`, (sort as any)[key] === 1 ? 'ASC' : 'DESC');
-       }
+      for (const key in sort) {
+        queryBuilder.addOrderBy(`user.${key}`, (sort as any)[key] === 1 ? 'ASC' : 'DESC');
+      }
     }
 
     queryBuilder.skip(skip).take(pageSize);
@@ -98,14 +104,17 @@ export class UsersService {
       return userWithoutPassword;
     });
 
-    return { results, totalPages };
+    return { results, totalPages, totalItems };
   }
 
   async findOne(id: string) {
     if (!this.isValidUUID(id)) {
       throw new BadRequestException(`ID không hợp lệ: ${id}`);
     }
-    return await this.userRepository.findOneBy({ _id: id });
+    return await this.userRepository.findOne({
+      where: { id },
+      relations: ['role']
+    });
   }
 
   async findByEmail(email: string) {
@@ -121,10 +130,13 @@ export class UsersService {
       throw new BadRequestException(`ID không hợp lệ: ${id}`);
     }
 
-    const { _id, ...updateData } = updateUserDto;
+    const { id: dummy, ...updateData } = updateUserDto;
 
-    await this.userRepository.update({ _id: id }, updateData);
-    const user = await this.userRepository.findOneBy({ _id: id });
+    await this.userRepository.update({ id }, updateData);
+    const user = await this.userRepository.findOne({
+      where: { id },
+      relations: ['role']
+    });
 
     if (!user) {
       throw new NotFoundException(`User không tồn tại`);
@@ -143,7 +155,7 @@ export class UsersService {
       throw new BadRequestException(`ID không hợp lệ: ${id}`);
     }
 
-    const result = await this.userRepository.delete({ _id: id });
+    const result = await this.userRepository.delete({ id });
 
     if (result.affected === 0) {
       throw new NotFoundException(`Không tìm thấy user với id: ${id}`);
@@ -151,6 +163,14 @@ export class UsersService {
 
     return {
       message: 'Xoá user thành công',
+      deletedCount: result.affected,
+    };
+  }
+
+  async bulkRemove(ids: string[]) {
+    const result = await this.userRepository.delete(ids);
+    return {
+      message: `Xoá thành công ${result.affected} người dùng`,
       deletedCount: result.affected,
     };
   }
@@ -167,7 +187,7 @@ export class UsersService {
 
     const hashPassword = await hashPasswordHelper(password);
     const codeId = uuidv4();
-    
+
     const user = this.userRepository.create({
       name,
       email,
@@ -191,26 +211,26 @@ export class UsersService {
     } catch (error) {
       console.error('Gửi email thất bại:', error.message);
     }
-    
+
     return {
-      _id: savedUser._id,
+      id: savedUser.id,
     };
   }
 
   async handleActive(data: CodeAuthDto) {
     const user = await this.userRepository.findOneBy({
-      _id: data._id,
+      id: data.id,
       codeId: data.code
     });
 
     if (!user) {
       throw new BadRequestException(`Code không chính xác hoặc đã hết hạn `);
     }
-    
+
     const isBeforecheck = dayjs().isBefore(user.codeExpired);
     if (isBeforecheck) {
       await this.userRepository.update(
-        { _id: data._id },
+        { id: data.id },
         { isActive: true, codeId: null, codeExpired: null }
       );
     } else {
@@ -227,16 +247,16 @@ export class UsersService {
     if (user.isActive) {
       throw new BadRequestException(`Tài Khoản Đã Được Kích Hoạt`);
     }
-    
+
     const codeId = uuidv4();
     await this.userRepository.update(
-      { _id: user._id },
+      { id: user.id },
       {
         codeId: codeId,
         codeExpired: dayjs().add(5, 'minutes').toDate(),
       }
     );
-    
+
     this.mailerService.sendMail({
       to: user.email,
       subject: 'Kích hoạt tài khoản amit group ',
@@ -247,7 +267,7 @@ export class UsersService {
       },
     });
 
-    return { _id: user._id };
+    return { id: user.id };
   }
 
   async forgotPassword(email: string) {
@@ -258,7 +278,7 @@ export class UsersService {
 
     const codeId = uuidv4();
     await this.userRepository.update(
-      { _id: user._id },
+      { id: user.id },
       {
         codeId: codeId,
         codeExpired: dayjs().add(5, 'minutes').toDate(),
@@ -275,12 +295,12 @@ export class UsersService {
       },
     });
 
-    return { _id: user._id };
+    return { id: user.id };
   }
 
   async changePassword(data: ChangePasswordAuthDto) {
     const user = await this.userRepository.findOneBy({
-      _id: data._id,
+      id: data.id,
       codeId: data.code
     });
 
@@ -292,7 +312,7 @@ export class UsersService {
     if (isBeforeCheck) {
       const hashPassword = await hashPasswordHelper(data.password);
       await this.userRepository.update(
-        { _id: user._id },
+        { id: user.id },
         {
           password: hashPassword,
           codeId: null,

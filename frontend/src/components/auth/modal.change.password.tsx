@@ -1,7 +1,8 @@
 'use client'
 
 import { useHasMounted } from "@/utils/customHook";
-import { Button, Form, Input, Modal, notification, Steps } from "antd";
+import { Button, Form, Input, Modal, Steps } from "antd";
+import { notification } from "@/library/antd.static";
 import { SmileOutlined, SolutionOutlined, UserOutlined } from '@ant-design/icons';
 import { useEffect, useState } from "react";
 import { sendRequest } from "@/utils/api";
@@ -28,11 +29,11 @@ const ModalChangePassword = (props: any) => {
         })
 
         if (res?.data) {
-            setUserId(res?.data?._id)
+            setUserId(res?.data?.id)
             setCurrent(1);
         } else {
             notification.error({
-                message: "Call APIs error",
+                title: "Call APIs error",
                 description: res?.message
             })
         }
@@ -41,7 +42,7 @@ const ModalChangePassword = (props: any) => {
 
     const onFinishStep1 = async (values: any) => {
         const { code, password, confirmPassword } = values;
-        
+
         if (password !== confirmPassword) {
             notification.error({
                 title: "Lỗi",
@@ -54,7 +55,7 @@ const ModalChangePassword = (props: any) => {
             url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/auth/change-password`,
             method: "POST",
             body: {
-                code, _id: userId, password
+                code, id: userId, password
             }
         })
 
@@ -62,7 +63,7 @@ const ModalChangePassword = (props: any) => {
             setCurrent(2);
         } else {
             notification.error({
-                message: "Call APIs error",
+                title: "Call APIs error",
                 description: res?.message
             })
         }
@@ -76,6 +77,7 @@ const ModalChangePassword = (props: any) => {
                 onOk={() => setIsModalOpen(false)}
                 onCancel={() => setIsModalOpen(false)}
                 mask={{ closable: false }}
+                destroyOnHidden
                 footer={null}
             >
                 <Steps

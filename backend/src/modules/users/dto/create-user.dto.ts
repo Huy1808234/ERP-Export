@@ -23,4 +23,11 @@ export class CreateUserDto {
   @IsOptional()
   @IsString({ message: 'Image phải là chuỗi' })
   image?: string;
+
+  @IsOptional()
+  @IsString({ message: 'roleId phải là chuỗi' })
+  roleId?: string;
+
+  @IsOptional()
+  isActive?: boolean;
 }

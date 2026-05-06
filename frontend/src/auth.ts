@@ -26,10 +26,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
         if (res.statusCode === 201) {
           return {
-            _id: res.data?.user._id,
+            id: res.data?.user.id,
             email: res.data?.user.email,
             name: res.data?.user.name,
-            access_token: res.data?.access_token, // 2. ĐÃ SỬA: Chữ 't' viết thường
+            role: res.data?.user.role,
+            access_token: res.data?.access_token, 
           };
         } else if (+res.statusCode === 401) {
           throw new InvalidEmailPasswordError();
@@ -41,9 +42,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       },
     }),
   ],
-  pages: {
-    signIn: "/auth/login",
-  },
+  // Pages config removed to allow middleware handling
   callbacks: {
     jwt({ token, user }) {
       if (user) {
@@ -53,7 +52,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       return token;
     },
     session({ session, token }) {
-      (session.user as IUser) = token.user;
+      if (token.user) {
+        (session.user as IUser) = token.user;
+        session.access_token = token.user.access_token;
+      }
       return session;
     },
     authorized: async ({ auth }) => {
