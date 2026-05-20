@@ -1,9 +1,10 @@
 import { useState, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
-import { sendRequest } from '@/utils/api';
+import { sendRequest } from '@/lib/api-client';
 import { IPurchaseReturn } from '@/types/purchase-return';
 import { IPaginationMeta } from '@/types/purchase-order';
-import { notification } from '@/library/antd.static';
+import { notification } from '@/providers/antd-static';
+import { getAccessToken } from '@/lib/auth-token';
 
 export const usePurchaseReturns = () => {
   const { data: session } = useSession();
@@ -22,7 +23,7 @@ export const usePurchaseReturns = () => {
           pageSize: params.pageSize,
           populate: 'purchaseOrder,items.product',
         },
-        headers: { Authorization: `Bearer ${session?.access_token}` },
+        headers: { Authorization: `Bearer ${getAccessToken(session)}` },
       });
       if (res?.data) {
         setData(res.data.results || []);

@@ -28,9 +28,10 @@ import {
 import { PageHeader } from '@/components/ui/PageHeader';
 import { useEffect, useRef, useState } from 'react';
 import { useSession } from 'next-auth/react';
-import { sendRequest } from '@/utils/api';
+import { sendRequest } from '@/lib/api-client';
 import { useReactToPrint } from 'react-to-print';
 import ShipmentDocCenter from '../shipment/shipment.doc-center';
+import { getAccessToken } from '@/lib/auth-token';
 
 const { Text } = Typography;
 
@@ -67,13 +68,13 @@ const DocumentsPage = () => {
 
   const handleDownloadOfficialPdf = async (type: 'CI' | 'PL') => {
     if (!selected || !session) return;
-    const accessToken = (session as any)?.access_token;
+    const accessToken = getAccessToken(session);
     
     notification.info({ title: 'Đang tạo bản PDF chính thức...' });
     
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/export-documents/download/${selected.id}/${type}`,
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/export-documents/download/${selected._id}/${type}`,
         {
           headers: { Authorization: `Bearer ${accessToken}` },
         }
@@ -98,7 +99,7 @@ const DocumentsPage = () => {
   };
 
   const fetchShipments = async () => {
-    const accessToken = session?.access_token;
+    const accessToken = getAccessToken(session);
     if (!accessToken) return;
 
     setLoading(true);
@@ -108,7 +109,7 @@ const DocumentsPage = () => {
       queryParams: {
         current: 1,
         pageSize: 50,
-        ...(searchText ? { shipmentNumber: `/${searchText}/i` } : {}),
+        ...(searchText ? { search: searchText } : {}),
       },
       headers: { Authorization: `Bearer ${accessToken}` },
     });
@@ -121,11 +122,11 @@ const DocumentsPage = () => {
   }, [searchText, session]);
 
   const handleOpenDetail = async (record: any) => {
-    const accessToken = session?.access_token;
+    const accessToken = getAccessToken(session);
     if (!accessToken) return;
 
     const res = await sendRequest<IBackendRes<any>>({
-      url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/shipments/${record.id}`,
+      url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/shipments/${record._id}`,
       method: 'GET',
       headers: { Authorization: `Bearer ${accessToken}` },
     });
@@ -176,7 +177,7 @@ const DocumentsPage = () => {
           type="primary"
           icon={<FilePdfOutlined />}
           onClick={() => {
-            setSelectedShipmentId(record.id);
+            setSelectedShipmentId(record._id);
             setDocCenterOpen(true);
           }}
         >
@@ -208,7 +209,7 @@ const DocumentsPage = () => {
       </div>
 
       <Table
-        rowKey="id"
+        rowKey="_id"
         bordered
         dataSource={shipments}
         columns={columns}

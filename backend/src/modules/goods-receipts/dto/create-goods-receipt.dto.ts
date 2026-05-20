@@ -1,9 +1,24 @@
-import { IsArray, IsDateString, IsNotEmpty, IsOptional, IsString, IsUUID, ValidateNested, IsNumber, Min } from 'class-validator';
+import { IsArray, IsDateString, IsIn, IsNotEmpty, IsOptional, IsString, ValidateNested, IsNumber, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 
+export const GOODS_RECEIPT_QUALITY_STATUSES = [
+  'PASS',
+  'DAMAGED',
+  'WRONG_SPEC',
+  'QUARANTINE',
+] as const;
+
 class GoodsReceiptItemDto {
-  @IsUUID()
+  @IsOptional()
+  @IsString()
+  _id?: string;
+
+  @IsOptional()
+  @IsString()
+  purchaseOrderItem_id?: string;
+
   @IsNotEmpty()
+  @IsString()
   productId: string;
 
   @IsNumber()
@@ -25,12 +40,24 @@ class GoodsReceiptItemDto {
 
   @IsOptional()
   @IsString()
+  lotNumber?: string;
+
+  @IsOptional()
+  @IsIn(GOODS_RECEIPT_QUALITY_STATUSES)
+  qualityStatus?: typeof GOODS_RECEIPT_QUALITY_STATUSES[number];
+
+  @IsOptional()
+  @IsString()
+  lineNote?: string;
+
+  @IsOptional()
+  @IsString()
   unit?: string;
 }
 
 export class CreateGoodsReceiptDto {
-  @IsUUID()
   @IsNotEmpty()
+  @IsString()
   purchaseOrderId: string;
 
   @IsDateString()
@@ -40,6 +67,18 @@ export class CreateGoodsReceiptDto {
   @IsOptional()
   @IsString()
   deliveryNoteNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  warehouseName?: string;
+
+  @IsOptional()
+  @IsString()
+  warehouseLocation?: string;
+
+  @IsOptional()
+  @IsString()
+  attachmentUrl?: string;
 
   @IsOptional()
   @IsString()

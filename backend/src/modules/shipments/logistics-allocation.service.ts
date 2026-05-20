@@ -33,7 +33,7 @@ export class LogisticsAllocationService {
     const manager = this.dataSource.manager;
 
     const shipment = await manager.findOne(Shipment, {
-      where: { id: shipmentId },
+      where: { _id: shipmentId },
       relations: ['salesContract', 'salesContract.items', 'salesContract.items.product']
     });
 

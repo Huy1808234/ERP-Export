@@ -1,6 +1,6 @@
 import { PartialType } from '@nestjs/mapped-types';
 import { CreateProformaInvoiceDto } from './create-proforma-invoice.dto';
-import { IsNumber, IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsDateString, IsNumber, IsOptional, IsString } from 'class-validator';
 
 export class UpdateProformaInvoiceDto extends PartialType(CreateProformaInvoiceDto) {
   @IsNumber()
@@ -14,4 +14,12 @@ export class UpdateProformaInvoiceDto extends PartialType(CreateProformaInvoiceD
   @IsString()
   @IsOptional()
   otherFeeCurrency?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  isPaid?: boolean;
+
+  @IsDateString()
+  @IsOptional()
+  paidAt?: string;
 }

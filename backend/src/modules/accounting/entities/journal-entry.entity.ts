@@ -1,5 +1,6 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToMany, DeleteDateColumn, Index } from 'typeorm';
+import { BeforeInsert, Entity, PrimaryColumn, Column, CreateDateColumn, UpdateDateColumn, OneToMany, DeleteDateColumn, Index } from 'typeorm';
 import { LedgerEntry } from './ledger-entry.entity';
+import { createEntityId } from '@/common/ids/entity-id.util';
 
 export enum JournalStatus {
   DRAFT = 'DRAFT',
@@ -9,8 +10,15 @@ export enum JournalStatus {
 
 @Entity('journal_entries')
 export class JournalEntry {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
+  @PrimaryColumn({ type: 'varchar', length: 40, name: '_id' })
+  _id: string;
+
+  @BeforeInsert()
+  assignId() {
+    if (!this._id) {
+      this._id = createEntityId('je');
+    }
+  }
 
   @Column({ unique: true })
   entryNumber: string;
@@ -35,7 +43,7 @@ export class JournalEntry {
   items: LedgerEntry[];
 
   @Column({ nullable: true })
-  createdById: string;
+  createdByUsername: string;
 
   @CreateDateColumn()
   createdAt: Date;

@@ -52,8 +52,9 @@
 - Gửi PO đến nhà cung cấp
 - Nhận hàng và tạo Phiếu nhập kho (Goods Receipt Note — GRN)
 - Nhận hóa đơn GTGT từ nhà cung cấp (Vendor Invoice)
-- Đối chiếu 3 chiều: PO + GRN + Vendor Invoice
-- Thanh toán nhà cung cấp, ghi nhận AP
+- Đối chiếu 3 chiều theo từng dòng hàng: PO + GRN + Vendor Invoice
+- Chỉ ghi nhận AP/hạch toán 331 cho phần hóa đơn khớp hàng đã nhập kho
+- Thanh toán nhà cung cấp và tất toán AP sau khi hóa đơn được duyệt thanh toán
 
 ### Xử Lý Ngoại Lệ
 - Hàng nhập thiếu / thừa so với PO — ghi số thực nhận, backorder phần còn lại
@@ -328,3 +329,24 @@
 - Tích hợp tỷ giá hối đoái tự động (Vietcombank / ECB API)
 - Lịch sử phiên bản cho mọi document (version history)
 - Tìm kiếm toàn văn (full-text search) trên hợp đồng, buyer, sản phẩm
+
+## 16. Cổng Thông Tin Khách Hàng (B2B Customer Portal)
+
+### 16.1. Tính năng Công khai (Không cần đăng nhập)
+- **Catalog Sản phẩm**: Xem danh sách sản phẩm, mô tả hàng hóa, mã HS Code và hình ảnh demo.
+- **Tra cứu Thông tin**: Xem giới thiệu công ty, dịch vụ logistics và thông tin liên hệ.
+- **Đăng ký tài khoản**: Form đăng ký dành cho đối tác mới để tham gia hệ thống.
+
+### 16.2. Tính năng Bảo mật (Bắt buộc Đăng nhập) 
+- **Quản lý Yêu cầu (Inquiry)**: Tạo mới và theo dõi các yêu cầu báo giá gửi cho đội Sales.
+- **Tài chính & Thanh toán**:
+    - Xem sao kê công nợ (Statement of Account).
+    - Tải lên lệnh chuyển tiền (T/T Receipt / Swift MT103) để kế toán xác nhận.
+- **Đơn hàng & Hợp đồng**:
+    - Tra cứu lịch sử các bản Proforma Invoice (PI) và Sales Contract.
+    - Phê duyệt/Ký điện tử (E-Sign) trực tiếp trên các bản hợp đồng nháp.
+- **Theo dõi Lô hàng (Shipment Tracking)**:
+    - Xem Timeline trạng thái chi tiết của từng lô hàng (Đang sản xuất → Xuất kho → Đang trên biển).
+    - Xem thông tin Tàu, Chuyến, Số Seal, Số Container.
+- **Trung tâm Chứng từ (Document Center)**: Tải bộ chứng từ gốc (Commercial Invoice, Packing List, B/L, C/O...) sau khi lô hàng hoàn tất.
+- **Hỗ trợ & Khiếu nại**: Tạo Ticket báo sự cố hàng hóa, đính kèm hình ảnh và chat trực tiếp với nhân viên phụ trách.

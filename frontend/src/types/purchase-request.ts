@@ -11,7 +11,7 @@ export enum PRStatus {
 }
 
 export interface IPurchaseRequestItem {
-  id?: string;
+  _id?: string;
   productId: string;
   product?: IProduct;
   description?: string;
@@ -22,7 +22,7 @@ export interface IPurchaseRequestItem {
 }
 
 export interface IPurchaseRequest {
-  id: string;
+  _id: string;
   prNumber: string;
   requestDate: string;
   expectedDate?: string;
@@ -30,10 +30,17 @@ export interface IPurchaseRequest {
   purpose?: string;
   totalAmount: number;
   status: PRStatus;
+  approvalWorkflowRequestId?: string | null;
+  submittedForApprovalByUsername?: string | null;
+  submittedForApprovalAt?: string | null;
+  approvedByUsername?: string | null;
+  approvedAt?: string | null;
+  rejectionReason?: string | null;
   note?: string;
   items: IPurchaseRequestItem[];
   createdBy?: {
-    id: string;
+    _id: string;
+    username: string;
     email: string;
     name: string;
   };

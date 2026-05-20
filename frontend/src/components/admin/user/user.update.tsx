@@ -1,8 +1,9 @@
 import { Form, Input, Modal, Select, Switch } from "antd";
-import { notification } from "@/library/antd.static";
+import { notification } from "@/providers/antd-static";
 import { useEffect, useState } from "react";
-import { sendRequest } from "@/utils/api";
+import { sendRequest } from "@/lib/api-client";
 import { getSession } from "next-auth/react";
+import { getAccessToken } from '@/lib/auth-token';
 
 interface IProps {
     isUpdateModalOpen: boolean;
@@ -14,7 +15,7 @@ interface IProps {
 }
 
 interface IRole {
-    id: string;
+    _id: string;
     name: string;
     description: string;
 }
@@ -30,7 +31,7 @@ const UserUpdateModal = (props: IProps) => {
             const res = await sendRequest<IBackendRes<IRole[]>>({
                 url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/roles`,
                 method: "GET",
-                headers: { Authorization: `Bearer ${currentSession?.user?.access_token}` }
+                headers: { Authorization: `Bearer ${getAccessToken(currentSession)}` }
             });
             if (res?.data) {
                 setRoles(res.data);
@@ -45,9 +46,10 @@ const UserUpdateModal = (props: IProps) => {
         if (dataUpdate) {
             form.setFieldsValue({
                 name: dataUpdate.name,
+                username: dataUpdate.username,
                 phone: dataUpdate.phone,
                 address: dataUpdate.address,
-                roleId: dataUpdate.role?.id || dataUpdate.roleId,
+                roleName: dataUpdate.role?.name || dataUpdate.roleName,
                 isActive: dataUpdate.isActive
             });
         }
@@ -60,14 +62,15 @@ const UserUpdateModal = (props: IProps) => {
     }
 
     const onFinish = async (values: any) => {
-        if (!dataUpdate?.id) return;
+        const userRef = dataUpdate?._id || dataUpdate?.username;
+        if (!userRef) return;
         
         const currentSession = await getSession();
         const res = await sendRequest<IBackendRes<any>>({
-            url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/users/${dataUpdate.id}`,
+            url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/users/${userRef}`,
             method: "PATCH",
-            body: { id: dataUpdate.id, ...values },
-            headers: { Authorization: `Bearer ${currentSession?.user?.access_token}` }
+            body: { ...values },
+            headers: { Authorization: `Bearer ${getAccessToken(currentSession)}` }
         })
         if (res?.data) {
             handleCloseUpdateModal();
@@ -102,6 +105,14 @@ const UserUpdateModal = (props: IProps) => {
                 </Form.Item>
 
                 <Form.Item
+                    label="Username"
+                    name="username"
+                    rules={[{ required: true, message: 'Vui lòng nhập username!' }]}
+                >
+                    <Input />
+                </Form.Item>
+
+                <Form.Item
                     label="Số điện thoại"
                     name="phone"
                 >
@@ -117,12 +128,12 @@ const UserUpdateModal = (props: IProps) => {
 
                 <Form.Item
                     label="Loại Quyền (Role)"
-                    name="roleId"
+                    name="roleName"
                     rules={[{ required: true, message: 'Vui lòng chọn quyền!' }]}
                 >
                     <Select
                         placeholder="Chọn vai trò người dùng"
-                        options={roles.map(r => ({ value: r.id, label: r.name + (r.description ? ` - ${r.description}` : '') }))}
+                        options={roles.map(r => ({ value: r.name, label: r.name + (r.description ? ` - ${r.description}` : '') }))}
                     />
                 </Form.Item>
 

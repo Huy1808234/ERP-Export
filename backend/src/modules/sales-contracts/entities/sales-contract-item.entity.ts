@@ -1,12 +1,20 @@
-import { Entity, Column, PrimaryGeneratedColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { BeforeInsert, Column, Entity, JoinColumn, ManyToOne, PrimaryColumn } from 'typeorm';
 import { SalesContract } from './sales-contract.entity';
 import { Product } from '../../products/entities/product.entity';
 import { ColumnNumericTransformer } from '@/helpers/typeorm.util';
+import { createEntityId } from '@/common/ids/entity-id.util';
 
 @Entity('sales_contract_items')
 export class SalesContractItem {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
+  @PrimaryColumn({ type: 'varchar', length: 40, name: '_id' })
+  _id: string;
+
+  @BeforeInsert()
+  assignId() {
+    if (!this._id) {
+      this._id = createEntityId('sc_item');
+    }
+  }
 
   @Column()
   salesContractId: string;

@@ -9,9 +9,12 @@ export interface IPurchaseReturnItem {
 }
 
 export interface IPurchaseReturn {
-  id: string;
+  _id: string;
   returnNumber: string;
   purchaseOrderId?: string;
+  qualityCheckId?: string | null;
+  claimNumber?: string | null;
+  status?: string;
   purchaseOrder?: {
     poNumber: string;
   };

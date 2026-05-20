@@ -1,4 +1,4 @@
-import { sendRequest } from "@/utils/api";
+import { sendRequest } from "@/lib/api-client";
 
 export interface IBackendRes<T> {
     data?: T;
@@ -15,7 +15,7 @@ export abstract class BaseApiService {
     }
 
     async findAll<T>(query: any): Promise<IBackendRes<T>> {
-        return sendRequest<T>({
+        return sendRequest<IBackendRes<T>>({
             url: this.baseUrl,
             method: "GET",
             queryParams: query,
@@ -23,14 +23,14 @@ export abstract class BaseApiService {
     }
 
     async findOne<T>(id: string): Promise<IBackendRes<T>> {
-        return sendRequest<T>({
+        return sendRequest<IBackendRes<T>>({
             url: `${this.baseUrl}/${id}`,
             method: "GET",
         });
     }
 
     async create<T>(data: any): Promise<IBackendRes<T>> {
-        return sendRequest<T>({
+        return sendRequest<IBackendRes<T>>({
             url: this.baseUrl,
             method: "POST",
             body: data,
@@ -38,7 +38,7 @@ export abstract class BaseApiService {
     }
 
     async update<T>(id: string, data: any): Promise<IBackendRes<T>> {
-        return sendRequest<T>({
+        return sendRequest<IBackendRes<T>>({
             url: `${this.baseUrl}/${id}`,
             method: "PATCH",
             body: data,
@@ -46,7 +46,7 @@ export abstract class BaseApiService {
     }
 
     async delete<T>(id: string): Promise<IBackendRes<T>> {
-        return sendRequest<T>({
+        return sendRequest<IBackendRes<T>>({
             url: `${this.baseUrl}/${id}`,
             method: "DELETE",
         });

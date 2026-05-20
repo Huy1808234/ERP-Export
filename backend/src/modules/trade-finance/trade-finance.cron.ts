@@ -4,6 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { LessThan, Repository, In } from 'typeorm';
 import { LetterOfCredit, LCStatus } from './entities/letter-of-credit.entity';
 import dayjs from 'dayjs';
+import { TradeFinanceService } from './trade-finance.service';
 
 @Injectable()
 export class TradeFinanceCron {
@@ -12,6 +13,7 @@ export class TradeFinanceCron {
   constructor(
     @InjectRepository(LetterOfCredit)
     private lcRepository: Repository<LetterOfCredit>,
+    private tradeFinanceService: TradeFinanceService,
   ) {}
 
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
@@ -46,6 +48,11 @@ export class TradeFinanceCron {
           if (lc.latestShipmentDate && dayjs(lc.latestShipmentDate).isBefore(sevenDaysFromNow)) this.logger.warn(`- LC ${lc.lcNumber}: SHIPMENT DEADLINE ALERT (${dayjs(lc.latestShipmentDate).format('YYYY-MM-DD')})`);
           if (lc.presentationDeadline && dayjs(lc.presentationDeadline).isBefore(sevenDaysFromNow)) this.logger.warn(`- LC ${lc.lcNumber}: PRESENTATION DEADLINE ALERT (${dayjs(lc.presentationDeadline).format('YYYY-MM-DD')})`);
       });
+    }
+
+    const notificationResult = await this.tradeFinanceService.publishDeadlineNotifications(7, 'system');
+    if (notificationResult.emitted > 0) {
+      this.logger.warn(`Published ${notificationResult.emitted} Trade Finance deadline notification(s).`);
     }
 
     // 2. Auto-expire LCs that passed their expiryDate

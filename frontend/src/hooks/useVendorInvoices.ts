@@ -1,9 +1,10 @@
 import { useState, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
-import { sendRequest } from '@/utils/api';
+import { sendRequest } from '@/lib/api-client';
 import { IVendorInvoice } from '@/types/vendor-invoice';
 import { IPaginationMeta } from '@/types/purchase-order';
-import { notification } from '@/library/antd.static';
+import { notification } from '@/providers/antd-static';
+import { getAccessToken } from '@/lib/auth-token';
 
 interface FetchParams {
   current: number;
@@ -30,7 +31,7 @@ export const useVendorInvoices = () => {
           ...(params.invoiceNumber ? { invoiceNumber: `/${params.invoiceNumber}/i` } : {}),
           populate: 'purchaseOrder,vendor',
         },
-        headers: { Authorization: `Bearer ${session?.access_token}` },
+        headers: { Authorization: `Bearer ${getAccessToken(session)}` },
       });
 
       if (res?.data) {

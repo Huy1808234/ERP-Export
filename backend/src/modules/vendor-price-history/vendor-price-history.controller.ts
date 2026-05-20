@@ -29,21 +29,21 @@ export class VendorPriceHistoryController {
     return this.vendorPriceHistoryService.findAll(vendorId, productId);
   }
 
-  @Get(':id')
+  @Get(':_id')
   @Roles('ADMIN', 'MANAGER', 'PURCHASING', 'ACCOUNTANT')
-  findOne(@Param('id') id: string) {
-    return this.vendorPriceHistoryService.findOne(id);
+  findOne(@Param('_id') recordId: string) {
+    return this.vendorPriceHistoryService.findOne(recordId);
   }
 
-  @Patch(':id')
+  @Patch(':_id')
   @Roles('ADMIN', 'MANAGER', 'PURCHASING')
-  update(@Param('id') id: string, @Body() dto: UpdateVendorPriceHistoryDto) {
-    return this.vendorPriceHistoryService.update(id, dto);
+  update(@Param('_id') recordId: string, @Body() dto: UpdateVendorPriceHistoryDto) {
+    return this.vendorPriceHistoryService.update(recordId, dto);
   }
 
-  @Delete(':id')
+  @Delete(':_id')
   @Roles('ADMIN', 'MANAGER')
-  remove(@Param('id') id: string) {
-    return this.vendorPriceHistoryService.remove(id);
+  remove(@Param('_id') recordId: string) {
+    return this.vendorPriceHistoryService.remove(recordId);
   }
 }

@@ -1,24 +1,19 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Card, Row, Col, Typography, Statistic, Table, Tag, Space, Skeleton, notification } from 'antd';
-import {
-  DollarOutlined,
-  ArrowUpOutlined,
-  ArrowDownOutlined,
-  BankOutlined,
-  LineChartOutlined,
-  PieChartOutlined,
-  LoadingOutlined
-} from '@ant-design/icons';
+import { Card, Row, Col, Typography, Statistic, Empty } from 'antd';
+import { DollarOutlined, BankOutlined, LineChartOutlined, PieChartOutlined, LoadingOutlined } from '@ant-design/icons';
 import { PageHeader } from '@/components/ui/PageHeader';
+import { SafeResponsiveContainer } from '@/components/ui/SafeResponsiveContainer';
 import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   BarChart, Bar, Legend, Cell
 } from 'recharts';
 import { motion } from 'framer-motion';
 import { useSession } from 'next-auth/react';
-import { sendRequest } from '@/utils/api';
+import { sendRequest } from '@/lib/api-client';
+import { getAccessToken } from '@/lib/auth-token';
+import { canReadCostFields } from '@/lib/field-access';
 
 const { Title, Text } = Typography;
 
@@ -28,7 +23,8 @@ const FinanceDashboardPage = () => {
   const { data: session } = useSession();
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<any>(null);
-  const accessToken = (session as any)?.access_token;
+  const accessToken = getAccessToken(session);
+  const canViewCost = canReadCostFields(session?.user);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -52,13 +48,7 @@ const FinanceDashboardPage = () => {
   const history = finance.history || [];
   const exchangeRate = finance.exchangeRate || 25450;
 
-  // Giả định allocation data từ backend (tạm thời lấy sample nếu backend chưa trả chi tiết)
-  const allocationData = [
-    { name: 'Cước Biển (Sea Freight)', value: 45000 },
-    { name: 'Vận Tải Nội Địa', value: 15000 },
-    { name: 'Phí Cảng (THC, LSS)', value: 12000 },
-    { name: 'Bảo Hiểm', value: 8000 },
-  ];
+  const allocationData = canViewCost ? (finance.logisticsCostBreakdown || []) : [];
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -123,9 +113,10 @@ const FinanceDashboardPage = () => {
               <div className="absolute top-0 right-0 p-4 opacity-10"><LineChartOutlined className="text-6xl text-blue-500" /></div>
               <Statistic
                 title={<Text className="text-slate-400 font-bold uppercase tracking-wider text-xs">Lợi Nhuận Gộp (Gross Profit)</Text>}
-                value={(finance.grossProfitVnd / exchangeRate)}
+                value={canViewCost ? (finance.grossProfitVnd / exchangeRate) : 0}
+                formatter={(value) => canViewCost ? Number(value || 0).toLocaleString() : 'Ẩn theo phân quyền'}
                 precision={0}
-                prefix="$"
+                prefix={canViewCost ? '$' : undefined}
                 styles={{ content: { color: '#60a5fa', fontWeight: 900, fontSize: '32px' } }}
               />
               <div className="mt-4 flex items-center text-blue-400 text-sm font-bold">
@@ -181,8 +172,8 @@ const FinanceDashboardPage = () => {
               title={<Text className="text-white font-bold text-lg">Xu Hướng Doanh Thu & Lợi Nhuận</Text>}
               styles={{ header: { borderBottom: '1px solid rgba(30, 41, 59, 0.5)' } }}
             >
-              <div className="h-80 w-full mt-4">
-                <ResponsiveContainer width="100%" height={320} minWidth={0}>
+              <div className="h-80 w-full mt-4" style={{ minWidth: 0, minHeight: 320 }}>
+                <SafeResponsiveContainer height={320}>
                   <AreaChart data={history} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                     <defs>
                       <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
@@ -204,9 +195,9 @@ const FinanceDashboardPage = () => {
                     />
                     <Legend />
                     <Area type="monotone" dataKey="revenue" name="Doanh Thu (USD)" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorRev)" />
-                    <Area type="monotone" dataKey="profit" name="Lợi Nhuận Est." stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#colorProf)" />
+                    {canViewCost && <Area type="monotone" dataKey="profit" name="Lợi Nhuận Est." stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#colorProf)" />}
                   </AreaChart>
-                </ResponsiveContainer>
+                </SafeResponsiveContainer>
               </div>
             </Card>
           </motion.div>
@@ -219,22 +210,29 @@ const FinanceDashboardPage = () => {
               title={<Text className="text-white font-bold text-lg">Cơ Cấu Chi Phí Logistics</Text>}
               styles={{ header: { borderBottom: '1px solid rgba(30, 41, 59, 0.5)' } }}
             >
-              <div className="h-80 w-full mt-4 flex items-center justify-center">
-                <ResponsiveContainer width="100%" height={320} minWidth={0}>
-                  <BarChart data={allocationData} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                    <XAxis type="number" hide />
-                    <YAxis dataKey="name" type="category" stroke="#64748b" axisLine={false} tickLine={false} width={120} tick={{ fill: '#94a3b8', fontSize: 12 }} />
-                    <Tooltip
-                      cursor={{ fill: 'rgba(255,255,255,0.05)' }}
-                      contentStyle={{ backgroundColor: '#0f172a', border: 'none', borderRadius: '12px', color: '#fff' }}
-                    />
-                    <Bar dataKey="value" radius={[0, 8, 8, 0]} barSize={24}>
-                      {allocationData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
+              <div className="h-80 w-full mt-4 flex items-center justify-center" style={{ minWidth: 0, minHeight: 320 }}>
+                {!canViewCost ? (
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={<span style={{ color: '#94a3b8' }}>Chi phí logistics đang được ẩn theo phân quyền</span>} />
+                ) : allocationData.length > 0 ? (
+                  <SafeResponsiveContainer height={320}>
+                    <BarChart data={allocationData} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                      <XAxis type="number" hide />
+                      <YAxis dataKey="name" type="category" stroke="#64748b" axisLine={false} tickLine={false} width={120} tick={{ fill: '#94a3b8', fontSize: 12 }} />
+                      <Tooltip
+                        cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                        contentStyle={{ backgroundColor: '#0f172a', border: 'none', borderRadius: '12px', color: '#fff' }}
+                        formatter={(val: any) => [`${Number(val).toLocaleString()} VND`, '']}
+                      />
+                      <Bar dataKey="value" radius={[0, 8, 8, 0]} barSize={24}>
+                        {allocationData.map((entry: any, index: number) => (
+                          <Cell key={`${entry.name}-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </SafeResponsiveContainer>
+                ) : (
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={<span style={{ color: '#94a3b8' }}>Chưa có chi phí logistics trong kỳ</span>} />
+                )}
               </div>
             </Card>
           </motion.div>

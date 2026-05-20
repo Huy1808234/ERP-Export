@@ -1,49 +1,51 @@
-// create-auth.dto.ts
-
-import {
-  IsEmail, // Nên dùng cái này để validate định dạng email
-  IsNotEmpty,
-  IsOptional,
-  IsString,
-  MinLength,
-} from 'class-validator';
+import { IsEmail, IsNotEmpty, IsOptional, IsString, MinLength } from 'class-validator';
 
 export class CreateAuthDto {
-  @IsNotEmpty({ message: 'Email không được để trống' })
-  @IsEmail({}, { message: 'Email không đúng định dạng' }) 
+  @IsNotEmpty({ message: 'Email is required' })
+  @IsEmail({}, { message: 'Email is invalid' })
   email: string;
 
-  @IsNotEmpty({ message: 'Password không được để trống' })
+  @IsNotEmpty({ message: 'Password is required' })
   @IsString()
-  @MinLength(6, { message: 'Password phải từ 6 ký tự trở lên' })
+  @MinLength(6, { message: 'Password must have at least 6 characters' })
   password: string;
 
   @IsOptional()
   @IsString()
   name: string;
+
+  @IsOptional()
+  @IsString()
+  username?: string;
 }
 
 export class CodeAuthDto {
-  @IsNotEmpty({ message: 'id không được để trống' })
+  @IsNotEmpty({ message: 'Account reference is required' })
   @IsString()
-  id: string;
+  accountRef: string;
 
-  @IsNotEmpty({ message: 'Code không được để trống' })
+  @IsNotEmpty({ message: 'Code is required' })
   @IsString()
   code: string;
 }
 
 export class ChangePasswordAuthDto {
-  @IsNotEmpty({ message: 'id không được để trống' })
+  @IsNotEmpty({ message: 'Account reference is required' })
   @IsString()
-  id: string;
+  accountRef: string;
 
-  @IsNotEmpty({ message: 'Code không được để trống' })
+  @IsNotEmpty({ message: 'Code is required' })
   @IsString()
   code: string;
 
-  @IsNotEmpty({ message: 'Password không được để trống' })
+  @IsNotEmpty({ message: 'Password is required' })
   @IsString()
-  @MinLength(6, { message: 'Password phải từ 6 ký tự trở lên' })
+  @MinLength(6, { message: 'Password must have at least 6 characters' })
   password: string;
+}
+
+export class RefreshTokenAuthDto {
+  @IsNotEmpty({ message: 'Refresh token is required' })
+  @IsString()
+  refreshToken: string;
 }

@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { Incoterms, SalesContract } from './entities/sales-contract.entity';
+import { Incoterm } from '../quotations/entities/quotation.entity';
+import { SalesContract } from './entities/sales-contract.entity';
 
 @Injectable()
 export class IncotermsService {
@@ -8,46 +9,41 @@ export class IncotermsService {
    * Lõi: Tự động cộng dồn các loại chi phí Logistics vào giá bán
    */
   calculateTotal(contract: Partial<SalesContract>): { totalAmount: number; totalAmountVnd: number } {
-    const baseValue = contract.items?.reduce((sum, item) => sum + (Number(item.totalPrice) || 0), 0) || 0;
-    
-    let totalAmount = baseValue;
+    const items = contract.items || [];
+    const itemsSum = items.reduce((sum, item) => sum + (Number(item.quantity || 0) * Number(item.unitPrice || 0)), 0);
 
-    // Logic cộng dồn chi phí Logistics dựa trên Incoterm
+    let totalAmount = itemsSum;
+
+    // SENIOR LOGIC: Accurate Total accumulation based on Incoterm obligations
+    const domestic = Number(contract.domesticTransportCost) || 0;
+    const port = Number(contract.portCharges) || 0;
+    const sea = Number(contract.seaFreight) || 0;
+    const insurance = Number(contract.insuranceCost) || 0;
+
+    const otherFee = Number(contract.otherFee) || 0;
+    const logisticsFee = Number(contract.logisticsFee) || 0;
+
     switch (contract.incoterm) {
-      case Incoterms.EXW:
-        // Giá tại xưởng: Không cộng gì thêm
+      case Incoterm.EXW:
+        totalAmount = itemsSum;
         break;
-      
-      case Incoterms.FOB:
-        // FOB = EXW + Vận chuyển nội địa + Phí cảng
-        totalAmount += (Number(contract.domesticTransportCost) || 0);
-        totalAmount += (Number(contract.portCharges) || 0);
+      case Incoterm.FOB:
+        totalAmount = itemsSum + domestic + port;
         break;
-
-      case Incoterms.CFR:
-        // CFR = FOB + Cước tàu
-        totalAmount += (Number(contract.domesticTransportCost) || 0);
-        totalAmount += (Number(contract.portCharges) || 0);
-        totalAmount += (Number(contract.seaFreight) || 0);
+      case Incoterm.CFR:
+        totalAmount = itemsSum + domestic + port + sea;
         break;
-      
-      case Incoterms.CIF:
-        // CIF = FOB + Cước tàu + Bảo hiểm
-        totalAmount += (Number(contract.domesticTransportCost) || 0);
-        totalAmount += (Number(contract.portCharges) || 0);
-        totalAmount += (Number(contract.seaFreight) || 0);
-        totalAmount += (Number(contract.insuranceCost) || 0);
+      case Incoterm.CIF:
+      case Incoterm.DAP:
+      case Incoterm.DDP:
+        totalAmount = itemsSum + domestic + port + sea + insurance;
         break;
-
-      case Incoterms.DAP:
-      case Incoterms.DDP:
-        // DAP/DDP = CIF + Phí nội địa tại đích (nếu có, hiện tại cộng dồn các field đã nhập)
-        totalAmount += (Number(contract.domesticTransportCost) || 0);
-        totalAmount += (Number(contract.portCharges) || 0);
-        totalAmount += (Number(contract.seaFreight) || 0);
-        totalAmount += (Number(contract.insuranceCost) || 0);
+      default:
+        totalAmount = itemsSum + domestic + port + sea + insurance; // Fallback
         break;
     }
+
+    totalAmount += logisticsFee + otherFee;
 
     const exchangeRate = Number(contract.exchangeRate) || 1;
     

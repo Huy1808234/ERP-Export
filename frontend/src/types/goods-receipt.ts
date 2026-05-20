@@ -1,31 +1,52 @@
 export type GRNStatus = 'DRAFT' | 'COMPLETED' | 'CANCELLED';
 
 export interface IGRNLine {
-  id: string;
+  _id: string;
+  purchaseOrderItem_id?: string | null;
   productId: string;
   product: {
-    id: string;
+    _id: string;
     vietnameseName: string;
     sku: string;
   };
+  quantityOrdered: number;
   quantityReceived: number;
+  quantityRejected: number;
+  rejectionReason?: string | null;
+  lotNumber?: string | null;
+  qualityStatus?: 'PASS' | 'DAMAGED' | 'WRONG_SPEC' | 'QUARANTINE' | string;
+  lineNote?: string | null;
   unit: string;
   note?: string;
 }
 
 export interface IGoodsReceipt {
-  id: string;
-  grnNumber: string;
+  _id: string;
+  grNumber?: string;
+  grnNumber?: string;
   purchaseOrderId: string;
   purchaseOrder: {
-    id: string;
+    _id: string;
     poNumber: string;
+    orderDate?: string;
+    expectedDeliveryDate?: string;
+    totalAmount?: number;
+    currency?: string;
+    vendor?: {
+      _id: string;
+      name: string;
+    };
   };
   receivedDate: string;
-  receivedById: string;
+  deliveryNoteNumber?: string | null;
+  warehouseName?: string | null;
+  warehouseLocation?: string | null;
+  attachmentUrl?: string | null;
+  receivedByUsername?: string;
   receivedBy: {
-    id: string;
-    email: string;
+    _id: string;
+    username: string;
+    email?: string;
   };
   status: GRNStatus;
   note?: string;

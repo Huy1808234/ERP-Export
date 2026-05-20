@@ -10,11 +10,22 @@ const AdminContent = ({
     const { Content } = Layout;
 
     return (
-        <Content>
+        <Content
+            style={{
+                flex: '1 1 auto',
+                minHeight: 0,
+                minWidth: 0,
+                overflow: 'hidden',
+            }}
+        >
             <div
                 style={{
-                    padding: 24,
-                    minHeight: 'calc(100vh - 180px)',
+                    height: '100%',
+                    minHeight: 0,
+                    width: '100%',
+                    maxWidth: '100%',
+                    boxSizing: 'border-box',
+                    overflow: 'hidden',
                     // background: "#ccc",
                     // borderRadius: "#ccc",
                 }}

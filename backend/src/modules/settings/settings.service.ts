@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Setting } from './entities/setting.entity';
 import { UpdateSettingDto } from './dto/update-setting.dto';
+import { SETTING_KEYS } from './settings.keys';
 
 @Injectable()
 export class SettingsService implements OnModuleInit {
@@ -31,6 +32,21 @@ export class SettingsService implements OnModuleInit {
         key: 'COMPANY_ADDRESS',
         value: '123 Export Street, Dist 1, HCMC, Vietnam',
         description: 'Company legal address',
+      },
+      {
+        key: SETTING_KEYS.DEFAULT_PURCHASE_VAT_RATE,
+        value: '10',
+        description: 'Default VAT rate (%) applied to new purchase orders',
+      },
+      {
+        key: SETTING_KEYS.THREE_WAY_MATCHING_QTY_TOLERANCE,
+        value: '0',
+        description: 'Allowed absolute quantity variance for 3-way matching',
+      },
+      {
+        key: SETTING_KEYS.THREE_WAY_MATCHING_PRICE_TOLERANCE_PERCENT,
+        value: '0',
+        description: 'Allowed unit price variance percentage for 3-way matching',
       }
     ];
 
@@ -48,6 +64,12 @@ export class SettingsService implements OnModuleInit {
 
   async findOne(key: string): Promise<Setting | null> {
     return this.settingRepository.findOne({ where: { key } });
+  }
+
+  async getNumber(key: string, fallback: number): Promise<number> {
+    const setting = await this.findOne(key);
+    const value = Number(setting?.value);
+    return Number.isFinite(value) ? value : fallback;
   }
 
   async update(updateSettingDto: UpdateSettingDto): Promise<Setting> {

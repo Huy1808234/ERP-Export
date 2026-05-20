@@ -1,34 +1,38 @@
 'use client';
 
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { Button, Space, Table, Tag, Input, Select, Typography, Card, Tooltip, Modal, App } from 'antd';
+import { Button, Space, Table, Tag, Input, Select, Typography, Card, Tooltip, App } from 'antd';
 import { ColumnsType } from 'antd/es/table';
-import { FileSearchOutlined, SearchOutlined, CheckCircleOutlined, PlusOutlined, ShoppingCartOutlined, PullRequestOutlined, UserOutlined, DeleteOutlined } from '@ant-design/icons';
+import { FileSearchOutlined, SearchOutlined, CheckCircleOutlined, PlusOutlined, ShoppingCartOutlined, PullRequestOutlined, DeleteOutlined } from '@ant-design/icons';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { debounce } from '@/utils/debounce';
 import { useSession } from 'next-auth/react';
-import { sendRequest } from '@/utils/api';
+import { useRouter } from 'next/navigation';
+import { sendRequest } from '@/lib/api-client';
 import { Avatar } from 'antd';
 
 import { usePurchaseRequests } from '@/hooks/usePurchaseRequests';
-import { PR_STATUS_CONFIG, PR_STATUS_OPTIONS } from '@/constants/purchase-request';
+import { PR_STATUS_CONFIG } from '@/constants/purchase-request';
 import { IPurchaseRequest, PRStatus } from '@/types/purchase-request';
 import { formatVND, formatDate } from '@/utils/format';
 import PurchaseRequestModal from './purchase-request.modal';
 
-import { useTheme } from '@/library/theme.context';
+import { useTheme } from '@/context/theme.context';
 import { theme } from 'antd';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
+import { getAccessToken } from '@/lib/auth-token';
 
 const { Text } = Typography;
 
 const PurchaseRequestTable: React.FC = () => {
   const { token } = theme.useToken();
   const t = useTranslations('PurchaseRequest');
+  const locale = useLocale();
+  const router = useRouter();
   const { isDark } = useTheme();
   const { modal, notification } = App.useApp();
   const { data: session } = useSession();
-  const { data, meta, loading, fetchPRs, approvePR } = usePurchaseRequests();
+  const { data, meta, loading, fetchPRs } = usePurchaseRequests();
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [queryParams, setQueryParams] = useState({
     current: 1,
@@ -51,7 +55,7 @@ const PurchaseRequestTable: React.FC = () => {
   );
 
   const handleCreatePO = useCallback(async (id: string) => {
-    const accessToken = session?.user?.access_token;
+    const accessToken = getAccessToken(session);
 
     try {
       const res = await sendRequest<IBackendRes<any>>({
@@ -63,14 +67,20 @@ const PurchaseRequestTable: React.FC = () => {
       if (res?.data) {
         notification.success({ title: t('notifications.createPOSuccess') });
         fetchPRs(queryParams);
+        router.push(`/${locale}/dashboard/purchase-orders`);
+      } else {
+        notification.error({
+          title: t('notifications.createPOError'),
+          description: res?.message,
+        });
       }
-    } catch (error) {
+    } catch {
       notification.error({ title: t('notifications.createPOError') });
     }
-  }, [session, queryParams, fetchPRs]);
+  }, [fetchPRs, locale, notification, queryParams, router, session, t]);
 
   const handleSubmitPR = useCallback(async (id: string) => {
-    const accessToken = session?.user?.access_token;
+    const accessToken = getAccessToken(session);
     try {
       const res = await sendRequest<IBackendRes<any>>({
         url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/purchase-requests/${id}/submit`,
@@ -80,14 +90,19 @@ const PurchaseRequestTable: React.FC = () => {
       if (res?.data) {
         notification.success({ title: t('notifications.submitSuccess') });
         fetchPRs(queryParams);
+      } else {
+        notification.error({
+          title: t('notifications.submitError'),
+          description: res?.message,
+        });
       }
-    } catch (error) {
+    } catch {
       notification.error({ title: t('notifications.submitError') });
     }
-  }, [session, queryParams, fetchPRs]);
+  }, [fetchPRs, notification, queryParams, session, t]);
 
   const handleDeletePR = useCallback(async (id: string) => {
-    const accessToken = session?.user?.access_token;
+    const accessToken = getAccessToken(session);
     modal.confirm({
       title: t('popconfirm.deleteTitle'),
       content: t('popconfirm.deleteContent'),
@@ -103,12 +118,12 @@ const PurchaseRequestTable: React.FC = () => {
           });
           notification.success({ title: t('notifications.deleteSuccess') });
           fetchPRs(queryParams);
-        } catch (error) {
+        } catch {
           notification.error({ title: t('notifications.deleteError') });
         }
       }
     });
-  }, [session, queryParams, fetchPRs]);
+  }, [fetchPRs, modal, notification, queryParams, session, t]);
 
   const columns: ColumnsType<IPurchaseRequest> = useMemo(() => [
     {
@@ -164,9 +179,9 @@ const PurchaseRequestTable: React.FC = () => {
       key: 'createdBy',
       render: (user?: any) => (
         <Space size={8}>
-          <Avatar size="small" style={{ backgroundColor: token.colorPrimary }}>{user?.fullName?.charAt(0) || user?.email?.charAt(0) || 'U'}</Avatar>
+          <Avatar size="small" style={{ backgroundColor: token.colorPrimary }}>{(user?.username || user?.name || 'U').charAt(0)}</Avatar>
           <Text type="secondary" style={{ color: isDark ? '#94a3b8' : undefined, fontSize: 13 }}>
-            {user?.fullName || (user?.email ? user.email.split('@')[0] : 'System')}
+            {user?.username || user?.name || 'system'}
           </Text>
         </Space>
       ),
@@ -191,7 +206,7 @@ const PurchaseRequestTable: React.FC = () => {
           {record.status === 'DRAFT' && (
             <>
                 <Tooltip title={t('tooltips.submitApproval')}>
-                    <Button type="text" icon={<PullRequestOutlined style={{ color: '#1890ff' }} />} onClick={() => handleSubmitPR(record.id)} />
+                    <Button type="text" icon={<PullRequestOutlined style={{ color: '#1890ff' }} />} onClick={() => handleSubmitPR(record._id)} />
                 </Tooltip>
                 <Tooltip title={t('tooltips.edit')}>
                     <Button 
@@ -205,38 +220,27 @@ const PurchaseRequestTable: React.FC = () => {
                     />
                 </Tooltip>
                 <Tooltip title={t('tooltips.delete')}>
-                    <Button type="text" danger icon={<DeleteOutlined />} onClick={() => handleDeletePR(record.id)} />
+                    <Button type="text" danger icon={<DeleteOutlined />} onClick={() => handleDeletePR(record._id)} />
                 </Tooltip>
             </>
-          )}
-          {record.status === 'PENDING' && (
-            <Tooltip title={t('tooltips.approve')}>
-              <Button 
-                type="text" 
-                icon={<CheckCircleOutlined style={{ color: '#52c41a' }} />} 
-                onClick={() => approvePR(record.id, () => fetchPRs(queryParams))}
-              />
-            </Tooltip>
           )}
           {record.status === 'APPROVED' && (
             <Tooltip title={t('tooltips.createPO')}>
               <Button 
                 type="text" 
                 icon={<ShoppingCartOutlined style={{ color: '#faad14' }} />} 
-                onClick={() => handleCreatePO(record.id)}
+                onClick={() => handleCreatePO(record._id)}
               />
             </Tooltip>
           )}
         </Space>
       ),
     },
-  ], [queryParams, approvePR, fetchPRs, handleCreatePO, isDark, token, t]);
+  ], [handleCreatePO, handleDeletePR, handleSubmitPR, isDark, token, t]);
 
   return (
     <div style={{ 
-      padding: '24px', 
-      backgroundColor: isDark ? '#0f172a' : token.colorBgLayout, 
-      minHeight: '100vh',
+      backgroundColor: 'transparent',
       transition: 'all 0.3s ease'
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
@@ -250,7 +254,10 @@ const PurchaseRequestTable: React.FC = () => {
           icon={<PlusOutlined />} 
           size="large" 
           style={{ borderRadius: 8 }}
-          onClick={() => setIsModalOpen(true)}
+          onClick={() => {
+            setModalMode('create');
+            setIsModalOpen(true);
+          }}
         >
           {t('createBtn')}
         </Button>
@@ -289,7 +296,7 @@ const PurchaseRequestTable: React.FC = () => {
             columns={columns}
             dataSource={data}
             loading={loading}
-            rowKey="id"
+            rowKey="_id"
             bordered={false}
             pagination={{
               current: meta.current,

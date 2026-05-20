@@ -1,7 +1,8 @@
-import { IsArray, IsDateString, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, ValidateNested } from 'class-validator';
+import { IsArray, IsDateString, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ContainerType } from '../entities/container.entity';
 import { ShipmentStatus } from '../entities/shipment.entity';
+import { IsEntityId } from '@/common/ids/entity-id.validator';
 
 class ContainerDto {
   @IsString()
@@ -26,15 +27,15 @@ class ContainerDto {
 }
 
 export class CreateShipmentDto {
-  @IsUUID()
+  @IsEntityId()
   @IsOptional()
   salesContractId: string;
 
-  @IsUUID()
+  @IsEntityId()
   @IsOptional()
   proformaInvoiceId: string;
 
-  @IsUUID()
+  @IsEntityId()
   @IsOptional()
   logisticsPartnerId: string;
 

@@ -1,6 +1,7 @@
-import { Column, CreateDateColumn, Entity, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn, ManyToOne, JoinColumn, DeleteDateColumn } from 'typeorm';
+import { BeforeInsert, Column, CreateDateColumn, DeleteDateColumn, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryColumn, UpdateDateColumn } from 'typeorm';
 import { PurchaseRequestItem } from './purchase-request-item.entity';
 import { User } from '@/modules/users/entities/user.entity';
+import { createEntityId } from '@/common/ids/entity-id.util';
 
 export enum PurchaseRequestStatus {
   DRAFT = 'DRAFT',
@@ -21,8 +22,8 @@ export enum PurchaseRequestPriority {
 
 @Entity('purchase_requests')
 export class PurchaseRequest {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
+  @PrimaryColumn({ type: 'varchar', length: 40, name: '_id' })
+  _id: string;
 
   @Column({ unique: true })
   prNumber: string;
@@ -50,21 +51,33 @@ export class PurchaseRequest {
   })
   status: PurchaseRequestStatus;
 
+  @Column({ type: 'varchar', length: 40, nullable: true })
+  approvalWorkflowRequestId: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  submittedForApprovalByUsername: string | null;
+
+  @Column({ type: 'timestamp', nullable: true })
+  submittedForApprovalAt: Date | null;
+
   @Column({ type: 'timestamp', nullable: true })
   requiredDate: Date | null;
 
+  @Column({ type: 'timestamp', nullable: true })
+  expectedDate: Date | null;
+
   @Column()
-  createdById: string;
+  createdByUsername: string;
 
   @ManyToOne(() => User)
-  @JoinColumn({ name: 'createdById' })
+  @JoinColumn({ name: 'createdByUsername', referencedColumnName: 'username' })
   createdBy: User;
 
-  @Column({ nullable: true })
-  approvedById: string | null;
+  @Column({ type: 'varchar', nullable: true })
+  approvedByUsername: string | null;
 
   @ManyToOne(() => User, { nullable: true })
-  @JoinColumn({ name: 'approvedById' })
+  @JoinColumn({ name: 'approvedByUsername', referencedColumnName: 'username' })
   approvedBy: User | null;
 
   @Column({ type: 'timestamp', nullable: true })
@@ -73,7 +86,7 @@ export class PurchaseRequest {
   @Column({ type: 'text', nullable: true })
   rejectionReason: string | null;
 
-  @OneToMany(() => PurchaseRequestItem, (item) => item.purchaseRequest, { cascade: true })
+  @OneToMany(() => PurchaseRequestItem, (item) => item.purchaseRequest, { cascade: true, orphanedRowAction: 'delete' })
   items: PurchaseRequestItem[];
 
   @Column({ type: 'text', nullable: true })
@@ -87,4 +100,11 @@ export class PurchaseRequest {
 
   @DeleteDateColumn()
   deletedAt: Date;
+
+  @BeforeInsert()
+  assignId() {
+    if (!this._id) {
+      this._id = createEntityId('pr');
+    }
+  }
 }

@@ -6,6 +6,12 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { IS_PUBLIC_KEY, ROLES_KEY } from '@/decorator/customize';
+import type { AuthenticatedUser } from '@/common/types/authenticated-user.type';
+import { normalizeRoleName } from '@/common/auth/role-catalog';
+
+type RequestWithUser = {
+  user?: AuthenticatedUser;
+};
 
 @Injectable()
 export class RolesGuard implements CanActivate {
@@ -30,26 +36,23 @@ export class RolesGuard implements CanActivate {
       return true;
     }
 
-    const request = context.switchToHttp().getRequest();
+    const request = context.switchToHttp().getRequest<RequestWithUser>();
     const userRoleObj = request.user?.role;
     
     // Support both string fallback and Role object
-    const userRoleRaw = typeof userRoleObj === 'string' ? userRoleObj : userRoleObj?.name;
+    const userRoleRaw =
+      typeof userRoleObj === 'string'
+        ? userRoleObj
+        : userRoleObj?.name || request.user?.roleName;
 
     if (!userRoleRaw) {
       throw new ForbiddenException('Bạn không có quyền truy cập tài nguyên này');
     }
 
-    const userRole = userRoleRaw.toUpperCase();
-    const normalizedRequiredRoles = requiredRoles.map(r => r.toUpperCase());
+    const userRole = normalizeRoleName(userRoleRaw);
+    const normalizedRequiredRoles = requiredRoles.map(normalizeRoleName);
 
-    // Special case: "SUPER ADMIN" or "ADMIN" should both count as "ADMIN"
-    const hasRole = normalizedRequiredRoles.some(required => {
-        if (required === 'ADMIN') {
-            return userRole === 'ADMIN' || userRole === 'SUPER ADMIN';
-        }
-        return userRole === required;
-    });
+    const hasRole = normalizedRequiredRoles.includes(userRole);
 
     if (!hasRole) {
       throw new ForbiddenException('Bạn không có quyền truy cập tài nguyên này');

@@ -87,7 +87,7 @@ export class CurrenciesService implements OnModuleInit {
           if (item.rate === null) continue;
 
           const latestRate = await this.exchangeRateRepository.findOne({
-            where: { currencyId: cur.id, rateType: item.rateType },
+            where: { currencyId: cur._id, rateType: item.rateType },
             order: { effectiveDate: 'DESC', createdAt: 'DESC' },
           });
 
@@ -96,7 +96,7 @@ export class CurrenciesService implements OnModuleInit {
           }
 
           await this.createExchangeRate({
-            currencyId: cur.id,
+            currencyId: cur._id,
             rate: item.rate,
             rateType: item.rateType,
             effectiveDate: new Date().toISOString(),
@@ -149,7 +149,7 @@ export class CurrenciesService implements OnModuleInit {
   }
 
   async findCurrencyById(id: string): Promise<Currency> {
-    const currency = await this.currencyRepository.findOne({ where: { id }, relations: ['exchangeRates'] });
+    const currency = await this.currencyRepository.findOne({ where: { _id: id }, relations: ['exchangeRates'] });
     if (!currency) {
       throw new NotFoundException('Currency not found');
     }
@@ -170,7 +170,7 @@ export class CurrenciesService implements OnModuleInit {
   // --- Exchange Rate Methods ---
 
   async createExchangeRate(createExchangeRateDto: CreateExchangeRateDto): Promise<ExchangeRate> {
-    const currency = await this.currencyRepository.findOne({ where: { id: createExchangeRateDto.currencyId } });
+    const currency = await this.currencyRepository.findOne({ where: { _id: createExchangeRateDto.currencyId } });
     if (!currency) {
       throw new NotFoundException('Currency not found');
     }
@@ -226,7 +226,7 @@ export class CurrenciesService implements OnModuleInit {
     const currency = await this.currencyRepository.findOne({ where: { code: currencyCode } });
     if (!currency) throw new NotFoundException(`Currency ${currencyCode} not found`);
 
-    const rate = await this.getLatestExchangeRate(currency.id, rateType);
+    const rate = await this.getLatestExchangeRate(currency._id, rateType);
     return new Decimal(amount).mul(new Decimal(rate.rate)).toNumber();
   }
 
@@ -256,7 +256,7 @@ export class CurrenciesService implements OnModuleInit {
     const currency = await this.currencyRepository.findOne({ where: { code } });
     if (!currency) throw new NotFoundException(`Currency ${code} not found`);
     
-    const rateEntity = await this.getLatestExchangeRate(currency.id, rateType);
+    const rateEntity = await this.getLatestExchangeRate(currency._id, rateType);
     return Number(rateEntity.rate);
   }
 }

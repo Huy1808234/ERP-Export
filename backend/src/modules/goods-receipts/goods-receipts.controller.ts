@@ -20,9 +20,9 @@ export class GoodsReceiptsController {
     return this.goodsReceiptsService.findAll(query);
   }
 
-  @Get(':id')
+  @Get(':_id')
   @ResponseMessage('Lấy chi tiết phiếu nhập kho thành công')
-  findOne(@Param('id') id: string) {
-    return this.goodsReceiptsService.findOne(id);
+  findOne(@Param('_id') recordId: string) {
+    return this.goodsReceiptsService.findOne(recordId);
   }
 }

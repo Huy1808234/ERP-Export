@@ -1,15 +1,17 @@
 import {
   Column,
+  BeforeInsert,
   CreateDateColumn,
   Entity,
   Index,
   JoinColumn,
   ManyToOne,
-  PrimaryGeneratedColumn,
+  PrimaryColumn,
   UpdateDateColumn,
 } from 'typeorm';
 import { ColumnNumericTransformer } from '@/helpers/typeorm.util';
 import { Partner } from '@/modules/partners/entities/partner.entity';
+import { createEntityId } from '@/common/ids/entity-id.util';
 
 export enum APStatus {
   UNPAID = 'UNPAID',
@@ -20,8 +22,15 @@ export enum APStatus {
 @Entity('account_payables')
 @Index('idx_account_payables_vendor', ['vendorId'])
 export class AccountPayable {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
+  @PrimaryColumn({ type: 'varchar', length: 40, name: '_id' })
+  _id: string;
+
+  @BeforeInsert()
+  assignId() {
+    if (!this._id) {
+      this._id = createEntityId('ap');
+    }
+  }
 
   @Column()
   vendorId: string;
@@ -30,8 +39,14 @@ export class AccountPayable {
   @JoinColumn({ name: 'vendorId' })
   vendor: Partner;
 
+  @Column({ type: 'varchar', length: 40, nullable: true })
+  vendorInvoiceId: string | null;
+
   @Column({ type: 'varchar', nullable: true })
   invoiceNumber: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  invoiceSeries: string | null;
 
   @Column({ type: 'numeric', precision: 15, scale: 2, transformer: new ColumnNumericTransformer() })
   amount: number;
@@ -47,6 +62,21 @@ export class AccountPayable {
 
   @Column({ type: 'enum', enum: APStatus, default: APStatus.UNPAID })
   status: APStatus;
+
+  @Column({ type: 'boolean', default: false })
+  isApprovedForPayment: boolean;
+
+  @Column({ type: 'varchar', nullable: true })
+  approvedByUsername: string | null;
+
+  @Column({ type: 'timestamp', nullable: true })
+  approvedAt: Date | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  paidByUsername: string | null;
+
+  @Column({ type: 'timestamp', nullable: true })
+  paidAt: Date | null;
 
   @Column({ type: 'text', nullable: true })
   note: string | null;

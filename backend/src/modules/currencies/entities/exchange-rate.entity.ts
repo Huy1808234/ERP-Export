@@ -1,6 +1,7 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { BeforeInsert, Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryColumn, UpdateDateColumn } from 'typeorm';
 import { Currency } from './currency.entity';
 import { Decimal } from 'decimal.js';
+import { createEntityId } from '@/common/ids/entity-id.util';
 
 export enum ExchangeRateType {
   TRANSFER = 'TRANSFER',
@@ -20,8 +21,15 @@ export class DecimalTransformer {
 
 @Entity('exchange_rates')
 export class ExchangeRate {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
+  @PrimaryColumn({ type: 'varchar', length: 40, name: '_id' })
+  _id: string;
+
+  @BeforeInsert()
+  assignId() {
+    if (!this._id) {
+      this._id = createEntityId('rate');
+    }
+  }
 
   @Column()
   currencyId: string;

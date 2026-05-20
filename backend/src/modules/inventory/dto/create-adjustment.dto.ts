@@ -1,8 +1,10 @@
-import { IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator';
+import { IsEntityId } from '@/common/ids/entity-id.validator';
 
 export class CreateAdjustmentDto {
   @IsNotEmpty()
   @IsString()
+  @IsEntityId()
   productId: string;
 
   @IsNotEmpty()

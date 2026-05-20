@@ -1,6 +1,6 @@
 import React from 'react';
 import { Typography, Space, theme } from 'antd';
-import { useTheme } from '@/library/theme.context';
+import { useTheme } from '@/context/theme.context';
 
 const { Title, Text } = Typography;
 

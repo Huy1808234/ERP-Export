@@ -2,6 +2,7 @@ import type { QuotationStatus, ShipmentStatus } from '@/types/o2c';
 
 export const QUOTATION_STATUS_CONFIG: Record<QuotationStatus, { color: string; label: string }> = {
   DRAFT: { color: 'default', label: 'Nháp' },
+  PENDING_APPROVAL: { color: 'processing', label: 'Chờ duyệt' },
   SENT: { color: 'blue', label: 'Đã gửi' },
   ACCEPTED: { color: 'success', label: 'Được chấp nhận' },
   REJECTED: { color: 'error', label: 'Bị từ chối' },
@@ -22,6 +23,8 @@ export const SHIPMENT_STATUS_KEYS = Object.keys(SHIPMENT_STATUS_CONFIG) as Shipm
 
 export const INCOTERMS_KEYS = ['EXW', 'FOB', 'CIF', 'CFR', 'DAP', 'DDP'] as const;
 export type IncotermKey = typeof INCOTERMS_KEYS[number];
+
+export const SELLER_LED_INCOTERMS: IncotermKey[] = ['CIF', 'CFR', 'DAP', 'DDP'];
 
 export const PAYMENT_TERM_KEYS = [
   'TT_30_70_BL',

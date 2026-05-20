@@ -11,40 +11,14 @@ import {
 } from '@ant-design/icons';
 import { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
-import { sendRequest } from '@/utils/api';
+import { sendRequest } from '@/lib/api-client';
+import { useTranslations } from 'next-intl';
+import { useMemo } from 'react';
+import { getAccessToken } from '@/lib/auth-token';
 
 const { Text } = Typography;
 
-const PARTNER_TYPES = [
-  { value: 'CUSTOMER', label: 'Khách hàng (Buyer)' },
-  { value: 'SUPPLIER', label: 'Nhà cung cấp (Vendor)' },
-  { value: 'LOGISTICS', label: 'Đơn vị vận chuyển' },
-];
 
-const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CNY', 'VND'].map(c => ({ value: c, label: c }));
-
-const REGIONS = [
-  { value: 'EU', label: 'Châu Âu (EU)' },
-  { value: 'US', label: 'Hoa Kỳ (US)' },
-  { value: 'ASEAN', label: 'Đông Nam Á (ASEAN)' },
-  { value: 'APAC', label: 'Châu Á - Thái Bình Dương' },
-  { value: 'OTHER', label: 'Khu vực khác' },
-];
-
-const PAYMENT_TERMS = [
-  { value: 'T/T', label: 'Chuyển tiền điện tử (Telegraphic Transfer - T/T)' },
-  { value: 'L/C', label: 'Tín dụng thư (Letter of Credit - L/C)' },
-  { value: 'D/P', label: 'Nhờ thu kèm chứng từ (Documents against Payment - D/P)' },
-  { value: 'D/A', label: 'Chấp nhận thanh toán chứng từ (Documents against Acceptance - D/A)' },
-];
-
-const VENDOR_PAYMENT_TERMS = [
-  { value: 'NET_30', label: 'Net 30 (Thanh toán sau 30 ngày)' },
-  { value: 'NET_60', label: 'Net 60 (Thanh toán sau 60 ngày)' },
-  { value: 'COD', label: 'COD (Thanh toán khi nhận hàng)' },
-  { value: 'PREPAID', label: 'Prepaid (Thanh toán trước 100%)' },
-  { value: 'GỐI ĐẦU', label: 'Gối đầu (Thanh toán theo lô kế tiếp)' },
-];
 
 interface IProps {
   isUpdateModalOpen: boolean;
@@ -62,8 +36,44 @@ const PartnerUpdateModal = (props: IProps) => {
   const { data: session } = useSession();
   const { token } = theme.useToken();
 
+  const tPartner = useTranslations('Partner');
+  const tCommon = useTranslations('Common');
+
   const partnerType = Form.useWatch('partnerType', form);
   const defaultCurrency = Form.useWatch('defaultCurrency', form);
+
+  const partnerTypeOptions = useMemo(() => [
+    { value: 'CUSTOMER', label: tPartner('types.CUSTOMER') },
+    { value: 'SUPPLIER', label: tPartner('types.SUPPLIER') },
+    { value: 'LOGISTICS', label: tPartner('types.LOGISTICS') },
+  ], [tPartner]);
+
+  const currencyOptions = useMemo(() => 
+    ['USD', 'EUR', 'GBP', 'JPY', 'CNY', 'VND'].map(c => ({ value: c, label: c })), 
+  []);
+
+  const regionOptions = useMemo(() => [
+    { value: 'EU', label: tPartner('regions.EU') },
+    { value: 'US', label: tPartner('regions.US') },
+    { value: 'ASEAN', label: tPartner('regions.ASEAN') },
+    { value: 'APAC', label: tPartner('regions.APAC') },
+    { value: 'OTHER', label: tPartner('regions.OTHER') },
+  ], [tPartner]);
+
+  const customerPaymentOptions = useMemo(() => [
+    { value: 'T/T', label: tPartner('paymentTerms.TT') },
+    { value: 'L/C', label: tPartner('paymentTerms.LC') },
+    { value: 'D/P', label: tPartner('paymentTerms.DP') },
+    { value: 'D/A', label: tPartner('paymentTerms.DA') },
+  ], [tPartner]);
+
+  const vendorPaymentOptions = useMemo(() => [
+    { value: 'NET_30', label: tPartner('paymentTerms.NET_30') },
+    { value: 'NET_60', label: tPartner('paymentTerms.NET_60') },
+    { value: 'COD', label: tPartner('paymentTerms.COD') },
+    { value: 'PREPAID', label: tPartner('paymentTerms.PREPAID') },
+    { value: 'GỐI ĐẦU', label: tPartner('paymentTerms.GỐI ĐẦU') },
+  ], [tPartner]);
 
   useEffect(() => {
     if (dataUpdate && isUpdateModalOpen) {
@@ -81,13 +91,13 @@ const PartnerUpdateModal = (props: IProps) => {
   };
 
   const onFinish = async (values: any) => {
-    const accessToken = session?.user?.access_token;
+    const accessToken = getAccessToken(session);
     if (!accessToken) return;
 
     setLoading(true);
     try {
       const res = await sendRequest<IBackendRes<any>>({
-        url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/partners/${dataUpdate?.id}`,
+        url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/partners/${dataUpdate?._id}`,
         method: 'PATCH',
         body: { ...values },
         headers: { Authorization: `Bearer ${accessToken}` },
@@ -95,16 +105,16 @@ const PartnerUpdateModal = (props: IProps) => {
 
       if (res?.data) {
         notification.success({ 
-          title: 'Cập nhật thành công', 
-          description: `Thông tin đối tác ${values.name} đã được thay đổi.` 
+          title: tCommon('success'), 
+          description: `${tCommon('success')}: ${values.name}` 
         });
         handleClose();
         fetchPartners();
       } else {
-        notification.error({ title: 'Cập nhật thất bại', description: res.message });
+        notification.error({ title: tPartner('notifications.errorTitle'), description: res.message });
       }
     } catch (error) {
-      notification.error({ title: 'Lỗi hệ thống' });
+      notification.error({ title: tPartner('notifications.connectionError') });
     } finally {
       setLoading(false);
     }
@@ -115,7 +125,7 @@ const PartnerUpdateModal = (props: IProps) => {
       title={
         <Space>
           <EditOutlined style={{ color: token.colorPrimary }} />
-          <span style={{ fontWeight: 700 }}>CẬP NHẬT THÔNG TIN ĐỐI TÁC</span>
+          <span style={{ fontWeight: 700 }}>{tPartner('form.titleUpdate') || 'UPDATE PARTNER'}</span>
         </Space>
       }
       open={isUpdateModalOpen}
@@ -125,8 +135,8 @@ const PartnerUpdateModal = (props: IProps) => {
       width={900}
       mask={{ closable: false }}
       destroyOnHidden
-      okText="Lưu thay đổi"
-      cancelText="Hủy"
+      okText={tCommon('save')}
+      cancelText={tCommon('cancel')}
       style={{ top: 20 }}
     >
       <Form 
@@ -135,28 +145,28 @@ const PartnerUpdateModal = (props: IProps) => {
         layout="vertical"
       >
         <Divider titlePlacement="left" plain>
-          <Space><InfoCircleOutlined style={{ color: token.colorPrimary }} /> <Text strong>Thông tin định danh & Phân loại</Text></Space>
+          <Space><InfoCircleOutlined style={{ color: token.colorPrimary }} /> <Text strong>{tPartner('form.basicInfo')}</Text></Space>
         </Divider>
         
         <Row gutter={16}>
           <Col span={10}>
             <Form.Item
-              label="Tên đối tác thương mại"
+              label={tPartner('form.fields.name')}
               name="name"
-              rules={[{ required: true, message: 'Tên đối tác không được bỏ trống!' }]}
+              rules={[{ required: true, message: tCommon('error') }]}
             >
               <Input prefix={<UserOutlined />} />
             </Form.Item>
           </Col>
           <Col span={6}>
-            <Form.Item label="Loại đối tác" name="partnerType" rules={[{ required: true }]}>
-              <Select options={PARTNER_TYPES} />
+            <Form.Item label={tPartner('form.fields.partnerType')} name="partnerType" rules={[{ required: true }]}>
+              <Select options={partnerTypeOptions} />
             </Form.Item>
           </Col>
           {partnerType === 'CUSTOMER' && (
             <Col span={8}>
-              <Form.Item label="Khu vực thương mại" name="region">
-                <Select options={REGIONS} allowClear placeholder="Chọn khu vực (EU, US...)" />
+              <Form.Item label={tPartner('form.fields.region')} name="region">
+                <Select options={regionOptions} allowClear placeholder={tPartner('form.fields.region')} />
               </Form.Item>
             </Col>
           )}
@@ -164,19 +174,19 @@ const PartnerUpdateModal = (props: IProps) => {
 
         <Row gutter={16}>
           <Col span={8}>
-            <Form.Item label="Mã số thuế (Tax Code)" name="taxCode">
-              <Input placeholder="MST doanh nghiệp" />
+            <Form.Item label={tPartner('form.fields.taxCode')} name="taxCode">
+              <Input placeholder={tPartner('form.fields.taxCode')} />
             </Form.Item>
           </Col>
           <Col span={8}>
-            <Form.Item label="Quốc gia" name="country">
-              <Input prefix={<GlobalOutlined />} placeholder="Ví dụ: USA, Vietnam..." />
+            <Form.Item label={tPartner('table.country')} name="country">
+              <Input prefix={<GlobalOutlined />} placeholder={tPartner('form.placeholders.country')} />
             </Form.Item>
           </Col>
           {partnerType === 'SUPPLIER' && (
             <Col span={8}>
-              <Form.Item label="Ngành hàng" name="vendorCategory">
-                <Input placeholder="VD: Nông sản, Dệt may..." />
+              <Form.Item label={tPartner('risk.industry')} name="vendorCategory">
+                <Input placeholder={tPartner('form.placeholders.industry')} />
               </Form.Item>
             </Col>
           )}
@@ -184,64 +194,60 @@ const PartnerUpdateModal = (props: IProps) => {
 
         <Row gutter={16}>
           <Col span={8}>
-            <Form.Item label="Người liên hệ chính" name="contactName">
-              <Input placeholder="Họ và tên" />
+            <Form.Item label={tPartner('form.fields.contactName')} name="contactName">
+              <Input placeholder={tPartner('form.fields.contactName')} />
             </Form.Item>
           </Col>
           <Col span={8}>
             <Form.Item 
-              label="Email liên hệ" 
+              label={tPartner('form.fields.email')} 
               name="email"
-              rules={[{ type: 'email', message: 'Email không đúng định dạng!' }]}
+              rules={[{ type: 'email', message: tCommon('error') }]}
             >
               <Input prefix={<MailOutlined />} placeholder="email@partner.com" />
             </Form.Item>
           </Col>
           <Col span={8}>
-            <Form.Item label="Số điện thoại" name="phone">
+            <Form.Item label={tPartner('form.fields.phone')} name="phone">
               <Input prefix={<PhoneOutlined />} placeholder="+84 ..." />
             </Form.Item>
           </Col>
         </Row>
 
-        <Form.Item label="Địa chỉ trụ sở" name="address">
-          <Input.TextArea rows={1} placeholder="Số nhà, đường, quận/huyện, tỉnh/thành..." />
+        <Form.Item label={tPartner('form.fields.address')} name="address">
+          <Input.TextArea rows={1} placeholder={tPartner('form.fields.address')} />
         </Form.Item>
 
         {partnerType !== 'LOGISTICS' && (
           <>
             <Divider titlePlacement="left" plain>
-              <Space><CreditCardOutlined style={{ color: token.colorPrimary }} /> <Text strong>Điều khoản & Hạn mức thương mại</Text></Space>
+              <Space><CreditCardOutlined style={{ color: token.colorPrimary }} /> <Text strong>{tPartner('form.financeInfo')}</Text></Space>
             </Divider>
 
             <Row gutter={16}>
               {partnerType === 'CUSTOMER' ? (
                 <Col span={10}>
-                  <Form.Item label="Điều khoản thanh toán (Buyer)" name="defaultPaymentTerm">
-                    <Select 
-                      options={PAYMENT_TERMS} 
-                      allowClear 
-                      placeholder="Chọn ĐKTT" 
-                    />
+                  <Form.Item label={tPartner('form.fields.defaultPaymentTerm')} name="defaultPaymentTerm">
+                    <Select options={customerPaymentOptions} allowClear placeholder={tPartner('form.fields.defaultPaymentTerm')} />
                   </Form.Item>
                 </Col>
               ) : (
                 <Col span={10}>
-                  <Form.Item label="Điều khoản thanh toán (Vendor)" name="vendorPaymentTerm">
-                    <Select options={VENDOR_PAYMENT_TERMS} allowClear placeholder="Chọn ĐKTT (Net 30, Net 60...)" />
+                  <Form.Item label={tPartner('form.fields.defaultPaymentTerm')} name="vendorPaymentTerm">
+                    <Select options={vendorPaymentOptions} allowClear placeholder={tPartner('form.fields.defaultPaymentTerm')} />
                   </Form.Item>
                 </Col>
               )}
               
               <Col span={6}>
-                <Form.Item label="Tiền tệ giao dịch" name="defaultCurrency">
-                  <Select options={CURRENCIES} />
+                <Form.Item label={tPartner('form.fields.defaultCurrency')} name="defaultCurrency">
+                  <Select options={currencyOptions} />
                 </Form.Item>
               </Col>
 
               {partnerType === 'CUSTOMER' && (
                 <Col span={8}>
-                  <Form.Item label="Hạn mức tín dụng">
+                  <Form.Item label={`${tPartner('form.fields.creditLimit')} (Credit Limit)`}>
                     <Space.Compact style={{ width: '100%' }}>
                       <Form.Item name="creditLimit" noStyle>
                         <InputNumber
@@ -273,17 +279,17 @@ const PartnerUpdateModal = (props: IProps) => {
                 <Col span={18}>
                   <Row gutter={8}>
                     <Col span={8}>
-                      <Form.Item label="Chất lượng" name="qualityScore">
+                      <Form.Item label={tPartner('risk.quality')} name="qualityScore">
                         <InputNumber min={0} max={100} style={{ width: '100%' }} />
                       </Form.Item>
                     </Col>
                     <Col span={8}>
-                      <Form.Item label="Giao hàng" name="deliveryScore">
+                      <Form.Item label={tPartner('risk.delivery')} name="deliveryScore">
                         <InputNumber min={0} max={100} style={{ width: '100%' }} />
                       </Form.Item>
                     </Col>
                     <Col span={8}>
-                      <Form.Item label="Giá cả" name="priceScore">
+                      <Form.Item label={tPartner('risk.price')} name="priceScore">
                         <InputNumber min={0} max={100} style={{ width: '100%' }} />
                       </Form.Item>
                     </Col>
@@ -293,9 +299,9 @@ const PartnerUpdateModal = (props: IProps) => {
               
               <Col span={partnerType === 'SUPPLIER' ? 6 : 24} style={{ textAlign: 'right' }}>
                 <Space size="middle">
-                   <Text type="secondary">Trạng thái:</Text>
+                   <Text type="secondary">{tPartner('table.status')}:</Text>
                    <Form.Item name="isActive" valuePropName="checked" noStyle>
-                    <Switch checkedChildren="ON" unCheckedChildren="OFF" />
+                    <Switch checkedChildren={tPartner('status.active')} unCheckedChildren={tPartner('status.inactive')} />
                   </Form.Item>
                 </Space>
               </Col>
@@ -305,42 +311,42 @@ const PartnerUpdateModal = (props: IProps) => {
 
 
         <Divider titlePlacement="left" plain>
-          <Space><BankOutlined style={{ color: token.colorPrimary }} /> <Text strong>Thông tin tài khoản ngân hàng</Text></Space>
+          <Space><BankOutlined style={{ color: token.colorPrimary }} /> <Text strong>{tPartner('form.bankingInfo')}</Text></Space>
         </Divider>
 
         <Row gutter={16}>
           <Col span={8}>
-            <Form.Item label="Tên ngân hàng" name="bankName">
-              <Input placeholder="Tên ngân hàng" />
+            <Form.Item label={tPartner('form.fields.bankName')} name="bankName">
+              <Input placeholder={tPartner('form.placeholders.bankName')} />
             </Form.Item>
           </Col>
           <Col span={8}>
-            <Form.Item label="Chủ tài khoản" name="bankAccountName">
-              <Input placeholder="Tên in trên thẻ" />
+            <Form.Item label={tPartner('form.fields.bankAccountName')} name="bankAccountName">
+              <Input placeholder={tPartner('form.placeholders.bankAccountName')} />
             </Form.Item>
           </Col>
           <Col span={8}>
-            <Form.Item label="Số tài khoản" name="bankAccountNumber">
-              <Input placeholder="Nhập số tài khoản" />
+            <Form.Item label={tPartner('form.fields.bankAccountNumber')} name="bankAccountNumber">
+              <Input placeholder={tPartner('form.placeholders.bankAccountNumber')} />
             </Form.Item>
           </Col>
         </Row>
 
         <Row gutter={16}>
           <Col span={8}>
-            <Form.Item label="SWIFT/BIC Code" name="bankSwiftCode">
-              <Input />
+            <Form.Item label={tPartner('form.fields.bankSwiftCode')} name="bankSwiftCode">
+              <Input placeholder={tPartner('form.placeholders.swift')} />
             </Form.Item>
           </Col>
           <Col span={16}>
-            <Form.Item label="Địa chỉ ngân hàng" name="bankAddress">
-              <Input />
+            <Form.Item label={tPartner('form.fields.bankAddress')} name="bankAddress">
+              <Input placeholder={tPartner('form.placeholders.bankAddress')} />
             </Form.Item>
           </Col>
         </Row>
 
-        <Form.Item label="Ghi chú & Đặc thù" name="note">
-          <Input.TextArea rows={2} />
+        <Form.Item label={tPartner('form.fields.note')} name="note">
+          <Input.TextArea rows={2} placeholder={tPartner('form.placeholders.note')} />
         </Form.Item>
       </Form>
     </Modal>

@@ -14,9 +14,10 @@ import {
 import { TruckOutlined } from '@ant-design/icons';
 import { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
-import { sendRequest } from '@/utils/api';
+import { sendRequest } from '@/lib/api-client';
 import { useTranslations } from 'next-intl';
 import dayjs from 'dayjs';
+import { getAccessToken } from '@/lib/auth-token';
 
 const { Text } = Typography;
 
@@ -30,13 +31,14 @@ const ShipmentFromPIModal = ({ open, setOpen, pi }: IProps) => {
   const { notification } = App.useApp();
   const { data: session } = useSession();
   const [form] = Form.useForm();
+  const tShipment = useTranslations('Shipment');
   const tInc = useTranslations('Incoterms');
   const [submitting, setSubmitting] = useState(false);
   const [forwarders, setForwarders] = useState<any[]>([]);
 
   useEffect(() => {
     const fetchForwarders = async () => {
-      const accessToken = session?.access_token;
+      const accessToken = getAccessToken(session);
       if (!accessToken) return;
 
       const res = await sendRequest<IBackendRes<IModelPaginate<any>>>({
@@ -68,19 +70,19 @@ const ShipmentFromPIModal = ({ open, setOpen, pi }: IProps) => {
 
   const onFinish = async (values: any) => {
     setSubmitting(true);
-    const accessToken = session?.access_token;
+    const accessToken = getAccessToken(session);
 
     const res = await sendRequest<IBackendRes<any>>({
       url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/shipments`,
       method: 'POST',
       body: {
-        proformaInvoiceId: pi?.id,
+        proformaInvoiceId: pi?._id,
         salesContractId: pi?.salesContractId,
         logisticsPartnerId: values.logisticsPartnerId,
         bookingNumber: values.bookingNumber,
         pol: values.pol,
         pod: values.pod,
-        vesselFlight: values.vesselFlight,
+        vesselName: values.vesselFlight,
         etd: values.etd ? values.etd.format('YYYY-MM-DD') : undefined,
         eta: values.eta ? values.eta.format('YYYY-MM-DD') : undefined,
       },
@@ -91,12 +93,12 @@ const ShipmentFromPIModal = ({ open, setOpen, pi }: IProps) => {
 
     if (res?.data) {
       handleClose();
-      notification.success({ 
-        title: 'Tạo lô hàng thành công',
-        description: `Mã Lô Hàng: ${res.data.shipmentNumber}`,
+      notification.success({
+        title: tShipment('createFromPI.notifications.success'),
+        description: tShipment('createFromPI.notifications.shipmentNumber', { number: res.data.shipmentNumber }),
       });
     } else {
-      notification.error({ title: 'Có lỗi xảy ra', description: res?.message });
+      notification.error({ title: tShipment('createFromPI.notifications.error'), description: res?.message });
     }
   };
 
@@ -107,7 +109,7 @@ const ShipmentFromPIModal = ({ open, setOpen, pi }: IProps) => {
       title={
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <TruckOutlined style={{ color: '#096dd9' }} />
-          <span>{pi?.salesContractId ? 'XUẤT KHO & LẬP BOOKING' : 'LÊN LÔ HÀNG (SHIPMENT / BOOKING)'}</span>
+          <span>{pi?.salesContractId ? tShipment('createFromPI.exportTitle') : tShipment('createFromPI.modalTitle')}</span>
         </div>
       }
       open={open}
@@ -116,8 +118,8 @@ const ShipmentFromPIModal = ({ open, setOpen, pi }: IProps) => {
       mask={{ closable: false }}
       width={700}
       confirmLoading={submitting}
-      okText={pi?.salesContractId ? 'Xác nhận Xuất kho' : 'Lưu Booking'}
-      cancelText="Hủy"
+      okText={pi?.salesContractId ? tShipment('createFromPI.okRelease') : tShipment('createFromPI.okSave')}
+      cancelText={tShipment('createFromPI.cancel')}
       okButtonProps={{ style: { background: '#096dd9', borderColor: '#096dd9' } }}
       destroyOnHidden
     >
@@ -129,52 +131,52 @@ const ShipmentFromPIModal = ({ open, setOpen, pi }: IProps) => {
         marginBottom: 20,
       }}>
         <Text strong style={{ display: 'block', marginBottom: 4 }}>
-          📋 {pi?.salesContractId ? 'Số Hợp đồng:' : 'Thông tin PI gốc:'} <span style={{ color: '#096dd9' }}>{pi.piNumber}</span>
+          📋 {pi?.salesContractId ? tShipment('createFromPI.contractLabel') : tShipment('createFromPI.piInfoLabel')} <span style={{ color: '#096dd9' }}>{pi.piNumber}</span>
         </Text>
         <div style={{ marginTop: 4 }}>
           <Tag color="geekblue">Incoterms: {pi.incoterm ? tInc(pi.incoterm) : '-'}</Tag>
-          <Tag color="cyan">Khách: {pi.customer?.name}</Tag>
+          <Tag color="cyan">{tShipment('createFromPI.customerLabel')} {pi.customer?.name}</Tag>
         </div>
       </div>
 
       <Form form={form} layout="vertical" onFinish={onFinish}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
           <Form.Item
-            label="Đại lý Vận Tải (Forwarder)"
+            label={tShipment('createFromPI.form.forwarder')}
             name="logisticsPartnerId"
-            rules={[{ required: true, message: 'Vui lòng chọn Forwarder!' }]}
+            rules={[{ required: true, message: tShipment('createFromPI.form.forwarderRequired') }]}
           >
             <Select
-              placeholder="Chọn Forwarder"
-              options={forwarders.map(f => ({ value: f.id, label: f.name }))}
+              placeholder={tShipment('createFromPI.form.forwarderPlaceholder')}
+              options={forwarders.map(f => ({ value: f._id, label: f.name }))}
             />
           </Form.Item>
-          
-          <Form.Item label="Số Booking" name="bookingNumber">
-            <Input placeholder="Nhập số Booking từ Hãng Tàu" />
+
+          <Form.Item label={tShipment('createFromPI.form.bookingNumber')} name="bookingNumber">
+            <Input placeholder={tShipment('createFromPI.form.bookingPlaceholder')} />
           </Form.Item>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-          <Form.Item label="Cảng Đi (POL)" name="pol">
-            <Input placeholder="Vd: Hai Phong, VN" />
+          <Form.Item label={tShipment('createFromPI.form.pol')} name="pol">
+            <Input placeholder={tShipment('createFromPI.form.polPlaceholder')} />
           </Form.Item>
-          <Form.Item label="Cảng Đến (POD)" name="pod">
-            <Input placeholder="Vd: Los Angeles, USA" />
-          </Form.Item>
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-          <Form.Item label="Tên Tàu / Chuyến (Vessel / Flight)" name="vesselFlight">
-            <Input placeholder="Vd: EVER GIVEN v.123E" />
+          <Form.Item label={tShipment('createFromPI.form.pod')} name="pod">
+            <Input placeholder={tShipment('createFromPI.form.podPlaceholder')} />
           </Form.Item>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-          <Form.Item label="Ngày Tàu Chạy Dự Kiến (ETD)" name="etd">
+          <Form.Item label={tShipment('createFromPI.form.vessel')} name="vesselFlight">
+            <Input placeholder={tShipment('createFromPI.form.vesselPlaceholder')} />
+          </Form.Item>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          <Form.Item label={tShipment('createFromPI.form.etd')} name="etd">
             <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" />
           </Form.Item>
-          <Form.Item label="Ngày Tàu Đến Dự Kiến (ETA)" name="eta">
+          <Form.Item label={tShipment('createFromPI.form.eta')} name="eta">
             <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" />
           </Form.Item>
         </div>

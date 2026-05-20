@@ -1,10 +1,11 @@
 import VendorInvoiceTable from "@/components/admin/vendor-invoice/vendor-invoice.table";
+import AdminPageScroll from "@/components/layout/admin.page-scroll";
 
 const VendorInvoicePage = () => {
     return (
-        <div>
+        <AdminPageScroll>
             <VendorInvoiceTable />
-        </div>
+        </AdminPageScroll>
     )
 }
 

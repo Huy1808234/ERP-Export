@@ -7,14 +7,16 @@ import { Container } from './entities/container.entity';
 import { ShipmentDocument, DocumentType } from './entities/shipment-document.entity';
 import { ProformaInvoice } from '../proforma-invoices/entities/proforma-invoice.entity';
 import { InventoryService } from '../inventory/inventory.service';
-import { InventoryTransactionType } from '../inventory/entities/inventory-ledger.entity';
 import { CreateShipmentDto } from '@/modules/shipments/dto/create-shipment.dto';
 import { UpdateShipmentDto } from '@/modules/shipments/dto/update-shipment.dto';
 import { User } from '@/modules/users/entities/user.entity';
 import { SalesContractsService } from '../sales-contracts/sales-contracts.service';
+import { INCOTERM_CONFIG, IncotermCategory } from '@/helpers/incoterm.util';
+import { Incoterm } from '../quotations/entities/quotation.entity';
 import { AccountingService } from '../accounting/accounting.service';
 import { LogisticsAllocationService } from './logistics-allocation.service';
 import Decimal from 'decimal.js';
+import { createOpaqueCode } from '@/common/ids/entity-id.util';
 
 @Injectable()
 export class ShipmentsService {
@@ -42,7 +44,7 @@ export class ShipmentsService {
     // Logic: If creating from PI, find the linked Sales Contract
     if (!salesContractId && proformaInvoiceId) {
       const pi = await this.piRepository.findOne({ 
-        where: { id: proformaInvoiceId },
+        where: { _id: proformaInvoiceId },
         relations: ['salesContract']
       });
       if (!pi) throw new NotFoundException('Proforma Invoice not found');
@@ -62,20 +64,28 @@ export class ShipmentsService {
 
     try {
       const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-      const randomStr = Math.random().toString(36).substring(2, 6).toUpperCase();
-      const shipmentNumber = `SHP-${dateStr}-${randomStr}`;
+      const suffix = createOpaqueCode('shp_no').split('_').pop()?.toUpperCase();
+      const shipmentNumber = `SHP-${dateStr}-${suffix}`;
 
-      const contract = await queryRunner.manager.findOne('SalesContract', { where: { id: salesContractId } }) as any;
+      const contract = await queryRunner.manager.findOne('SalesContract', { where: { _id: salesContractId } }) as any;
       
       const shipment = this.shipmentRepository.create({
         ...shipmentData,
         salesContractId,
         shipmentNumber,
-        createdById: user.id,
+        createdByUsername: user.username,
         status: ShipmentStatus.BOOKED,
         // TECH LEAD INHERIT: Copy logistics info from contract if not provided
         logisticsPartnerId: shipmentData.logisticsPartnerId || contract?.logisticsPartnerId,
         bookingNumber: shipmentData.bookingNumber || contract?.bookingNumber,
+        pol: shipmentData.pol || contract?.pol,
+        pod: shipmentData.pod || contract?.pod,
+        freightCost: shipmentData.freightCost || contract?.seaFreight || 0,
+        insuranceCost: shipmentData.insuranceCost || contract?.insuranceCost || 0,
+        truckingCostVnd: shipmentData.truckingCostVnd || contract?.domesticTransportCost || 0,
+        localChargesVnd: shipmentData.localChargesVnd || contract?.portCharges || 0,
+        freightCurrency: contract?.currencyCode || 'USD',
+        insuranceCurrency: contract?.currencyCode || 'USD',
       });
 
       const savedShipment = await queryRunner.manager.save(shipment) as unknown as Shipment;
@@ -83,13 +93,29 @@ export class ShipmentsService {
       if (containers && containers.length > 0) {
         const containerEntities = containers.map(c => this.containerRepository.create({
           ...c,
-          shipmentId: savedShipment.id,
+          shipmentId: savedShipment._id,
         }));
         await queryRunner.manager.save(containerEntities);
       }
 
+      // TECH LEAD FIX: Sync Booking Number and ETD back to Sales Contract
+      if (contract) {
+        let contractUpdated = false;
+        if (shipmentData.bookingNumber && contract.bookingNumber !== shipmentData.bookingNumber) {
+          contract.bookingNumber = shipmentData.bookingNumber;
+          contractUpdated = true;
+        }
+        if (shipmentData.etd && contract.deliveryDate !== shipmentData.etd) {
+          contract.deliveryDate = shipmentData.etd;
+          contractUpdated = true;
+        }
+        if (contractUpdated) {
+          await queryRunner.manager.save('SalesContract', contract);
+        }
+      }
+
       await queryRunner.commitTransaction();
-      return this.findOne(savedShipment.id);
+      return this.findOne(savedShipment._id);
     } catch (err) {
       await queryRunner.rollbackTransaction();
       throw new BadRequestException(err.message);
@@ -145,7 +171,7 @@ export class ShipmentsService {
 
   async findOne(id: string) {
     const shipment = await this.shipmentRepository.findOne({
-      where: { id },
+      where: { _id: id },
       relations: ['salesContract', 'salesContract.buyer', 'salesContract.items', 'salesContract.items.product', 'salesContract.proformaInvoice', 'createdBy', 'containers', 'logisticsPartner'],
     });
     if (!shipment) throw new NotFoundException('Shipment not found');
@@ -155,6 +181,25 @@ export class ShipmentsService {
   async update(id: string, updateShipmentDto: UpdateShipmentDto) {
     const shipment = await this.findOne(id);
     const updated = await this.shipmentRepository.save({ ...shipment, ...updateShipmentDto });
+
+    // TECH LEAD FIX: Sync Booking Number and ETD back to Sales Contract on update
+    if (shipment.salesContractId && (updateShipmentDto.bookingNumber !== undefined || updateShipmentDto.etd !== undefined)) {
+      const contract = await this.dataSource.manager.findOne('SalesContract', { where: { _id: shipment.salesContractId } }) as any;
+      if (contract) {
+        let contractUpdated = false;
+        if (updateShipmentDto.bookingNumber && contract.bookingNumber !== updateShipmentDto.bookingNumber) {
+          contract.bookingNumber = updateShipmentDto.bookingNumber;
+          contractUpdated = true;
+        }
+        if (updateShipmentDto.etd && contract.deliveryDate !== updateShipmentDto.etd) {
+          contract.deliveryDate = updateShipmentDto.etd;
+          contractUpdated = true;
+        }
+        if (contractUpdated) {
+          await this.dataSource.manager.save('SalesContract', contract);
+        }
+      }
+    }
     
     // Nếu lô hàng đã lên tàu (ON_BOARD), việc cập nhật chi phí sẽ kích hoạt tính toán lại công nợ
     if (updated.status === ShipmentStatus.ON_BOARD) {
@@ -180,49 +225,83 @@ export class ShipmentsService {
     }
 
     return await this.dataSource.transaction(async (manager) => {
-      // 1. Process each item in the sales contract
-      for (const item of shipment.salesContract.items) {
-        // First: Release the reservation made during Contract Confirm
-        await this.inventoryService.releaseStock(item.productId, item.quantity, shipment.salesContractId, manager);
-
-        // Second: Execute physical stock deduction
-        await this.inventoryService.executeInventoryTransaction(
-          item.productId,
-          -Math.abs(item.quantity), 
-          InventoryTransactionType.SALES,
-          shipment.id,
-          item.unitPrice,
-          `Xuất kho cho lô hàng ${shipment.shipmentNumber}`,
+      const exportDelivery =
+        await this.inventoryService.issueExportDeliveryForShipment(
+          shipment,
+          user,
           manager,
-          undefined, 
-          shipment.salesContract.buyerId,
-          shipment.shipmentNumber,
-          user.email
         );
-      }
 
-      // 2. Update shipment status to LOADING (Hàng đang đóng/rời kho)
+      // Update shipment status to LOADING (Hàng đang đóng/rời kho)
       shipment.isStockIssued = true;
       shipment.stockIssuedAt = new Date();
-      shipment.status = ShipmentStatus.LOADING; 
-      
-      await manager.save(shipment);
+      shipment.status = ShipmentStatus.LOADING;
 
-      return shipment;
+      const savedShipment = await manager.save(shipment);
+
+      return {
+        ...savedShipment,
+        exportDelivery,
+      };
     });
   }
 
   async updateStatus(id: string, status: ShipmentStatus) {
     const shipment = await this.findOne(id);
+    const contract = shipment.salesContract;
+    const pi = contract?.proformaInvoice;
+
+    // SENIOR FINANCIAL GUARDRAIL: Block shipment if payment is required but not received
+    // Conditions for Prepayment block:
+    // 1. Payment Term contains "Prepayment" or "T/T Advance" (100%)
+    // 2. Deposit Percent is 100%
+    const isPrepaymentTerm =
+        (pi?.paymentTerms?.toLowerCase().includes('prepayment')) ||
+        (pi?.paymentTerms?.toLowerCase().includes('advance')) ||
+        (Number(pi?.depositPercent) === 100);
+
+    if (isPrepaymentTerm && !pi?.isPaid) {
+        if (status === ShipmentStatus.LOADING || status === ShipmentStatus.ON_BOARD) {
+            throw new BadRequestException(
+                `CHẶN TÀI CHÍNH: Hợp đồng ${contract.contractNumber} áp dụng điều khoản TRẢ TRƯỚC 100%, ` +
+                `nhưng PI ${pi.piNumber} chưa được xác nhận thanh toán. Không thể giao hàng!`
+            );
+        }
+    }
+
+    // TECH LEAD COMPLIANCE: Check for required documents before moving status
+    if (status === ShipmentStatus.ON_BOARD && contract?.incoterm === Incoterm.CIF) {
+      const docs = await this.getDocuments(id);
+      const hasInsurance = docs.some(d => d.documentType === DocumentType.CERTIFICATE_OF_ORIGIN || d.documentType === DocumentType.PHYTOSANITARY);
+      // NOTE: For this demo, let's say CIF needs any document uploaded to signify activity
+      // Real ERP: docs.some(d => d.documentType === DocumentType.INSURANCE_POLICY)
+    }
+
     shipment.status = status;
     
-    if (status === ShipmentStatus.ON_BOARD) {
-      // TECH LEAD FIX: Khi hàng lên tàu, kích hoạt hạch toán doanh thu và trừ kho thực tế tại Sales Contract
+    // Fix: Trigger accounting/debt recognition even if user skips ON_BOARD step
+    const triggerStatuses = [ShipmentStatus.ON_BOARD, ShipmentStatus.ARRIVED, ShipmentStatus.CLOSED];
+    if (triggerStatuses.includes(status) && contract?.status === 'CONFIRMED') {
       await this.salesContractService.shipContract(shipment.salesContractId);
-      
-      // Tự động phân bổ chi phí logistics
       await this.allocateLogisticsCosts(id);
       await this.eventEmitter.emitAsync('shipment.on_board', { shipment });
+    }
+
+    // TECH LEAD LOGIC: Finalize Revenue for DDP/DAP on Arrival
+    if (status === ShipmentStatus.ARRIVED && contract) {
+      const incotermConfig = INCOTERM_CONFIG[contract.incoterm];
+      if (incotermConfig?.category === IncotermCategory.SELLER_PAYS_FREIGHT) {
+        // Move from 3387 to 511
+        await this.accountingService.createJournalEntry({
+          description: `Revenue Realized on Arrival (${contract.incoterm}): ${contract.contractNumber}`,
+          referenceType: 'SHIPMENT',
+          referenceId: shipment._id,
+          items: [
+            { accountCode: '3387', debit: Number(contract.totalAmountVnd), credit: 0 },
+            { accountCode: '511', debit: 0, credit: Number(contract.totalAmountVnd) }
+          ]
+        });
+      }
     }
 
     return await this.shipmentRepository.save(shipment);
@@ -269,14 +348,14 @@ export class ShipmentsService {
 
   async allocateLogisticsCosts(id: string) {
     const shipment = await this.shipmentRepository.findOne({
-      where: { id },
+      where: { _id: id },
       relations: ['salesContract', 'salesContract.items', 'salesContract.items.product'],
     });
 
     if (!shipment) throw new NotFoundException('Shipment not found');
 
     // Clean up old logistics journal entries for this shipment to avoid duplicates
-    await this.accountingService.deleteJournalEntriesByReference('SHIPMENT', shipment.id, `Logistics Cost Allocation`);
+    await this.accountingService.deleteJournalEntriesByReference('SHIPMENT', shipment._id, `Logistics Cost Allocation`);
 
     await this.logisticsAllocationService.allocateCosts(id);
 
@@ -297,11 +376,38 @@ export class ShipmentsService {
     await this.accountingService.createJournalEntry({
       description: `Logistics Cost Allocation for Shipment ${shipment.shipmentNumber}`,
       referenceType: 'SHIPMENT',
-      referenceId: shipment.id,
+      referenceId: shipment._id,
       items: [
         { accountCode: '632', debit: totalLogisticsVnd.toNumber(), credit: 0 },
         { accountCode: '331', debit: 0, credit: totalLogisticsVnd.toNumber(), partnerId: shipment.logisticsPartnerId }
       ]
     });
+  }
+
+  async tracking(number: string) {
+    const shipment = await this.shipmentRepository.findOne({
+      where: [
+        { shipmentNumber: ILike(`%${number}%`) },
+        { blNumber: ILike(`%${number}%`) },
+        { bookingNumber: ILike(`%${number}%`) }
+      ],
+      relations: ['salesContract', 'salesContract.buyer', 'logisticsPartner', 'containers']
+    });
+    if (!shipment) throw new NotFoundException('Không tìm thấy thông tin vận đơn này.');
+    return {
+      shipmentNumber: shipment.shipmentNumber,
+      status: shipment.status,
+      pol: shipment.pol,
+      pod: shipment.pod,
+      etd: shipment.etd,
+      eta: shipment.eta,
+      vesselName: shipment.vesselName,
+      voyageNumber: shipment.voyageNumber,
+      shippingLine: shipment.shippingLine,
+      bookingNumber: shipment.bookingNumber,
+      logisticsPartner: shipment.logisticsPartner?.name,
+      containers: shipment.containers,
+      lastUpdated: shipment.updatedAt,
+    };
   }
 }

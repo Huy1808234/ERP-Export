@@ -1,5 +1,20 @@
-import { Repository, FindManyOptions, FindOneOptions, DeepPartial, FindOptionsWhere, ObjectLiteral } from 'typeorm';
-import { NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  DeepPartial,
+  FindOneOptions,
+  FindOptionsOrder,
+  FindOptionsWhere,
+  ObjectLiteral,
+  Repository,
+} from 'typeorm';
+import { NotFoundException } from '@nestjs/common';
+import type { QueryParams } from '@/common/types/authenticated-user.type';
+
+type PaginationMeta = {
+  current: number;
+  pageSize: number;
+  pages: number;
+  total: number;
+};
 
 export abstract class BaseService<T extends ObjectLiteral> {
   constructor(protected readonly repository: Repository<T>) {}
@@ -10,54 +25,56 @@ export abstract class BaseService<T extends ObjectLiteral> {
   }
 
   async findAll(
-    query: { current?: number; pageSize?: number; [key: string]: any },
+    query: QueryParams,
     relations: string[] = [],
-  ): Promise<{ results: T[]; meta: any }> {
+  ): Promise<{ results: T[]; meta: PaginationMeta }> {
     const { current = 1, pageSize = 10, ...filters } = query;
-    const skip = (current - 1) * pageSize;
+    const normalizedCurrent = Number(current) || 1;
+    const normalizedPageSize = Number(pageSize) || 10;
+    const skip = (normalizedCurrent - 1) * normalizedPageSize;
 
     // Tự động loại bỏ các field meta khỏi filter
-    const where: any = filters;
+    const where = filters as FindOptionsWhere<T>;
 
     const [results, total] = await this.repository.findAndCount({
       where,
       relations,
-      take: pageSize,
+      take: normalizedPageSize,
       skip,
-      order: { createdAt: 'DESC' } as any,
+      order: { createdAt: 'DESC' } as unknown as FindOptionsOrder<T>,
     });
 
     return {
       results,
       meta: {
-        current: +current,
-        pageSize: +pageSize,
-        pages: Math.ceil(total / pageSize),
+        current: normalizedCurrent,
+        pageSize: normalizedPageSize,
+        pages: Math.ceil(total / normalizedPageSize),
         total,
       },
     };
   }
 
-  async findOne(id: string, relations: string[] = []): Promise<T> {
+  async findOne(entityRef: string, relations: string[] = []): Promise<T> {
     const options: FindOneOptions = {
-      where: { id } as any,
+      where: { _id: entityRef } as unknown as FindOptionsWhere<T>,
       relations,
     };
     const entity = await this.repository.findOne(options);
     if (!entity) {
-      throw new NotFoundException(`${this.repository.metadata.name} with ID ${id} not found`);
+      throw new NotFoundException(`${this.repository.metadata.name} with reference ${entityRef} not found`);
     }
     return entity;
   }
 
-  async update(id: string, data: DeepPartial<T>): Promise<T> {
-    const entity = await this.findOne(id);
+  async update(entityRef: string, data: DeepPartial<T>): Promise<T> {
+    const entity = await this.findOne(entityRef);
     const updatedEntity = this.repository.merge(entity, data);
     return await this.repository.save(updatedEntity);
   }
 
-  async softDelete(id: string): Promise<void> {
-    const entity = await this.findOne(id);
+  async softDelete(entityRef: string): Promise<void> {
+    const entity = await this.findOne(entityRef);
     await this.repository.softRemove(entity);
   }
 }

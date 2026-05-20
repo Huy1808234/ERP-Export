@@ -1,4 +1,5 @@
 import ShipmentTable from "@/components/admin/shipment/shipment.table";
+import AdminPageScroll from "@/components/layout/admin.page-scroll";
 import { auth } from "@/auth";
 
 // Refresh TS Cache
@@ -7,9 +8,9 @@ const ShipmentPage = async () => {
     const session = await auth();
 
     return (
-        <div>
+        <AdminPageScroll>
             <ShipmentTable session={session} />
-        </div>
+        </AdminPageScroll>
     )
 }
 

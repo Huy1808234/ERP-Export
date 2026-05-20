@@ -12,9 +12,10 @@ import {
 } from '@ant-design/icons';
 import { useState } from 'react';
 import { useSession } from 'next-auth/react';
-import { sendRequest } from '@/utils/api';
+import { sendRequest } from '@/lib/api-client';
 import { useTranslations } from 'next-intl';
 import { useMemo } from 'react';
+import { getAccessToken } from '@/lib/auth-token';
 
 const { Text } = Typography;
 
@@ -39,9 +40,9 @@ const PartnerCreateModal = ({ isCreateModalOpen, setIsCreateModalOpen, fetchPart
   const defaultCurrency = Form.useWatch('defaultCurrency', form);
 
   const partnerTypeOptions = useMemo(() => [
-    { value: 'CUSTOMER', label: tPartner('type.CUSTOMER') },
-    { value: 'SUPPLIER', label: tPartner('type.SUPPLIER') },
-    { value: 'LOGISTICS', label: tPartner('type.LOGISTICS') },
+    { value: 'CUSTOMER', label: tPartner('types.CUSTOMER') },
+    { value: 'SUPPLIER', label: tPartner('types.SUPPLIER') },
+    { value: 'LOGISTICS', label: tPartner('types.LOGISTICS') },
   ], [tPartner]);
 
   const regionOptions = useMemo(() => [
@@ -84,9 +85,12 @@ const PartnerCreateModal = ({ isCreateModalOpen, setIsCreateModalOpen, fetchPart
   };
 
   const onFinish = async (values: any) => {
-    const accessToken = session?.user?.access_token;
+    const accessToken = getAccessToken(session);
     if (!accessToken) {
-      notification.error({ title: 'Lỗi xác thực', description: 'Vui lòng đăng nhập lại!' });
+      notification.error({ 
+        title: tPartner('notifications.errorTitle') || 'Lỗi xác thực', 
+        description: tCommon('error') 
+      });
       return;
     }
 
@@ -101,16 +105,16 @@ const PartnerCreateModal = ({ isCreateModalOpen, setIsCreateModalOpen, fetchPart
 
       if (res?.data) {
         notification.success({ 
-          title: 'Thành công',
-          description: `Đã tạo đối tác ${values.name} thành công!` 
+          title: tCommon('success'),
+          description: `${tCommon('success')}: ${values.name}` 
         });
         handleClose();
         fetchPartners();
       } else {
-        notification.error({ title: 'Thất bại', description: res.message });
+        notification.error({ title: tPartner('notifications.errorTitle'), description: res.message });
       }
     } catch (error) {
-      notification.error({ title: 'Lỗi hệ thống' });
+      notification.error({ title: tPartner('notifications.connectionError') });
     } finally {
       setLoading(false);
     }
@@ -182,14 +186,14 @@ const PartnerCreateModal = ({ isCreateModalOpen, setIsCreateModalOpen, fetchPart
             </Form.Item>
           </Col>
           <Col span={8}>
-            <Form.Item label="Quốc gia" name="country">
-              <Input prefix={<GlobalOutlined />} placeholder="Ví dụ: USA, Vietnam..." />
+            <Form.Item label={tPartner('table.country')} name="country">
+              <Input prefix={<GlobalOutlined />} placeholder={tPartner('form.placeholders.country')} />
             </Form.Item>
           </Col>
           {partnerType === 'SUPPLIER' && (
             <Col span={8}>
-              <Form.Item label="Ngành hàng" name="vendorCategory">
-                <Input placeholder="VD: Nông sản, Dệt may..." />
+              <Form.Item label={tPartner('risk.industry')} name="vendorCategory">
+                <Input placeholder={tPartner('form.placeholders.industry')} />
               </Form.Item>
             </Col>
           )}
@@ -251,7 +255,7 @@ const PartnerCreateModal = ({ isCreateModalOpen, setIsCreateModalOpen, fetchPart
 
               {partnerType === 'CUSTOMER' && (
                 <Col span={8}>
-                  <Form.Item label="Hạn mức tín dụng (Credit Limit)">
+                  <Form.Item label={`${tPartner('form.fields.creditLimit')} (Credit Limit)`}>
                     <Space.Compact style={{ width: '100%' }}>
                       <Form.Item name="creditLimit" noStyle>
                         <InputNumber
@@ -292,17 +296,17 @@ const PartnerCreateModal = ({ isCreateModalOpen, setIsCreateModalOpen, fetchPart
                 <Col span={12}>
                   <Row gutter={8}>
                     <Col span={8}>
-                      <Form.Item label="Chất lượng" name="qualityScore">
+                      <Form.Item label={tPartner('risk.quality')} name="qualityScore">
                         <InputNumber min={0} max={100} style={{ width: '100%' }} placeholder="0-100" />
                       </Form.Item>
                     </Col>
                     <Col span={8}>
-                      <Form.Item label="Giao hàng" name="deliveryScore">
+                      <Form.Item label={tPartner('risk.delivery')} name="deliveryScore">
                         <InputNumber min={0} max={100} style={{ width: '100%' }} placeholder="0-100" />
                       </Form.Item>
                     </Col>
                     <Col span={8}>
-                      <Form.Item label="Giá cả" name="priceScore">
+                      <Form.Item label={tPartner('risk.price')} name="priceScore">
                         <InputNumber min={0} max={100} style={{ width: '100%' }} placeholder="0-100" />
                       </Form.Item>
                     </Col>
@@ -312,9 +316,9 @@ const PartnerCreateModal = ({ isCreateModalOpen, setIsCreateModalOpen, fetchPart
 
               <Col span={partnerType === 'SUPPLIER' ? 12 : 16} style={{ textAlign: 'right' }}>
                 <Space size="middle">
-                   <Text type="secondary">Trạng thái đối tác:</Text>
+                   <Text type="secondary">{tPartner('table.status')}:</Text>
                    <Form.Item name="isActive" valuePropName="checked" noStyle>
-                    <Switch checkedChildren="Hoạt động" unCheckedChildren="Tạm khóa" />
+                    <Switch checkedChildren={tPartner('status.active')} unCheckedChildren={tPartner('status.inactive')} />
                   </Form.Item>
                 </Space>
               </Col>
@@ -324,42 +328,42 @@ const PartnerCreateModal = ({ isCreateModalOpen, setIsCreateModalOpen, fetchPart
 
         {/* --- SECTION 3: BANKING DETAILS (Show for all) --- */}
         <Divider titlePlacement="left" plain>
-          <Space><BankOutlined style={{ color: token.colorPrimary }} /> <Text strong>Thông tin tài khoản ngân hàng</Text></Space>
+          <Space><BankOutlined style={{ color: token.colorPrimary }} /> <Text strong>{tPartner('form.bankingInfo')}</Text></Space>
         </Divider>
 
         <Row gutter={16}>
           <Col span={8}>
-            <Form.Item label="Tên ngân hàng" name="bankName">
-              <Input placeholder="VD: Vietcombank, HSBC, Standard Chartered..." />
+            <Form.Item label={tPartner('form.fields.bankName')} name="bankName">
+              <Input placeholder={tPartner('form.placeholders.bankName')} />
             </Form.Item>
           </Col>
           <Col span={8}>
-            <Form.Item label="Chủ tài khoản" name="bankAccountName">
-              <Input placeholder="Tên in trên hồ sơ thanh toán" />
+            <Form.Item label={tPartner('form.fields.bankAccountName')} name="bankAccountName">
+              <Input placeholder={tPartner('form.placeholders.bankAccountName')} />
             </Form.Item>
           </Col>
           <Col span={8}>
-            <Form.Item label="Số tài khoản (Account Number)" name="bankAccountNumber">
-              <Input placeholder="Nhập số tài khoản" />
+            <Form.Item label={tPartner('form.fields.bankAccountNumber')} name="bankAccountNumber">
+              <Input placeholder={tPartner('form.placeholders.bankAccountNumber')} />
             </Form.Item>
           </Col>
         </Row>
 
         <Row gutter={16}>
           <Col span={8}>
-            <Form.Item label="SWIFT/BIC Code" name="bankSwiftCode">
-              <Input placeholder="Mã định danh ngân hàng quốc tế" />
+            <Form.Item label={tPartner('form.fields.bankSwiftCode')} name="bankSwiftCode">
+              <Input placeholder={tPartner('form.placeholders.swift')} />
             </Form.Item>
           </Col>
           <Col span={16}>
-            <Form.Item label="Địa chỉ ngân hàng / Chi nhánh" name="bankAddress">
-              <Input placeholder="Nhập địa chỉ chi nhánh ngân hàng" />
+            <Form.Item label={tPartner('form.fields.bankAddress')} name="bankAddress">
+              <Input placeholder={tPartner('form.placeholders.bankAddress')} />
             </Form.Item>
           </Col>
         </Row>
 
-        <Form.Item label={<Space><SafetyCertificateOutlined /> Ghi chú nội bộ & Đặc thù đối tác</Space>} name="note">
-          <Input.TextArea rows={3} placeholder="Nhập các ghi chú về thói quen thanh toán, rủi ro tiềm ẩn hoặc các ưu tiên đặc biệt..." />
+        <Form.Item label={<Space><SafetyCertificateOutlined /> {tPartner('form.fields.note')}</Space>} name="note">
+          <Input.TextArea rows={3} placeholder={tPartner('form.placeholders.note')} />
         </Form.Item>
       </Form>
     </Modal>

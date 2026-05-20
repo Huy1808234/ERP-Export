@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Table, Tag, Card, Button, Space, Typography, Tooltip, Badge, Popconfirm, App, Skeleton, Select, Row, Col, Drawer, Form, Input, Divider, theme, Statistic } from 'antd';
+import { Table, Tag, Card, Button, Space, Typography, Tooltip, Badge, Popconfirm, App, Skeleton, Select, Row, Col, Drawer, Form, Input, Divider, theme, Statistic, Modal } from 'antd';
 import {
   CheckCircleOutlined,
   SendOutlined,
@@ -11,26 +11,41 @@ import {
   FilePdfOutlined,
   PlusOutlined,
   SearchOutlined,
-  FilterOutlined, FileProtectOutlined, ReloadOutlined, TruckOutlined
+  FilterOutlined, FileProtectOutlined, ReloadOutlined, TruckOutlined, CloseCircleOutlined
 } from '@ant-design/icons';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getSession, useSession } from 'next-auth/react';
-import { sendRequest } from '@/utils/api';
+import { sendRequest } from '@/lib/api-client';
 import { useCurrency } from '@/hooks/useCurrency';
 import { GLOBAL_EXCHANGE_RATE } from '@/constants/currency.config';
 import SalesContractDetailModal from './sales-contract.detail';
-import useDebounce from '../../../hooks/useDebounce';
+import useDebounce from '@/hooks/useDebounce';
 import dayjs from 'dayjs';
 import SalesContractModal from './sales-contract.modal';
 import ShipmentFromPIModal from '../shipment/shipment.from-pi';
 import { useTranslations } from 'next-intl';
+import { getAccessToken } from '@/lib/auth-token';
 
 const { Title, Text } = Typography;
+
+type SalesContractActionResponse = {
+  invitation?: {
+    signingUrl?: string;
+    expiresAt?: string;
+    signerEmailMasked?: string | null;
+  };
+  deliveryStatus?: string;
+};
 
 
 const getStatusConfig = (t: any): Record<string, { color: string; icon: React.ReactNode; label: string }> => ({
   DRAFT: { color: 'cyan', icon: <SendOutlined />, label: t('status.DRAFT') },
+  PENDING_APPROVAL: { color: 'processing', icon: <SendOutlined />, label: t('status.PENDING_APPROVAL') },
+  APPROVED: { color: 'green', icon: <CheckCircleOutlined />, label: t('status.APPROVED') },
+  PENDING_BUYER_SIGNATURE: { color: 'purple', icon: <FileProtectOutlined />, label: t('status.PENDING_BUYER_SIGNATURE') },
+  BUYER_SIGNED: { color: 'gold', icon: <FileProtectOutlined />, label: t('status.BUYER_SIGNED') },
+  REJECTED: { color: 'red', icon: <CloseCircleOutlined />, label: t('status.REJECTED') },
   CONFIRMED: { color: 'blue', icon: <CheckCircleOutlined />, label: t('status.CONFIRMED') },
   SHIPPED: { color: 'orange', icon: <RocketOutlined />, label: t('status.SHIPPED') },
   PAID: { color: 'green', icon: <DollarOutlined />, label: t('status.PAID') },
@@ -45,6 +60,8 @@ const SalesContractTable = () => {
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState<any>(null);
   const [isShipmentModalOpen, setIsShipmentModalOpen] = useState(false);
+  const [isSignatureModalOpen, setIsSignatureModalOpen] = useState(false);
+  const [signatureTarget, setSignatureTarget] = useState<{ record: any; signerType: 'BUYER' | 'INTERNAL' } | null>(null);
   const [searchText, setSearchText] = useState('');
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
@@ -55,6 +72,7 @@ const SalesContractTable = () => {
     paymentTerms: undefined,
   });
   const [filterForm] = Form.useForm();
+  const [signatureForm] = Form.useForm();
   const debouncedSearch = useDebounce(searchText, 500);
 
   const { data: session } = useSession();
@@ -84,7 +102,7 @@ const SalesContractTable = () => {
         url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/sales-contracts`,
         method: 'GET',
         queryParams,
-        headers: { Authorization: `Bearer ${session?.user?.access_token}` }
+        headers: { Authorization: `Bearer ${getAccessToken(session)}` }
       });
 
       if (res?.data) {
@@ -108,7 +126,7 @@ const SalesContractTable = () => {
         url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/partners`,
         method: 'GET',
         queryParams: { current: 1, pageSize: 100 },
-        headers: { Authorization: `Bearer ${session?.user?.access_token}` }
+        headers: { Authorization: `Bearer ${getAccessToken(session)}` }
       });
       if (res?.data) setPartners(res.data.results);
     };
@@ -129,17 +147,91 @@ const SalesContractTable = () => {
 
   const activeFilterCount = Object.values(advancedFilters).filter(v => v !== undefined && v !== '').length;
 
-  const handleAction = async (id: string, action: 'confirm' | 'ship') => {
+  const handleAction = async (id: string, action: 'submit-approval' | 'send-signature' | 'confirm' | 'ship') => {
     try {
       const session = await getSession();
-      const res = await sendRequest<IBackendRes<any>>({
+      const res = await sendRequest<IBackendRes<SalesContractActionResponse>>({
         url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/sales-contracts/${id}/${action}`,
         method: 'PATCH',
-        headers: { Authorization: `Bearer ${session?.user?.access_token}` }
+        headers: { Authorization: `Bearer ${getAccessToken(session)}` }
       });
 
       if (res?.data) {
-        message.success(action === 'confirm' ? t('messages.confirmSuccess') : t('messages.shipSuccess'));
+        const successKey: Record<string, string> = {
+          'submit-approval': t('messages.submitApprovalSuccess'),
+          'send-signature': t('messages.sendSignatureSuccess'),
+          confirm: t('messages.confirmSuccess'),
+          ship: t('messages.shipSuccess'),
+        };
+        if (action === 'send-signature' && res.data.invitation?.signingUrl) {
+          const signingUrl = res.data.invitation.signingUrl;
+          let copied = false;
+          try {
+            await navigator.clipboard?.writeText(signingUrl);
+            copied = true;
+          } catch {
+            copied = false;
+          }
+
+          notification.success({
+            message: successKey[action],
+            description: copied
+              ? `Portal link copied. Delivery: ${res.data.deliveryStatus || 'SENT'}`
+              : `Portal link: ${signingUrl}`,
+            duration: 6,
+          });
+        } else {
+          message.success(successKey[action]);
+        }
+        fetchData(meta.current, meta.pageSize);
+      } else {
+        message.error(res?.message || t('messages.actionFailed'));
+      }
+    } catch (error) {
+      message.error(t('messages.actionFailed'));
+    }
+  };
+
+  const openSignatureModal = (record: any, signerType: 'BUYER' | 'INTERNAL') => {
+    setSignatureTarget({ record, signerType });
+    signatureForm.setFieldsValue({
+      signerName: signerType === 'BUYER'
+        ? record.buyer?.contactName || record.buyer?.name
+        : session?.user?.name || session?.user?.username,
+      signerTitle: signerType === 'BUYER' ? 'Authorized Representative' : 'Authorized Signatory',
+      signerEmail: signerType === 'BUYER' ? record.buyer?.email : undefined,
+      consentText: t('signature.defaultConsent'),
+    });
+    setIsSignatureModalOpen(true);
+  };
+
+  const handleSignatureSubmit = async (values: any) => {
+    if (!signatureTarget) return;
+
+    try {
+      const currentSession = await getSession();
+      const res = await sendRequest<IBackendRes<any>>({
+        url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/sales-contracts/${signatureTarget.record._id}/signatures`,
+        method: 'POST',
+        headers: { Authorization: `Bearer ${getAccessToken(currentSession)}` },
+        body: {
+          signerType: signatureTarget.signerType,
+          signerName: values.signerName,
+          signerTitle: values.signerTitle,
+          signerEmail: values.signerEmail,
+          consentText: values.consentText,
+        },
+      });
+
+      if (res?.data) {
+        message.success(
+          signatureTarget.signerType === 'BUYER'
+            ? t('messages.buyerSignSuccess')
+            : t('messages.internalSignSuccess'),
+        );
+        setIsSignatureModalOpen(false);
+        setSignatureTarget(null);
+        signatureForm.resetFields();
         fetchData(meta.current, meta.pageSize);
       } else {
         message.error(res?.message || t('messages.actionFailed'));
@@ -229,21 +321,54 @@ const SalesContractTable = () => {
       align: 'center' as const,
       render: (_: any, record: any) => (
         <Space size="small">
-          {record.status === 'DRAFT' && canWrite && (
+          {(record.status === 'DRAFT' || record.status === 'REJECTED') && canWrite && (
             <Popconfirm
-              title={t('messages.confirmTitle')}
-              onConfirm={() => handleAction(record.id, 'confirm')}
+              title={t('messages.submitApprovalTitle')}
+              onConfirm={() => handleAction(record._id, 'submit-approval')}
               okText={t('messages.confirmOk')}
               cancelText={t('messages.cancel')}
             >
               <Button
                 type="primary"
                 className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 border-none h-10 px-6 rounded-xl font-bold shadow-lg shadow-blue-500/30"
-                icon={<CheckCircleOutlined />}
+                icon={<SendOutlined />}
               >
-                {t('actions.confirm')}
+                {t('actions.submitApproval')}
               </Button>
             </Popconfirm>
+          )}
+
+          {record.status === 'APPROVED' && canWrite && (
+            <Button
+              type="primary"
+              className="bg-gradient-to-r from-purple-600 to-blue-600 border-none h-10 px-6 rounded-xl font-bold shadow-lg shadow-purple-500/25"
+              icon={<FileProtectOutlined />}
+              onClick={() => handleAction(record._id, 'send-signature')}
+            >
+              {t('actions.sendSignature')}
+            </Button>
+          )}
+
+          {record.status === 'PENDING_BUYER_SIGNATURE' && canWrite && (
+            <Button
+              type="primary"
+              className="bg-gradient-to-r from-purple-600 to-pink-600 border-none h-10 px-6 rounded-xl font-bold shadow-lg shadow-purple-500/25"
+              icon={<FileProtectOutlined />}
+              onClick={() => openSignatureModal(record, 'BUYER')}
+            >
+              {t('actions.buyerSign')}
+            </Button>
+          )}
+
+          {record.status === 'BUYER_SIGNED' && canWrite && (
+            <Button
+              type="primary"
+              className="bg-gradient-to-r from-emerald-600 to-blue-600 border-none h-10 px-6 rounded-xl font-bold shadow-lg shadow-emerald-500/25"
+              icon={<CheckCircleOutlined />}
+              onClick={() => openSignatureModal(record, 'INTERNAL')}
+            >
+              {t('actions.internalSign')}
+            </Button>
           )}
 
           {record.status === 'CONFIRMED' && canWrite && (
@@ -253,7 +378,7 @@ const SalesContractTable = () => {
               icon={<TruckOutlined />}
               onClick={() => { setSelectedRecord(record); setIsShipmentModalOpen(true); }}
             >
-              LẬP LÔ HÀNG
+              {t('table.createShipment')}
             </Button>
           )}
 
@@ -267,7 +392,7 @@ const SalesContractTable = () => {
           </Tooltip>
           <Tooltip title={t('actions.pdf')}>
             <Button
-              onClick={() => message.info("Đang tạo tệp PDF...")}
+              onClick={() => message.info(t('table.pdfGenerating'))}
               shape="circle"
               className="bg-slate-800 border-slate-700 text-red-400 hover:text-red-300 hover:border-red-300"
               icon={<FilePdfOutlined />}
@@ -291,9 +416,9 @@ const SalesContractTable = () => {
           <Button
             icon={<FilePdfOutlined />}
             className="flex items-center rounded-xl h-10 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 bg-white dark:bg-slate-900/50 hover:border-blue-500 hover:text-blue-500 transition-all"
-            onClick={() => message.info("Đang chuẩn bị tệp PDF...")}
+            onClick={() => message.info(t('table.pdfGenerating'))}
           >
-            Xuất PDF
+            {t('buttons.exportPdf')}
           </Button>
           <Button
             type="primary"
@@ -302,7 +427,7 @@ const SalesContractTable = () => {
             onClick={() => canWrite && setIsModalOpen(true)}
             disabled={!canWrite}
           >
-            THÊM HỢP ĐỒNG
+            {t('buttons.createNew')}
           </Button>
         </div>
       </div>
@@ -312,7 +437,7 @@ const SalesContractTable = () => {
         <Col xs={24} sm={12} lg={8}>
           <Card variant="borderless" hoverable style={{ borderRadius: '12px', background: isDark ? '#1e293b' : token.colorBgContainer }}>
             <Statistic
-              title={<Text type="secondary" style={{ fontSize: '12px', fontWeight: 600, color: '#94a3b8' }}>TỔNG TRỊ GIÁ (QUY ĐỔI USD)</Text>}
+              title={<Text type="secondary" style={{ fontSize: '12px', fontWeight: 600, color: '#94a3b8' }}>{t('stats.totalValue')}</Text>}
               value={data.reduce((sum, item) => sum + Number(item.totalAmountVnd || 0), 0) / GLOBAL_EXCHANGE_RATE}
               formatter={(val) => formatMoney(Number(val), 'USD')}
               styles={{ content: { color: isDark ? '#f8fafc' : '#1e293b', fontWeight: 900, fontSize: '24px' } }}
@@ -323,8 +448,8 @@ const SalesContractTable = () => {
         <Col xs={24} sm={12} lg={8}>
           <Card variant="borderless" hoverable style={{ borderRadius: '12px', background: isDark ? '#1e293b' : token.colorBgContainer }}>
             <Statistic
-              title={<Text type="secondary" style={{ fontSize: '12px', fontWeight: 600, color: '#94a3b8' }}>HỢP ĐỒNG CHỜ DUYỆT</Text>}
-              value={data.filter(item => item.status === 'DRAFT').length}
+              title={<Text type="secondary" style={{ fontSize: '12px', fontWeight: 600, color: '#94a3b8' }}>{t('stats.pending')}</Text>}
+              value={data.filter(item => ['DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'PENDING_BUYER_SIGNATURE', 'BUYER_SIGNED'].includes(item.status)).length}
               styles={{ content: { color: isDark ? '#f8fafc' : '#1e293b', fontWeight: 900, fontSize: '24px' } }}
               prefix={<SendOutlined style={{ color: '#f59e0b', marginRight: '8px' }} />}
             />
@@ -333,7 +458,7 @@ const SalesContractTable = () => {
         <Col xs={24} sm={12} lg={8}>
           <Card variant="borderless" hoverable style={{ borderRadius: '12px', background: isDark ? '#1e293b' : token.colorBgContainer }}>
             <Statistic
-              title={<Text type="secondary" style={{ fontSize: '12px', fontWeight: 600, color: '#94a3b8' }}>ĐÃ GIAO HÀNG</Text>}
+              title={<Text type="secondary" style={{ fontSize: '12px', fontWeight: 600, color: '#94a3b8' }}>{t('stats.shipped')}</Text>}
               value={data.filter(item => item.status === 'SHIPPED' || item.status === 'PAID').length}
               styles={{ content: { color: isDark ? '#f8fafc' : '#1e293b', fontWeight: 900, fontSize: '24px' } }}
               prefix={<RocketOutlined style={{ color: '#10b981', marginRight: '8px' }} />}
@@ -357,7 +482,7 @@ const SalesContractTable = () => {
         <div style={{ padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Space size="large">
             <Input
-              placeholder="Tìm số hợp đồng..."
+              placeholder={t('filters.searchPlaceholder')}
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
               prefix={<SearchOutlined className="text-slate-400" />}
@@ -366,17 +491,22 @@ const SalesContractTable = () => {
               allowClear
             />
             <Select
-              placeholder="Tất cả trạng thái"
+              placeholder={t('filters.allStatus')}
               allowClear
               value={statusFilter}
               onChange={(val) => setStatusFilter(val)}
               style={{ width: 180, height: 40 }}
               className="rounded-xl"
               options={[
-                { value: 'DRAFT', label: 'Nháp (Draft)' },
-                { value: 'CONFIRMED', label: 'Đã xác nhận' },
-                { value: 'SHIPPED', label: 'Đã giao hàng' },
-                { value: 'PAID', label: 'Đã thanh toán' },
+                { value: 'DRAFT', label: t('status.DRAFT') },
+                { value: 'PENDING_APPROVAL', label: t('status.PENDING_APPROVAL') },
+                { value: 'APPROVED', label: t('status.APPROVED') },
+                { value: 'PENDING_BUYER_SIGNATURE', label: t('status.PENDING_BUYER_SIGNATURE') },
+                { value: 'BUYER_SIGNED', label: t('status.BUYER_SIGNED') },
+                { value: 'REJECTED', label: t('status.REJECTED') },
+                { value: 'CONFIRMED', label: t('status.CONFIRMED') },
+                { value: 'SHIPPED', label: t('status.SHIPPED') },
+                { value: 'PAID', label: t('status.PAID') },
               ]}
             />
           </Space>
@@ -387,7 +517,7 @@ const SalesContractTable = () => {
                 className={`rounded-xl h-10 transition-all ${activeFilterCount > 0 ? 'border-blue-500 text-blue-500 bg-blue-50' : 'border-slate-200 text-slate-500 bg-transparent hover:border-blue-500 hover:text-blue-500'}`}
                 onClick={() => setIsFilterOpen(true)}
               >
-                Bộ lọc nâng cao
+                {t('filters.advancedFilter')}
               </Button>
             </Badge>
             <Button 
@@ -419,10 +549,10 @@ const SalesContractTable = () => {
                     ...meta,
                     showSizeChanger: true,
                     className: "px-6 py-4 border-t border-slate-50",
-                    showTotal: (total) => `Tổng cộng ${total} hợp đồng`
+                    showTotal: (total) => t('table.totalCount', { total })
                   }}
                   onChange={(pagination) => fetchData(pagination.current, pagination.pageSize)}
-                  rowKey="id"
+                  rowKey={(record: any) => record._id || record.contractNumber}
                   bordered={false}
                 />
               </motion.div>
@@ -487,38 +617,84 @@ const SalesContractTable = () => {
             ...selectedRecord,
             piNumber: selectedRecord.contractNumber, 
             id: undefined, 
-            salesContractId: selectedRecord.id,
+            salesContractId: selectedRecord._id,
             customer: selectedRecord.buyer // Map buyer to customer for modal display
           }}
         />
       )}
 
+      <Modal
+        title={signatureTarget?.signerType === 'BUYER' ? t('signature.buyerTitle') : t('signature.internalTitle')}
+        open={isSignatureModalOpen}
+        onCancel={() => {
+          setIsSignatureModalOpen(false);
+          setSignatureTarget(null);
+          signatureForm.resetFields();
+        }}
+        onOk={() => signatureForm.submit()}
+        okText={signatureTarget?.signerType === 'BUYER' ? t('signature.buyerOk') : t('signature.internalOk')}
+        cancelText={t('messages.cancel')}
+        destroyOnHidden
+      >
+        <Form
+          form={signatureForm}
+          layout="vertical"
+          onFinish={handleSignatureSubmit}
+          className="pt-2"
+        >
+          <Form.Item
+            label={t('signature.signerName')}
+            name="signerName"
+            rules={[{ required: true, message: t('signature.signerRequired') }]}
+          >
+            <Input />
+          </Form.Item>
+          <Form.Item label={t('signature.signerTitle')} name="signerTitle">
+            <Input />
+          </Form.Item>
+          <Form.Item
+            label={t('signature.signerEmail')}
+            name="signerEmail"
+            rules={[{ type: 'email', message: t('signature.emailInvalid') }]}
+          >
+            <Input />
+          </Form.Item>
+          <Form.Item
+            label={t('signature.consent')}
+            name="consentText"
+            rules={[{ required: true, message: t('signature.consentRequired') }]}
+          >
+            <Input.TextArea rows={4} />
+          </Form.Item>
+        </Form>
+      </Modal>
+
       <Drawer
         title={
           <div className="flex items-center space-x-2 text-slate-800 dark:text-slate-100">
             <FilterOutlined className="text-blue-500" />
-            <span className="font-bold">Bộ lọc nâng cao</span>
+            <span className="font-bold">{t('table.filter.title')}</span>
           </div>
         }
         placement="right"
         onClose={() => setIsFilterOpen(false)}
         open={isFilterOpen}
+        size={400}
         styles={{ 
-          wrapper: { width: 400 },
           body: { padding: '24px' } 
         }}
         extra={
           <Button type="link" onClick={handleResetFilters} className="text-slate-400 hover:text-blue-500">
-            Làm mới
+            {t('table.filter.reset')}
           </Button>
         }
         footer={
           <div className="flex space-x-3 p-2">
             <Button className="flex-1 rounded-xl h-11 border-slate-200" onClick={() => setIsFilterOpen(false)}>
-              Hủy
+              {t('table.filter.cancel')}
             </Button>
             <Button type="primary" className="flex-1 rounded-xl h-11 bg-blue-600" onClick={() => filterForm.submit()}>
-              Áp dụng
+              {t('table.filter.apply')}
             </Button>
           </div>
         }
@@ -531,20 +707,20 @@ const SalesContractTable = () => {
           initialValues={advancedFilters}
           className="premium-form"
         >
-          <Form.Item label="Khách hàng (Buyer)" name="buyerId">
+          <Form.Item label={t('table.filter.buyer')} name="buyerId">
             <Select
-              placeholder="Chọn khách hàng"
+              placeholder={t('table.filter.buyerPlaceholder')}
               showSearch
               allowClear
               optionFilterProp="label"
-              options={partners.map(p => ({ value: p.id, label: p.name }))}
+              options={partners.map(p => ({ value: p._id, label: p.name }))}
               className="premium-select-dynamic"
             />
           </Form.Item>
 
-          <Form.Item label="Điều kiện thương mại" name="incoterm">
+          <Form.Item label={t('table.filter.incoterm')} name="incoterm">
             <Select
-              placeholder="Chọn Incoterm"
+              placeholder={t('table.filter.incotermPlaceholder')}
               allowClear
               options={[
                 { value: 'EXW', label: 'EXW - Ex Works' },
@@ -557,30 +733,35 @@ const SalesContractTable = () => {
             />
           </Form.Item>
 
-          <Form.Item label="Trạng thái hợp đồng" name="status">
+          <Form.Item label={t('table.filter.status')} name="status">
             <Select
-              placeholder="Tất cả trạng thái"
+              placeholder={t('table.filter.statusPlaceholder')}
               allowClear
               options={[
-                { value: 'DRAFT', label: 'Nháp (Draft)' },
-                { value: 'CONFIRMED', label: 'Đã xác nhận' },
-                { value: 'SHIPPED', label: 'Đã giao hàng' },
-                { value: 'PAID', label: 'Đã thanh toán' },
+                { value: 'DRAFT', label: t('status.DRAFT') },
+                { value: 'PENDING_APPROVAL', label: t('status.PENDING_APPROVAL') },
+                { value: 'APPROVED', label: t('status.APPROVED') },
+                { value: 'PENDING_BUYER_SIGNATURE', label: t('status.PENDING_BUYER_SIGNATURE') },
+                { value: 'BUYER_SIGNED', label: t('status.BUYER_SIGNED') },
+                { value: 'REJECTED', label: t('status.REJECTED') },
+                { value: 'CONFIRMED', label: t('status.CONFIRMED') },
+                { value: 'SHIPPED', label: t('status.SHIPPED') },
+                { value: 'PAID', label: t('status.PAID') },
               ]}
               className="premium-select-dynamic"
             />
           </Form.Item>
 
-          <Form.Item label="Phương thức thanh toán" name="paymentTerms">
-            <Input placeholder="Ví dụ: T/T, L/C..." className="rounded-xl h-10 border-slate-200" />
+          <Form.Item label={t('table.filter.payment')} name="paymentTerms">
+            <Input placeholder={t('table.filter.paymentPlaceholder')} className="rounded-xl h-10 border-slate-200" />
           </Form.Item>
           
           <Divider className="my-6 border-slate-100 dark:border-slate-800" />
           
           <div className="bg-blue-50/50 dark:bg-blue-500/5 p-4 rounded-2xl border border-blue-100 dark:border-blue-500/10">
-            <Text className="text-[11px] text-blue-600/70 uppercase font-bold tracking-widest block mb-2">Thông tin</Text>
+            <Text className="text-[11px] text-blue-600/70 uppercase font-bold tracking-widest block mb-2">{t('table.filter.hintTitle')}</Text>
             <Text className="text-slate-500 text-xs leading-relaxed">
-              Sử dụng bộ lọc nâng cao để tìm kiếm hợp đồng chính xác hơn theo khách hàng và điều khoản thương mại.
+              {t('table.filter.hintText')}
             </Text>
           </div>
         </Form>

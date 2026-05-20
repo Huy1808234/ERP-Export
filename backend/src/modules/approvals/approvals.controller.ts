@@ -10,32 +10,32 @@ export class ApprovalsController {
   constructor(private readonly approvalsService: ApprovalsService) {}
 
   @Get('pending')
-  @Roles('ADMIN', 'MANAGER')
+  @Roles('ADMIN', 'DIRECTOR', 'MANAGER', 'SALES_EXPORT', 'PURCHASING', 'LOGISTICS', 'WAREHOUSE', 'ACCOUNTANT', 'CHIEF_ACCOUNTANT')
   @ResponseMessage('Fetch all pending approvals')
-  getPendingApprovals() {
-    return this.approvalsService.getPendingApprovals();
+  getPendingApprovals(@User() user: any) {
+    return this.approvalsService.getPendingApprovals(user);
   }
 
-  @Post(':id/approve')
-  @Roles('ADMIN', 'MANAGER')
+  @Post(':_id/approve')
+  @Roles('ADMIN', 'DIRECTOR', 'MANAGER', 'SALES_EXPORT', 'PURCHASING', 'LOGISTICS', 'WAREHOUSE', 'ACCOUNTANT', 'CHIEF_ACCOUNTANT')
   @ResponseMessage('Approved successfully')
   approve(
-    @Param('id') id: string,
+    @Param('_id') recordId: string,
     @Body('type') type: string,
     @User() user: any
   ) {
-    return this.approvalsService.approve(id, type, user);
+    return this.approvalsService.approve(recordId, type, user);
   }
 
-  @Post(':id/reject')
-  @Roles('ADMIN', 'MANAGER')
+  @Post(':_id/reject')
+  @Roles('ADMIN', 'DIRECTOR', 'MANAGER', 'SALES_EXPORT', 'PURCHASING', 'LOGISTICS', 'WAREHOUSE', 'ACCOUNTANT', 'CHIEF_ACCOUNTANT')
   @ResponseMessage('Rejected successfully')
   reject(
-    @Param('id') id: string,
+    @Param('_id') recordId: string,
     @Body('type') type: string,
     @Body('reason') reason: string,
     @User() user: any
   ) {
-    return this.approvalsService.reject(id, type, reason, user);
+    return this.approvalsService.reject(recordId, type, reason, user);
   }
 }

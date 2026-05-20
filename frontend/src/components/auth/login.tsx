@@ -1,17 +1,22 @@
 "use client";
-import { Button, Col, Divider, Form, Input, Row } from "antd";
-import { notification } from "@/library/antd.static";
+
+import { Button, Divider, Form, Input } from "antd";
+import { notification } from "@/providers/antd-static";
 import { ArrowLeftOutlined } from "@ant-design/icons";
-import { Link, useRouter } from "@/i18n/routing";
-import { useTranslations } from "next-intl";
+import { Link } from "@/i18n/routing";
+import { useTranslations, useLocale } from "next-intl";
+import { useSearchParams } from "next/navigation";
 import { authenticate } from "@/utils/action";
 import ModalReactive from "./modal.reactive";
 import ModalChangePassword from "./modal.change.password";
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { isStaff } from "@/utils/auth-utils";
+import { getPostLoginRedirectPath } from "@/utils/auth-redirect";
 
 const Login = () => {
   const t = useTranslations("Auth.login");
-  const route = useRouter();
+  const locale = useLocale();
+  const searchParams = useSearchParams();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [useEmail, setUserEmail] = useState("");
   const [changePassword, setChangePassword] = useState(false);
@@ -24,23 +29,32 @@ const Login = () => {
     const res = await authenticate(username, password);
     setLoading(false);
 
-    if (res?.error) {
-      if (res?.code === 2) {
+    if (!res.ok) {
+      if (res.code === 2) {
         setIsModalOpen(true);
         setUserEmail(username);
         return;
       }
+
       notification.error({
         title: t("notifications.failTitle"),
         description: res.error || "Login failed",
       });
-    } else {
-      notification.success({
-        title: t("notifications.successTitle"),
-        description: t("notifications.successDesc"),
-      });
-      route.push("/dashboard");
+      return;
     }
+
+    notification.success({
+      title: t("notifications.successTitle"),
+      description: t("notifications.successDesc"),
+    });
+
+    const redirectPath = getPostLoginRedirectPath({
+      callbackUrl: searchParams.get("callbackUrl"),
+      locale,
+      isStaffUser: res.user ? isStaff(res.user) : true,
+    });
+
+    window.location.assign(redirectPath);
   };
 
   return (
@@ -136,7 +150,7 @@ const Login = () => {
               rules={[{ required: true, message: t("fields.password.required") }]}
             >
               <Input.Password
-                placeholder="••••••••"
+                placeholder="********"
                 style={{
                   background: "rgba(15, 23, 42, 0.6)",
                   border: "1px solid rgba(255, 255, 255, 0.1)",

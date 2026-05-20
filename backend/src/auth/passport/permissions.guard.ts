@@ -6,6 +6,32 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { IS_PUBLIC_KEY, PERMISSIONS_KEY } from '@/decorator/customize';
+import type { AuthenticatedUser } from '@/common/types/authenticated-user.type';
+
+type RequestWithUser = {
+  user?: AuthenticatedUser;
+};
+
+function normalizeRoleName(user?: AuthenticatedUser): string {
+  const role = user?.role;
+  const roleName = typeof role === 'string' ? role : role?.name || user?.roleName;
+
+  return roleName?.toUpperCase() || '';
+}
+
+function getPermissionNames(user: AuthenticatedUser): Set<string> {
+  const role = user.role;
+  const rolePermissions =
+    role && typeof role === 'object' && Array.isArray(role.permissions)
+      ? role.permissions
+      : [];
+
+  return new Set(
+    rolePermissions
+      .map((permission) => permission.name)
+      .filter((name): name is string => Boolean(name)),
+  );
+}
 
 @Injectable()
 export class PermissionsGuard implements CanActivate {
@@ -30,7 +56,7 @@ export class PermissionsGuard implements CanActivate {
       return true;
     }
 
-    const request = context.switchToHttp().getRequest();
+    const request = context.switchToHttp().getRequest<RequestWithUser>();
     const user = request.user;
     
     if (!user || !user.role) {
@@ -38,15 +64,17 @@ export class PermissionsGuard implements CanActivate {
     }
 
     // Admin has all permissions
-    const userRole = user.role.name?.toUpperCase();
+    const userRole = normalizeRoleName(user);
     if (userRole === 'ADMIN' || userRole === 'SUPER ADMIN') {
         return true;
     }
 
-    const userPermissions = user.role.permissions?.map(p => p.name) || [];
+    const userPermissions = getPermissionNames(user);
     
     const hasPermission = requiredPermissions.every(permission => 
-        userPermissions.includes(permission)
+        userPermissions.has(permission) ||
+        userPermissions.has('read:all') ||
+        userPermissions.has('manage:all')
     );
 
     if (!hasPermission) {

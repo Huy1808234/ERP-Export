@@ -5,6 +5,7 @@ import { IQuotation, IQuotationLine } from '@/types/o2c';
 /**
  * Senior Excel Service for ERP
  * Handles professional data exporting with proper formatting and mapping
+ * Verification: IQuotation.createdBy is defined in types/o2c.ts
  */
 
 export const ExcelService = {
@@ -22,7 +23,7 @@ export const ExcelService = {
       'Trạng Thái': item.status,
       'Ngày Phát Hành': item.createdAt ? new Date(item.createdAt).toLocaleDateString('vi-VN') : '-',
       'Ngày Hết Hạn': item.expiryDate ? new Date(item.expiryDate).toLocaleDateString('vi-VN') : '-',
-      'Người Tạo': 'N/A', // Update if createdBy is available in IQuotation
+      'Người Tạo': item.createdBy ? `${item.createdBy.fullName || item.createdBy.name}${item.createdBy.role?.name ? ` (${item.createdBy.role.name})` : ''}` : 'N/A',
     }));
 
     const ws = XLSX.utils.json_to_sheet(wsData);
@@ -67,32 +68,40 @@ export const ExcelService = {
     const bankInfoRaw = getSetting('COMPANY_BANK_INFO', 'Bank Name: VIETCOMBANK\nBeneficiary: ANTIGRAVITY EXPORT CO., LTD\nAccount No: 123-456-789-000 (USD)\nSwift Code: VCBKVNVX');
     const bankLines = bankInfoRaw.split('\n');
 
-    // Header Section - Enterprise Identity
+    // Precise calculation of subtotal from lines
+    const lineItemsSubtotal = (item.items || []).reduce((acc: number, line: IQuotationLine) => {
+      return acc + (line.quantity * line.unitPrice);
+    }, 0);
+
+    const otherFee = Number(item.otherFee) || 0;
+
+    // Header Section - Enterprise Identity (Separated columns for clarity)
     const header = [
       ['PROFORMA INVOICE / QUOTATION'],
       [''],
-      ['SHIPPER / EXPORTER:', 'BUYER / IMPORTER:'],
-      [companyName, item.customer?.name],
-      [companyAddress, item.customer?.address || '-'],
-      ['Tel: +84 28 3822 0000', `Contact: ${item.customer?.contactPerson || 'N/A'}`],
-      ['Email: sales@antigravity.com', `Tax ID: ${item.customer?.taxId || '-'}`],
+      ['SHIPPER / EXPORTER:', '', '', '', '', 'BUYER / IMPORTER:'],
+      [companyName, '', '', '', '', item.customer?.name],
+      [companyAddress, '', '', '', '', item.customer?.address || '-'],
+      [`Tel: +84 28 3822 0000`, '', '', '', '', `Contact: ${item.customer?.contactPerson || 'N/A'}`],
+      ['Email: sales@antigravity.com', '', '', '', '', `Tax ID: ${item.customer?.taxId || '-'}`],
       [''],
-      [`PI/Quotation No: ${item.quotationNumber}`, `Date: ${item.createdAt ? new Date(item.createdAt).toLocaleDateString('vi-VN') : '-'}`],
-      [`Incoterm: ${item.incoterm || '-'}`, `Currency: ${item.currency}`],
-      [`Port of Loading: ${item.portOfLoading || '-'}`, `Port of Discharge: ${item.portOfDischarge || '-'}`],
+      [`PI/Quotation No: ${item.quotationNumber}`, '', '', '', '', `Date: ${item.createdAt ? new Date(item.createdAt).toLocaleDateString('vi-VN') : '-'}`],
+      [`Incoterm: ${item.incoterm || '-'}`, '', '', '', '', `Currency: ${item.currency}`],
+      [`Port of Loading: ${item.portOfLoading || '-'}`, '', '', '', '', `Port of Discharge: ${item.portOfDischarge || '-'}`],
       [''],
       ['STT', 'Mô tả sản phẩm / Description', 'HS Code', 'Q\'ty', 'Unit', 'Price', 'Total Amount', 'CBM', 'G.W (Kgs)'],
     ];
 
-    // Calculate Logistics Totals
+    // Calculate Logistics Totals for Summary
     let totalCBM = 0;
     let totalGW = 0;
 
     // Items Section
     const items = (item.items || []).map((line: IQuotationLine, idx: number) => {
       const p = line.product || {};
-      const cbm = (p.cbmPerCarton || 0) * (line.quantity / (p.piecesPerCarton || 1));
-      const gw = (p.grossWeightPerCarton || 0) * (line.quantity / (p.piecesPerCarton || 1));
+      const pcsPerCtn = p.piecesPerCarton || 1;
+      const cbm = (p.cbmPerCarton || 0) * (line.quantity / pcsPerCtn);
+      const gw = (p.grossWeightPerCarton || 0) * (line.quantity / pcsPerCtn);
       
       totalCBM += cbm;
       totalGW += gw;
@@ -110,12 +119,16 @@ export const ExcelService = {
       ];
     });
 
-    // Financial & Logistics Footer
+    // Financial & Logistics Footer (Complete Fee Breakdown)
     const footer = [
       [''],
-      ['', '', '', '', '', 'SUBTOTAL:', item.subTotal || 0],
-      ['', '', '', '', '', 'LOGISTICS FEE:', item.logisticsFee || 0],
-      ['', '', '', '', '', 'OTHER FEE:', item.otherFee || 0],
+      ['', '', '', '', '', 'SUBTOTAL:', lineItemsSubtotal],
+      ['', '', '', '', '', 'SEA FREIGHT:', item.seaFreight || 0],
+      ['', '', '', '', '', 'INSURANCE:', item.insuranceCost || 0],
+      ['', '', '', '', '', 'TRUCKING / DOMESTIC:', item.domesticTransportCost || 0],
+      ['', '', '', '', '', 'LOCAL CHARGES (POL/POD):', item.portCharges || 0],
+      ['', '', '', '', '', 'LOGISTICS SERVICES:', item.logisticsFee || 0],
+      ['', '', '', '', '', 'OTHER FEE:', otherFee],
       ['', '', '', '', '', 'GRAND TOTAL:', item.totalAmount, item.currency],
       [''],
       ['LOGISTICS SUMMARY:'],
@@ -126,7 +139,7 @@ export const ExcelService = {
       [item.paymentTerms || 'T/T 100%'],
       [''],
       ['BANKING INFORMATION:'],
-      ...bankLines.map(line => [line]),
+      ...bankLines.map((line: string) => [line]),
       [''],
       [''],
       ['VALIDITY:', `This quotation is valid until ${item.expiryDate ? new Date(item.expiryDate).toLocaleDateString('vi-VN') : '30 days from issue date'}`],

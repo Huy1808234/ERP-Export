@@ -29,11 +29,11 @@ declare global {
         results: T[];
         totalItems?: number;
         totalPages?: number;
-        summary?: any;
+        summary?: Record<string, unknown>;
     }
 
     interface IPartner {
-        id: string;
+        _id: string;
         name: string;
         email?: string;
         phone?: string;
@@ -44,11 +44,11 @@ declare global {
     }
 
     interface IShipment {
-        id: string;
+        _id: string;
         shipmentNumber: string;
         status: 'BOOKED' | 'LOADING' | 'CUSTOMS_CLEARED' | 'ON_BOARD' | 'ARRIVED' | 'CLOSED';
         proformaInvoice?: {
-            id: string;
+            _id: string;
             piNumber: string;
         };
         forwarder?: IPartner;
@@ -67,19 +67,21 @@ declare global {
     }
 
     interface ISessionUser {
-        id: string;
+        _id: string;
+        username: string;
         email: string;
         name: string;
+        roleName?: string | null;
         role?: {
-            id: string;
+            _id: string;
             name: string;
-            permissions?: Array<{ id: string; name: string }>;
+            permissions?: Array<{ _id: string; name: string }>;
         };
-        access_token: string;
+        partnerId?: string | null;
     }
 
     interface IPurchaseRequest {
-        id: string;
+        _id: string;
         prNumber: string;
         purpose?: string;
         department?: string;
@@ -87,11 +89,13 @@ declare global {
         project?: string;
         status: string;
         requiredDate?: string;
-        items: any[];
+        items: Array<Record<string, unknown>>;
     }
 
     interface ILogin {
         access_token: string;
+        access_token_expires_at: number;
+        refresh_token: string;
         user: ISessionUser;
     }
 }

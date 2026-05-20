@@ -1,6 +1,7 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, ManyToOne, JoinColumn, Index } from 'typeorm';
+import { BeforeInsert, Entity, Column, PrimaryColumn, CreateDateColumn, ManyToOne, JoinColumn, Index } from 'typeorm';
 import { Product } from '../../products/entities/product.entity';
 import { ColumnNumericTransformer } from '@/helpers/typeorm.util';
+import { createEntityId } from '@/common/ids/entity-id.util';
 
 export enum InventoryTransactionType {
   GRN = 'GOODS_RECEIPT',
@@ -15,8 +16,15 @@ export enum InventoryTransactionType {
 @Entity('inventory_ledger')
 @Index(['productId', 'createdAt'])
 export class InventoryLedger {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
+  @PrimaryColumn({ type: 'varchar', length: 40, name: '_id' })
+  _id: string;
+
+  @BeforeInsert()
+  assignId() {
+    if (!this._id) {
+      this._id = createEntityId('invled');
+    }
+  }
 
   @Column({ default: false })
   isQuarantine: boolean; // Đánh dấu hàng nằm ở khu cách ly (hỏng, lỗi...)
@@ -42,7 +50,11 @@ export class InventoryLedger {
   unitPrice: number;
 
   @Column()
-  referenceId: string; // Internal UUID for relations
+  referenceId: string; // Internal technical _id for relations
+
+  @Column({ nullable: true })
+  @Index()
+  partnerId: string; // Buyer/vendor _id for movement tracing
 
   @Column({ nullable: true })
   referenceNumber: string; // Human-readable ID (e.g. GRN-20260502-0001)

@@ -3,11 +3,12 @@
 import React, { useState, useEffect } from 'react';
 import { Modal, Form, Input, DatePicker, Select, InputNumber, Button, Space, Typography, Divider } from 'antd';
 import { useTranslations } from 'next-intl';
-import { notification } from '@/library/antd.static';
+import { notification } from '@/providers/antd-static';
 import { PlusOutlined, DeleteOutlined, RollbackOutlined } from '@ant-design/icons';
 import { useSession } from 'next-auth/react';
-import { sendRequest } from '@/utils/api';
+import { sendRequest } from '@/lib/api-client';
 import dayjs from 'dayjs';
+import { getAccessToken } from '@/lib/auth-token';
 
 const { Text } = Typography;
 
@@ -30,7 +31,7 @@ const PurchaseReturnModal = (props: IProps) => {
       const res = await sendRequest<IBackendRes<any>>({
         url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/products?pageSize=100`,
         method: 'GET',
-        headers: { Authorization: `Bearer ${session?.access_token}` },
+        headers: { Authorization: `Bearer ${getAccessToken(session)}` },
       });
       if (res?.data) setProducts(res.data.results || []);
     };
@@ -49,7 +50,7 @@ const PurchaseReturnModal = (props: IProps) => {
         url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/purchase-returns`,
         method: 'POST',
         body: payload,
-        headers: { Authorization: `Bearer ${session?.access_token}` },
+        headers: { Authorization: `Bearer ${getAccessToken(session)}` },
       });
 
       if (res?.data) {
@@ -109,7 +110,7 @@ const PurchaseReturnModal = (props: IProps) => {
                     <Select
                       showSearch
                       placeholder={t('modal.form.productPlaceholder')}
-                      options={products.map(p => ({ label: `[${p.sku}] ${p.vietnameseName}`, value: p.id }))}
+                      options={products.map(p => ({ label: `[${p.sku}] ${p.vietnameseName}`, value: p._id }))}
                     />
                   </Form.Item>
                   <Form.Item

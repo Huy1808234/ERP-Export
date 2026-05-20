@@ -7,7 +7,7 @@ export enum UOM {
 }
 
 export interface IProduct {
-  id?: string;
+  _id?: string;
   sku: string;
   vietnameseName: string;
   englishName: string;
@@ -31,7 +31,11 @@ export interface IProduct {
   exportCurrency: string;
   
   preferredSupplierId?: string;
-  preferredSupplier?: { id: string; name: string };
+  preferredSupplier?: { _id: string; name: string };
   currentStock?: number;
+  category?: string;
+  isBestseller?: boolean;
+  isNew?: boolean;
+  imageUrl?: string;
   isActive: boolean;
 }

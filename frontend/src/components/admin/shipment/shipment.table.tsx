@@ -7,12 +7,12 @@ import {
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {DeleteTwoTone, EyeTwoTone, TruckOutlined, SearchOutlined, FilterOutlined, ReloadOutlined, DeploymentUnitOutlined, CalendarOutlined, CheckCircleOutlined, FilePdfOutlined} from '@ant-design/icons';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { PageHeader } from '@/components/ui/PageHeader';
 
 import ShipmentDetailDrawer from './shipment.detail';
 import ShipmentDocCenter from './shipment.doc-center';
-import { useDebounce } from '@/utils/customHook';
+import { useDebounce } from '@/hooks/useDebounce';
 import { useShipments } from '@/hooks/useShipments';
 import { SHIPMENT_STATUS_CONFIG } from '@/constants/o2c';
 import type { IShipment, ShipmentStatus } from '@/types/o2c';
@@ -20,7 +20,7 @@ import type { IShipment, ShipmentStatus } from '@/types/o2c';
 import type { Session } from 'next-auth';
 import type { TableProps } from 'antd';
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
 interface IProps {
   session: Session | null;
@@ -35,6 +35,8 @@ const ShipmentTable = ({ session }: IProps) => {
   const tStatus = useTranslations('ShipmentStatus');
   const tTable = useTranslations('ShipmentTable');
   const tCommon = useTranslations('Common');
+  const locale = useLocale();
+  const dateLocale = locale === 'vi' ? 'vi-VN' : 'en-US';
 
   // Pagination state derived from URL
   const current = searchParams.get('current') ?? '1';
@@ -77,13 +79,13 @@ const ShipmentTable = ({ session }: IProps) => {
 
   const columns = useMemo<TableProps<IShipment>['columns']>(() => [
     {
-      title: 'Số Lô Hàng',
+      title: tTable('table.shipmentNumber'),
       dataIndex: 'shipmentNumber',
       key: 'shipmentNumber',
       render: (text: string) => <b style={{ color: token.colorPrimary }}>{text}</b>,
     },
     {
-      title: 'Tham chiếu',
+      title: tTable('table.reference'),
       key: 'reference',
       render: (_: any, record: IShipment) => (
         <Space orientation="vertical" size={0}>
@@ -95,35 +97,35 @@ const ShipmentTable = ({ session }: IProps) => {
       )
     },
     {
-      title: 'Forwarder (Đơn vị vận tải)',
+      title: tTable('table.forwarder'),
       dataIndex: ['logisticsPartner', 'name'],
       key: 'logisticsPartner',
       render: (name: string | undefined) => name || '-',
     },
     {
-      title: 'Số Booking',
+      title: tTable('table.bookingNumber'),
       dataIndex: 'bookingNumber',
       key: 'bookingNumber',
       render: (booking: string | undefined) => booking ? <Tag color="purple">{booking}</Tag> : '-',
     },
     {
-      title: 'Cảng đi (POL)',
+      title: tTable('table.pol'),
       dataIndex: 'pol',
       key: 'pol',
     },
     {
-      title: 'Cảng đến (POD)',
+      title: tTable('table.pod'),
       dataIndex: 'pod',
       key: 'pod',
     },
     {
-      title: 'Ngày tàu chạy (ETD)',
+      title: tTable('table.etd'),
       dataIndex: 'etd',
       key: 'etd',
-      render: (date: string | undefined) => date ? new Date(date).toLocaleDateString('vi-VN') : '-',
+      render: (date: string | undefined) => date ? new Date(date).toLocaleDateString(dateLocale) : '-',
     },
     {
-      title: 'Trạng thái',
+      title: tTable('table.status'),
       dataIndex: 'status',
       key: 'status',
       render: (status: ShipmentStatus) => (
@@ -133,18 +135,18 @@ const ShipmentTable = ({ session }: IProps) => {
       ),
     },
     {
-      title: 'Thao tác',
+      title: tTable('table.actions'),
       key: 'action',
       width: 150,
       render: (_value: unknown, record: IShipment) => (
         <Space size="middle">
           {!record.isStockIssued ? (
             <Popconfirm
-              title="Xác nhận xuất kho?"
-              description="Hệ thống sẽ thực hiện trừ tồn kho thực tế."
-              onConfirm={() => issueStock(record.id, () => fetchShipments({ current: 1, pageSize: 10 }))}
-              okText="Xác nhận"
-              cancelText="Hủy"
+              title={tTable('table.issueTitle')}
+              description={tTable('table.issueDesc')}
+              onConfirm={() => issueStock(record._id, () => fetchShipments({ current: 1, pageSize: 10 }))}
+              okText={tCommon('confirm')}
+              cancelText={tCommon('cancel')}
             >
               <Button 
                 type="primary" 
@@ -152,46 +154,46 @@ const ShipmentTable = ({ session }: IProps) => {
                 icon={<CheckCircleOutlined />}
                 style={{ background: '#10b981', borderColor: '#10b981' }}
               >
-                XUẤT KHO
+                {tTable('table.issueStock')}
               </Button>
             </Popconfirm>
           ) : (
-            <Tag color="success" icon={<CheckCircleOutlined />}>ĐÃ XUẤT</Tag>
+            <Tag color="success" icon={<CheckCircleOutlined />}>{tTable('table.issued')}</Tag>
           )}
           
-          <Tooltip title="Xem chi tiết">
+          <Tooltip title={tTable('table.viewDetail')}>
             <EyeTwoTone
               style={{ cursor: 'pointer', fontSize: 18 }}
               onClick={() => {
-                setSelectedShipmentId(record.id);
+                setSelectedShipmentId(record._id);
                 setDetailOpen(true);
               }}
             />
           </Tooltip>
 
-          <Tooltip title="Bộ chứng từ (CI/PL)">
+          <Tooltip title={tTable('table.docCenter')}>
             <FilePdfOutlined 
               style={{ cursor: 'pointer', fontSize: 18, color: '#f5222d' }}
               onClick={() => {
-                setSelectedShipmentId(record.id);
+                setSelectedShipmentId(record._id);
                 setDocCenterOpen(true);
               }}
             />
           </Tooltip>
 
           <Popconfirm
-            title="Xóa Lô Hàng"
-            description="Bạn có chắc muốn xóa lô hàng này?"
-            onConfirm={() => handleDelete(record.id)}
-            okText="Đồng ý"
-            cancelText="Hủy"
+            title={tTable('table.deleteTitle')}
+            description={tTable('table.deleteConfirm')}
+            onConfirm={() => handleDelete(record._id)}
+            okText={tCommon('confirm')}
+            cancelText={tCommon('cancel')}
           >
             <DeleteTwoTone twoToneColor="#eb2f96" style={{ cursor: 'pointer', fontSize: 18 }} />
           </Popconfirm>
         </Space>
       ),
     },
-  ], [handleDelete, issueStock, fetchShipments, token.colorPrimary, tStatus, isDark]);
+  ], [dateLocale, handleDelete, issueStock, fetchShipments, token.colorPrimary, tStatus, tTable, tCommon]);
 
   const onFilterFinish = (values: any) => {
     setFilters(values);
@@ -218,7 +220,7 @@ const ShipmentTable = ({ session }: IProps) => {
         <Col xs={24} sm={12} lg={8}>
           <Card variant="borderless" hoverable style={{ borderRadius: '12px', background: isDark ? '#1e293b' : token.colorBgContainer }}>
             <Statistic
-              title={<Text type="secondary" style={{ fontSize: '12px', fontWeight: 600, color: '#94a3b8' }}>TỔNG LÔ HÀNG</Text>}
+              title={<Text type="secondary" style={{ fontSize: '12px', fontWeight: 600, color: '#94a3b8' }}>{tTable('stats.total')}</Text>}
               value={stats.total}
               styles={{ content: { color: isDark ? '#f8fafc' : '#1e293b', fontWeight: 900, fontSize: '24px' } }}
               prefix={<DeploymentUnitOutlined style={{ color: '#3b82f6', marginRight: '8px' }} />}
@@ -228,7 +230,7 @@ const ShipmentTable = ({ session }: IProps) => {
         <Col xs={24} sm={12} lg={8}>
           <Card variant="borderless" hoverable style={{ borderRadius: '12px', background: isDark ? '#1e293b' : token.colorBgContainer }}>
             <Statistic
-              title={<Text type="secondary" style={{ fontSize: '12px', fontWeight: 600, color: '#94a3b8' }}>ĐANG VẬN CHUYỂN</Text>}
+              title={<Text type="secondary" style={{ fontSize: '12px', fontWeight: 600, color: '#94a3b8' }}>{tTable('stats.inTransit')}</Text>}
               value={stats.inTransit}
               styles={{ content: { color: isDark ? '#f8fafc' : '#1e293b', fontWeight: 900, fontSize: '24px' } }}
               prefix={<CalendarOutlined style={{ color: '#f59e0b', marginRight: '8px' }} />}
@@ -238,7 +240,7 @@ const ShipmentTable = ({ session }: IProps) => {
         <Col xs={24} sm={12} lg={8}>
           <Card variant="borderless" hoverable style={{ borderRadius: '12px', background: isDark ? '#1e293b' : token.colorBgContainer }}>
             <Statistic
-              title={<Text type="secondary" style={{ fontSize: '12px', fontWeight: 600, color: '#94a3b8' }}>HOÀN TẤT</Text>}
+              title={<Text type="secondary" style={{ fontSize: '12px', fontWeight: 600, color: '#94a3b8' }}>{tTable('stats.closed')}</Text>}
               value={stats.closed}
               styles={{ content: { color: isDark ? '#f8fafc' : '#1e293b', fontWeight: 900, fontSize: '24px' } }}
               prefix={<CheckCircleOutlined style={{ color: '#10b981', marginRight: '8px' }} />}
@@ -260,7 +262,7 @@ const ShipmentTable = ({ session }: IProps) => {
         <div style={{ padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Space size="large">
             <Input
-              placeholder="Tìm số lô hàng hoặc booking..."
+              placeholder={tTable('table.searchPlaceholder')}
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               prefix={<SearchOutlined className="text-slate-400" />}
@@ -276,7 +278,7 @@ const ShipmentTable = ({ session }: IProps) => {
                 className="rounded-xl h-10 border-slate-200 text-slate-500 hover:text-blue-500 hover:border-blue-500 transition-all"
                 onClick={() => setIsFilterOpen(true)}
               >
-                Bộ lọc nâng cao
+                {tTable('table.advancedFilter')}
               </Button>
             </Badge>
             <Button 
@@ -292,14 +294,14 @@ const ShipmentTable = ({ session }: IProps) => {
           <Table
             columns={columns}
             dataSource={data}
-            rowKey="id"
+            rowKey={(record: any) => record._id || record.shipmentNumber}
             loading={loading}
             bordered={false}
             pagination={{
               current: Number(meta.current),
               pageSize: Number(meta.pageSize),
               total: meta.total,
-              showTotal: (total) => `Tổng cộng ${total} lô hàng`,
+              showTotal: (total) => tTable('table.totalCount', { total }),
               className: "px-6 py-4 border-t border-slate-50"
             }}
             onChange={(pagination) => {
@@ -317,7 +319,7 @@ const ShipmentTable = ({ session }: IProps) => {
         title={
           <Space>
             <FilterOutlined />
-            <span>BỘ LỌC LÔ HÀNG</span>
+            <span>{tTable('table.filterTitle')}</span>
           </Space>
         }
         placement="right"
@@ -326,8 +328,8 @@ const ShipmentTable = ({ session }: IProps) => {
         styles={{ wrapper: { width: 400 } }}
         extra={
           <Space>
-            <Button onClick={handleResetFilters}>Đặt lại</Button>
-            <Button type="primary" onClick={() => filterForm.submit()}>Áp dụng</Button>
+            <Button onClick={handleResetFilters}>{tTable('table.reset')}</Button>
+            <Button type="primary" onClick={() => filterForm.submit()}>{tTable('table.apply')}</Button>
           </Space>
         }
       >
@@ -337,18 +339,18 @@ const ShipmentTable = ({ session }: IProps) => {
           onFinish={onFilterFinish}
           initialValues={filters}
         >
-          <Form.Item label="Trạng thái" name="status">
-            <Select placeholder="Tất cả trạng thái" allowClear>
+          <Form.Item label={tTable('table.status')} name="status">
+            <Select placeholder={tTable('table.allStatus')} allowClear>
               {Object.keys(SHIPMENT_STATUS_CONFIG).map(key => (
                 <Select.Option key={key} value={key}>{tStatus(key as ShipmentStatus)}</Select.Option>
               ))}
             </Select>
           </Form.Item>
-          <Form.Item label="Cảng đi (POL)" name="pol">
-            <Input placeholder="VD: CAT LAI, HAIPHONG..." />
+          <Form.Item label={tTable('table.pol')} name="pol">
+            <Input placeholder={tTable('table.polPlaceholder')} />
           </Form.Item>
-          <Form.Item label="Cảng đến (POD)" name="pod">
-            <Input placeholder="VD: HAMBURG, JEBEL ALI..." />
+          <Form.Item label={tTable('table.pod')} name="pod">
+            <Input placeholder={tTable('table.podPlaceholder')} />
           </Form.Item>
         </Form>
       </Drawer>

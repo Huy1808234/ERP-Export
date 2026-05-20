@@ -1,12 +1,25 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToMany, JoinTable, OneToMany } from 'typeorm';
+import {
+  BeforeInsert,
+  Column,
+  CreateDateColumn,
+  Entity,
+  Index,
+  JoinTable,
+  ManyToMany,
+  OneToMany,
+  PrimaryColumn,
+  UpdateDateColumn,
+} from 'typeorm';
 import { Permission } from './permission.entity';
 import { User } from '../../users/entities/user.entity';
+import { createEntityId } from '@/common/ids/entity-id.util';
 
 @Entity('roles')
 export class Role {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
+  @PrimaryColumn({ type: 'varchar', length: 40, name: '_id' })
+  _id: string;
 
+  @Index({ unique: true })
   @Column({ unique: true })
   name: string;
 
@@ -19,8 +32,8 @@ export class Role {
   @ManyToMany(() => Permission)
   @JoinTable({
     name: 'role_permissions',
-    joinColumn: { name: 'roleId', referencedColumnName: 'id' },
-    inverseJoinColumn: { name: 'permissionId', referencedColumnName: 'id' }
+    joinColumn: { name: 'roleRef', referencedColumnName: '_id' },
+    inverseJoinColumn: { name: 'permissionRef', referencedColumnName: '_id' },
   })
   permissions: Permission[];
 
@@ -32,4 +45,11 @@ export class Role {
 
   @UpdateDateColumn()
   updatedAt: Date;
+
+  @BeforeInsert()
+  assignId() {
+    if (!this._id) {
+      this._id = createEntityId('role');
+    }
+  }
 }

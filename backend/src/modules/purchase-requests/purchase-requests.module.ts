@@ -4,11 +4,16 @@ import { PurchaseRequestsController } from './purchase-requests.controller';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { PurchaseRequest } from './entities/purchase-request.entity';
 import { PurchaseRequestItem } from './entities/purchase-request-item.entity';
+import { ApprovalMatrixModule } from '../approval-matrix/approval-matrix.module';
+import { PurchaseRequestApprovalListener } from './purchase-request-approval.listener';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([PurchaseRequest, PurchaseRequestItem])],
+  imports: [
+    TypeOrmModule.forFeature([PurchaseRequest, PurchaseRequestItem]),
+    ApprovalMatrixModule,
+  ],
   controllers: [PurchaseRequestsController],
-  providers: [PurchaseRequestsService],
+  providers: [PurchaseRequestsService, PurchaseRequestApprovalListener],
   exports: [PurchaseRequestsService]
 })
 export class PurchaseRequestsModule {}

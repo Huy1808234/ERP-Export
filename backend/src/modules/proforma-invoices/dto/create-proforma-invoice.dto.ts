@@ -1,9 +1,10 @@
-import { IsArray, IsDateString, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, ValidateNested } from 'class-validator';
+import { IsArray, IsDateString, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { Incoterm } from '@/modules/quotations/entities/quotation.entity';
+import { IsEntityId } from '@/common/ids/entity-id.validator';
 
 class PIItemDto {
-  @IsUUID()
+  @IsEntityId()
   @IsNotEmpty()
   productId: string;
 
@@ -25,11 +26,11 @@ class PIItemDto {
 }
 
 export class CreateProformaInvoiceDto {
-  @IsUUID()
+  @IsEntityId()
   @IsNotEmpty()
   customerId: string;
 
-  @IsUUID()
+  @IsEntityId()
   @IsOptional()
   quotationId?: string;
 
@@ -77,6 +78,10 @@ export class CreateProformaInvoiceDto {
   @IsOptional()
   note?: string;
 
+  @IsString()
+  @IsOptional()
+  bankInfo?: string;
+
   @IsNumber()
   @IsOptional()
   logisticsFee?: number;
@@ -93,6 +98,22 @@ export class CreateProformaInvoiceDto {
   @IsOptional()
   otherFeeCurrency?: string;
 
+  @IsNumber()
+  @IsOptional()
+  domesticTransportCost?: number;
+
+  @IsNumber()
+  @IsOptional()
+  portCharges?: number;
+
+  @IsNumber()
+  @IsOptional()
+  seaFreight?: number;
+
+  @IsNumber()
+  @IsOptional()
+  insuranceCost?: number;
+
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => PIItemDto)
@@ -100,7 +121,7 @@ export class CreateProformaInvoiceDto {
 }
 
 export class ConvertQuotationToPiDto {
-  @IsUUID()
+  @IsEntityId()
   @IsNotEmpty()
   quotationId: string;
 
@@ -159,4 +180,20 @@ export class ConvertQuotationToPiDto {
   @IsString()
   @IsOptional()
   bankInfo?: string;
+
+  @IsNumber()
+  @IsOptional()
+  domesticTransportCost?: number;
+
+  @IsNumber()
+  @IsOptional()
+  portCharges?: number;
+
+  @IsNumber()
+  @IsOptional()
+  seaFreight?: number;
+
+  @IsNumber()
+  @IsOptional()
+  insuranceCost?: number;
 }

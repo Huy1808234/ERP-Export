@@ -26,7 +26,7 @@ import { TradeFinanceModule } from './modules/trade-finance/trade-finance.module
 import { AccountingModule } from './modules/accounting/accounting.module';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ScheduleModule } from '@nestjs/schedule';
-import { LandingModule } from './modules/landing/landing.module';
+import { GuestModule } from './modules/landing/guest.module';
 import { CurrenciesModule } from './modules/currencies/currencies.module';
 import { RolesModule } from './modules/roles/roles.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
@@ -39,6 +39,20 @@ import { ApprovalsModule } from './modules/approvals/approvals.module';
 import { LotsModule } from './modules/lots/lots.module';
 import { QualityControlModule } from './modules/quality-control/quality-control.module';
 import { SettingsModule } from './modules/settings/settings.module';
+import { SocketModule } from './modules/socket/socket.module';
+import { InquiriesModule } from './modules/inquiries/inquiries.module';
+import { FilesModule } from './modules/files/files.module';
+import { CategoriesModule } from './modules/categories/categories.module';
+import { AccountPayablesModule } from './modules/account-payables/account-payables.module';
+import { AccountReceivablesModule } from './modules/account-receivables/account-receivables.module';
+import { CommercialInvoicesModule } from './modules/commercial-invoices/commercial-invoices.module';
+import { PricingPoliciesModule } from './modules/pricing-policies/pricing-policies.module';
+import { VendorEvaluationsModule } from './modules/vendor-evaluations/vendor-evaluations.module';
+import { VendorPriceHistoryModule } from './modules/vendor-price-history/vendor-price-history.module';
+import { ApprovalMatrixModule } from './modules/approval-matrix/approval-matrix.module';
+import { PortalModule } from './modules/portal/portal.module';
+import { SearchModule } from './modules/search/search.module';
+import { runIdentitySchemaPreflight } from './core/database-preflight';
 
 @Module({
   imports: [
@@ -59,16 +73,26 @@ import { SettingsModule } from './modules/settings/settings.module';
     ScheduleModule.forRoot(),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
-      useFactory: async (configService: ConfigService) => ({
-        type: 'postgres',
-        host: configService.get<string>('POSTGRES_HOST'),
-        port: configService.get<number>('POSTGRES_PORT'),
-        username: configService.get<string>('POSTGRES_USER'),
-        password: configService.get<string>('POSTGRES_PASSWORD'),
-        database: configService.get<string>('POSTGRES_DATABASE'),
-        autoLoadEntities: true,
-        synchronize: true,
-      }),
+      useFactory: async (configService: ConfigService) => {
+        const databaseOptions = {
+          host: configService.get<string>('POSTGRES_HOST'),
+          port: configService.get<number>('POSTGRES_PORT'),
+          username: configService.get<string>('POSTGRES_USER'),
+          password: configService.get<string>('POSTGRES_PASSWORD'),
+          database: configService.get<string>('POSTGRES_DATABASE'),
+        };
+
+        await runIdentitySchemaPreflight(databaseOptions);
+        const synchronize =
+          configService.get<string>('TYPEORM_SYNCHRONIZE', 'false').toLowerCase() === 'true';
+
+        return {
+          type: 'postgres',
+          ...databaseOptions,
+          autoLoadEntities: true,
+          synchronize,
+        };
+      },
       inject: [ConfigService],
     }),
     MailerModule.forRootAsync({
@@ -110,7 +134,7 @@ import { SettingsModule } from './modules/settings/settings.module';
     TradeFinanceModule,
     AccountingModule,
     ShipmentsModule,
-    LandingModule,
+    GuestModule,
     CurrenciesModule,
     RolesModule,
     InventoryModule,
@@ -122,6 +146,19 @@ import { SettingsModule } from './modules/settings/settings.module';
     LotsModule,
     QualityControlModule,
     SettingsModule,
+    SocketModule,
+    InquiriesModule,
+    FilesModule,
+    CategoriesModule,
+    AccountPayablesModule,
+    AccountReceivablesModule,
+    CommercialInvoicesModule,
+    PricingPoliciesModule,
+    VendorEvaluationsModule,
+    VendorPriceHistoryModule,
+    ApprovalMatrixModule,
+    PortalModule,
+    SearchModule,
   ],
   controllers: [AppController],
   providers: [

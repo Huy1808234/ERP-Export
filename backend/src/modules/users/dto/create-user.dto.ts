@@ -1,33 +1,38 @@
-import { IsEmail, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsEmail, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 export class CreateUserDto {
-  @IsNotEmpty({ message: 'Name Không Được Để Trống' })
-  @IsString({ message: 'Name phải là chuỗi' })
+  @IsOptional()
+  @IsString({ message: 'Username must be a string' })
+  username?: string;
+
+  @IsNotEmpty({ message: 'Display name is required' })
+  @IsString({ message: 'Display name must be a string' })
   name: string;
 
-  @IsEmail({}, { message: 'Email Không Đúng Định Dạng' })
+  @IsEmail({}, { message: 'Email is invalid' })
   email: string;
 
-  @IsNotEmpty({ message: 'Password Không Được Để Trống' })
-  @IsString({ message: 'Password phải là chuỗi' })
+  @IsNotEmpty({ message: 'Password is required' })
+  @IsString({ message: 'Password must be a string' })
   password: string;
 
   @IsOptional()
-  @IsString({ message: 'Phone phải là chuỗi' })
+  @IsString({ message: 'Phone must be a string' })
   phone?: string;
 
   @IsOptional()
-  @IsString({ message: 'Address phải là chuỗi' })
+  @IsString({ message: 'Address must be a string' })
   address?: string;
 
   @IsOptional()
-  @IsString({ message: 'Image phải là chuỗi' })
+  @IsString({ message: 'Image must be a string' })
   image?: string;
 
   @IsOptional()
-  @IsString({ message: 'roleId phải là chuỗi' })
-  roleId?: string;
+  @IsString({ message: 'Role name must be a string' })
+  roleName?: string;
 
   @IsOptional()
+  @IsBoolean()
   isActive?: boolean;
 }

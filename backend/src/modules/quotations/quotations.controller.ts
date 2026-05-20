@@ -18,20 +18,24 @@ export class QuotationsController {
 
   @Get()
   @ResponseMessage('Fetch all quotations with pagination')
-  findAll(@Query() query: string) {
-    return this.quotationsService.findAll(query);
+  findAll(
+    @Query() query: string,
+    @Query('current') current: string,
+    @Query('pageSize') pageSize: string,
+  ) {
+    return this.quotationsService.findAll(query, +current, +pageSize);
   }
 
-  @Get(':id')
-  @ResponseMessage('Fetch quotation by id')
-  findOne(@Param('id') id: string) {
-    return this.quotationsService.findOne(id);
+  @Get(':_id')
+  @ResponseMessage('Fetch quotation by recordId')
+  findOne(@Param('_id') recordId: string) {
+    return this.quotationsService.findOne(recordId);
   }
 
-  @Patch(':id')
+  @Patch(':_id')
   @ResponseMessage('Update quotation successfully')
-  update(@Param('id') id: string, @Body() updateQuotationDto: UpdateQuotationDto) {
-    return this.quotationsService.update(id, updateQuotationDto);
+  update(@Param('_id') recordId: string, @Body() updateQuotationDto: UpdateQuotationDto) {
+    return this.quotationsService.update(recordId, updateQuotationDto);
   }
 
   @Post('bulk-delete')
@@ -40,15 +44,19 @@ export class QuotationsController {
     return this.quotationsService.bulkRemove(ids);
   }
 
-  @Delete(':id')
+  @Delete(':_id')
   @ResponseMessage('Soft delete quotation')
-  remove(@Param('id') id: string) {
-    return this.quotationsService.remove(id);
+  remove(@Param('_id') recordId: string) {
+    return this.quotationsService.remove(recordId);
   }
 
-  @Patch(':id/status')
+  @Patch(':_id/status')
   @ResponseMessage('Update quotation status')
-  updateStatus(@Param('id') id: string, @Body('status') status: QuotationStatus) {
-    return this.quotationsService.updateStatus(id, status);
+  updateStatus(
+    @Param('_id') recordId: string,
+    @Body('status') status: QuotationStatus,
+    @User() user: UserEntity,
+  ) {
+    return this.quotationsService.updateStatus(recordId, status, user);
   }
 }

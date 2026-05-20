@@ -8,10 +8,17 @@ CallHandler,
 import { Reflector } from '@nestjs/core';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
+import { maskCostFields } from '@/common/field-access.util';
+import type { AuthenticatedUser } from '@/common/types/authenticated-user.type';
+
+type RequestWithUser = {
+user?: AuthenticatedUser;
+};
+
 export interface Response<T> {
 statusCode: number;
 message?: string;
-data: any;
+data: T;
 }
 @Injectable()
 export class TransformInterceptor<T>
@@ -24,12 +31,15 @@ next: CallHandler,
 return next
 .handle()
 .pipe(
-map((data) => ({
+map((data) => {
+const request = context.switchToHttp().getRequest<RequestWithUser>();
+return {
 statusCode: context.switchToHttp().getResponse().statusCode,
 message: this.reflector
 .get<string>(RESPONSE_MESSAGE, context.getHandler()) || '',
-data: data
-})),
+data: maskCostFields(data, request?.user)
+};
+}),
 );
 }
 }

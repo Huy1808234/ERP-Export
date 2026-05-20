@@ -1,12 +1,20 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { BeforeInsert, Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryColumn } from 'typeorm';
 import { Product } from '../../products/entities/product.entity';
 import { Partner } from '../../partners/entities/partner.entity';
 import { ColumnNumericTransformer } from '@/helpers/typeorm.util';
+import { createEntityId } from '@/common/ids/entity-id.util';
 
 @Entity('lots')
 export class Lot {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
+  @PrimaryColumn({ type: 'varchar', length: 40, name: '_id' })
+  _id: string;
+
+  @BeforeInsert()
+  assignId() {
+    if (!this._id) {
+      this._id = createEntityId('lot');
+    }
+  }
 
   @Column({ unique: true })
   lotNumber: string;
@@ -29,7 +37,7 @@ export class Lot {
   supplier: Partner;
 
   @Column({ type: 'timestamp', nullable: true })
-  productionDate: Date;
+  manufactureDate: Date;
 
   @Column({ type: 'timestamp', nullable: true })
   expiryDate: Date;

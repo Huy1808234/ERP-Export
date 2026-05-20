@@ -1,10 +1,20 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import {
+  BeforeInsert,
+  Column,
+  CreateDateColumn,
+  Entity,
+  Index,
+  PrimaryColumn,
+  UpdateDateColumn,
+} from 'typeorm';
+import { createEntityId } from '@/common/ids/entity-id.util';
 
 @Entity('permissions')
 export class Permission {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
+  @PrimaryColumn({ type: 'varchar', length: 40, name: '_id' })
+  _id: string;
 
+  @Index()
   @Column()
   name: string; // e.g. "Create Product"
 
@@ -22,4 +32,11 @@ export class Permission {
 
   @UpdateDateColumn()
   updatedAt: Date;
+
+  @BeforeInsert()
+  assignId() {
+    if (!this._id) {
+      this._id = createEntityId('perm');
+    }
+  }
 }

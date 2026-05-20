@@ -1,5 +1,6 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, OneToMany } from 'typeorm';
+import { BeforeInsert, Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryColumn, UpdateDateColumn } from 'typeorm';
 import { Shipment } from './shipment.entity';
+import { createEntityId } from '@/common/ids/entity-id.util';
 
 export enum ContainerType {
   C20DC = '20DC',
@@ -12,8 +13,15 @@ export enum ContainerType {
 
 @Entity('containers')
 export class Container {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
+  @PrimaryColumn({ type: 'varchar', length: 40, name: '_id' })
+  _id: string;
+
+  @BeforeInsert()
+  assignId() {
+    if (!this._id) {
+      this._id = createEntityId('container');
+    }
+  }
 
   @Column()
   shipmentId: string;

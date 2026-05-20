@@ -1,5 +1,6 @@
-import { Column, CreateDateColumn, DeleteDateColumn, Entity, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+import { BeforeInsert, Column, CreateDateColumn, DeleteDateColumn, Entity, PrimaryColumn, UpdateDateColumn } from 'typeorm';
 import { ColumnNumericTransformer } from '@/helpers/typeorm.util';
+import { createEntityId } from '@/common/ids/entity-id.util';
 export enum PartnerType { CUSTOMER = 'CUSTOMER', SUPPLIER = 'SUPPLIER', LOGISTICS = 'LOGISTICS' }
 export enum BuyerRegion { EU = 'EU', US = 'US', ASEAN = 'ASEAN', APAC = 'APAC', MIDDLE_EAST = 'MIDDLE_EAST', OTHER = 'OTHER' }
 export enum BuyerPaymentTerm { TT = 'T/T', LC = 'L/C', DP = 'D/P', DA = 'D/A' }
@@ -7,8 +8,15 @@ export enum BuyerRiskLevel { LOW = 'LOW', MEDIUM = 'MEDIUM', HIGH = 'HIGH' }
 
 @Entity('partners')
 export class Partner {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
+  @PrimaryColumn({ type: 'varchar', length: 40, name: '_id' })
+  _id: string;
+
+  @BeforeInsert()
+  assignId() {
+    if (!this._id) {
+      this._id = createEntityId('partner');
+    }
+  }
 
   @Column()
   name: string;
@@ -88,6 +96,30 @@ export class Partner {
 
   @Column({ type: 'numeric', precision: 5, scale: 2, nullable: true, transformer: new ColumnNumericTransformer() })
   priceScore: number | null;
+
+  @Column({ type: 'numeric', precision: 5, scale: 2, nullable: true, transformer: new ColumnNumericTransformer() })
+  vendorOverallScore: number | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  vendorGrade: string | null;
+
+  @Column({ type: 'numeric', precision: 5, scale: 2, nullable: true, transformer: new ColumnNumericTransformer() })
+  vendorOnTimeDeliveryRate: number | null;
+
+  @Column({ type: 'numeric', precision: 5, scale: 2, nullable: true, transformer: new ColumnNumericTransformer() })
+  vendorDefectRate: number | null;
+
+  @Column({ type: 'integer', default: 0 })
+  vendorClaimCount: number;
+
+  @Column({ type: 'integer', default: 0 })
+  vendorRejectionCount: number;
+
+  @Column({ type: 'timestamp', nullable: true })
+  vendorLastEvaluationAt: Date | null;
+
+  @Column({ type: 'timestamp', nullable: true })
+  vendorScoreUpdatedAt: Date | null;
 
   @Column({ type: 'numeric', precision: 15, scale: 2, nullable: true, transformer: new ColumnNumericTransformer() })
   apBalance: number | null;

@@ -7,15 +7,23 @@ export class AuditSubscriber implements EntitySubscriberInterface {
     dataSource.subscribers.push(this);
   }
 
+  private getEntityRef(entity: any, fallback: any = 'unknown') {
+    if (!entity) {
+      return String(fallback ?? 'unknown');
+    }
+
+    return String(entity._id ?? entity.id ?? fallback ?? 'unknown');
+  }
+
   async afterInsert(event: InsertEvent<any>) {
     if (event.metadata.tableName === 'audit_logs') return;
     
     const auditLog = this.dataSource.manager.create(AuditLog, {
       tableName: event.metadata.tableName,
-      recordId: event.entity?.id || 'unknown',
+      recordId: this.getEntityRef(event.entity),
       action: 'INSERT',
       newValues: event.entity,
-      userId: 'SYSTEM'
+      username: 'system',
     });
     await this.dataSource.manager.save(AuditLog, auditLog);
   }
@@ -28,11 +36,11 @@ export class AuditSubscriber implements EntitySubscriberInterface {
     
     const auditLog = this.dataSource.manager.create(AuditLog, {
       tableName: event.metadata.tableName,
-      recordId: event.entity?.id || event.databaseEntity?.id || 'unknown',
+      recordId: this.getEntityRef(event.entity, this.getEntityRef(event.databaseEntity)),
       action: 'UPDATE',
       oldValues,
       newValues,
-      userId: 'SYSTEM'
+      username: 'system',
     });
     await this.dataSource.manager.save(AuditLog, auditLog);
   }
@@ -42,10 +50,10 @@ export class AuditSubscriber implements EntitySubscriberInterface {
     
     const auditLog = this.dataSource.manager.create(AuditLog, {
       tableName: event.metadata.tableName,
-      recordId: event.entityId || 'unknown',
+      recordId: this.getEntityRef(event.databaseEntity, event.entityId),
       action: 'DELETE',
       oldValues: event.databaseEntity,
-      userId: 'SYSTEM'
+      username: 'system',
     });
     await this.dataSource.manager.save(AuditLog, auditLog);
   }

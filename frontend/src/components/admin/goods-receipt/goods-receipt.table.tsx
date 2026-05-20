@@ -75,9 +75,9 @@ const GoodsReceiptTable = () => {
     },
     {
       title: t('table.columns.receivedBy'),
-      dataIndex: ['receivedBy', 'email'],
+      dataIndex: ['receivedBy', 'username'],
       key: 'receivedBy',
-      render: (email: string) => <Text type="secondary">{email?.split('@')[0]}</Text>,
+      render: (username: string) => <Text type="secondary">{username || 'system'}</Text>,
     },
     {
       title: t('table.columns.actions'),
@@ -98,7 +98,7 @@ const GoodsReceiptTable = () => {
         </Space>
       ),
     },
-  ], []);
+  ], [t]);
 
   return (
     <Card variant="borderless" style={{ borderRadius: 12, boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
@@ -132,7 +132,7 @@ const GoodsReceiptTable = () => {
         columns={columns}
         dataSource={data}
         loading={loading}
-        rowKey="id"
+        rowKey="_id"
         pagination={{
           current: meta.current,
           pageSize: meta.pageSize,

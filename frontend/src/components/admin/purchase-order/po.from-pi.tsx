@@ -13,14 +13,18 @@ import {
   DatePicker,
   theme,
   Space,
+  Alert,
 } from 'antd';
 import { ShoppingCartOutlined } from '@ant-design/icons';
 import { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
-import { sendRequest } from '@/utils/api';
+import { sendRequest } from '@/lib/api-client';
 import { useCurrency } from '@/hooks/useCurrency';
 import { getCurrencyConfig } from '@/constants/currency.config';
 import { useTranslations } from 'next-intl';
+import { getAccessToken } from '@/lib/auth-token';
+import AmountInWords from '@/components/ui/AmountInWords';
+import { canReadCostFields } from '@/lib/field-access';
 
 const { Text } = Typography;
 
@@ -34,6 +38,7 @@ const POFromPIModal = ({ open, setOpen, pi }: IProps) => {
   const { notification } = App.useApp();
   const t = useTranslations('PurchaseOrder');
   const { data: session } = useSession();
+  const canViewCost = canReadCostFields(session?.user);
   const { formatMoney } = useCurrency();
   const [form] = Form.useForm();
   const [submitting, setSubmitting] = useState(false);
@@ -42,7 +47,7 @@ const POFromPIModal = ({ open, setOpen, pi }: IProps) => {
 
   useEffect(() => {
     const fetchSuppliers = async () => {
-      const accessToken = session?.access_token;
+      const accessToken = getAccessToken(session);
       if (!accessToken) return;
 
       const res = await sendRequest<IBackendRes<IModelPaginate<any>>>({
@@ -62,11 +67,11 @@ const POFromPIModal = ({ open, setOpen, pi }: IProps) => {
 
   useEffect(() => {
     const fetchPIDetail = async () => {
-      const accessToken = session?.access_token;
-      if (!accessToken || !pi?.id) return;
+      const accessToken = getAccessToken(session);
+      if (!accessToken || !pi?._id) return;
 
       const res = await sendRequest<IBackendRes<any>>({
-        url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/proforma-invoices/${pi.id}`,
+        url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/proforma-invoices/${pi._id}`,
         method: 'GET',
         headers: { Authorization: `Bearer ${accessToken}` },
       });
@@ -74,7 +79,7 @@ const POFromPIModal = ({ open, setOpen, pi }: IProps) => {
         setPiDetail(res.data);
       }
     };
-    if (open && pi?.id && !pi.items) {
+    if (open && pi?._id && !pi.items) {
       fetchPIDetail();
     } else if (open && pi) {
       setPiDetail(pi);
@@ -83,7 +88,7 @@ const POFromPIModal = ({ open, setOpen, pi }: IProps) => {
 
   useEffect(() => {
     const initializeForm = async () => {
-      if (open && piDetail && session?.access_token) {
+      if (open && piDetail && getAccessToken(session)) {
         const targetCurrency = piDetail.currency || 'VND';
         
         let rate = 1;
@@ -93,7 +98,7 @@ const POFromPIModal = ({ open, setOpen, pi }: IProps) => {
               url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/currencies/cross-rate`,
               method: 'GET',
               queryParams: { from: 'VND', to: targetCurrency },
-              headers: { Authorization: `Bearer ${session.access_token}` },
+              headers: { Authorization: `Bearer ${getAccessToken(session)}` },
             });
             if (rateRes?.data?.rate) {
               rate = rateRes.data.rate;
@@ -103,14 +108,17 @@ const POFromPIModal = ({ open, setOpen, pi }: IProps) => {
           }
         }
 
-        const items = piDetail.items?.map((l: any) => ({
-          productId: l.product?.id,
-          productName: l.product?.vietnameseName || l.product?.name,
-          quantity: l.quantity,
-          unit: l.unit,
-          unitPrice: l.product?.purchasePriceVnd ? (l.product.purchasePriceVnd * rate).toFixed(targetCurrency === 'VND' ? 0 : 4) : 0,
-          basePriceVnd: l.product?.purchasePriceVnd || 0,
-        })) || [];
+        const items = piDetail.items?.map((l: any) => {
+          const purchasePriceVnd = canViewCost ? Number(l.product?.purchasePriceVnd || 0) : 0;
+          return {
+            productId: l.product?._id,
+            productName: l.product?.vietnameseName || l.product?.name,
+            quantity: l.quantity,
+            unit: l.unit,
+            unitPrice: purchasePriceVnd ? (purchasePriceVnd * rate).toFixed(targetCurrency === 'VND' ? 0 : 4) : 0,
+            basePriceVnd: purchasePriceVnd,
+          };
+        }) || [];
 
         form.setFieldsValue({
           lines: items,
@@ -120,11 +128,15 @@ const POFromPIModal = ({ open, setOpen, pi }: IProps) => {
       }
     };
     initializeForm();
-  }, [open, piDetail, form, session]);
+  }, [open, piDetail, form, session, canViewCost]);
 
   // Handle cross-rate conversion when currency changes
   const handleCurrencyChange = async (newCurrency: string) => {
-    if (!session?.access_token) return;
+    if (!getAccessToken(session)) return;
+    if (!canViewCost) {
+      notification.warning({ title: 'Bạn không có quyền xem giá vốn để quy đổi giá mua.' });
+      return;
+    }
     
     const currentLines = form.getFieldValue('lines') || [];
     if (currentLines.length === 0) return;
@@ -143,7 +155,7 @@ const POFromPIModal = ({ open, setOpen, pi }: IProps) => {
         url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/currencies/cross-rate`,
         method: 'GET',
         queryParams: { from: 'VND', to: newCurrency },
-        headers: { Authorization: `Bearer ${session.access_token}` },
+        headers: { Authorization: `Bearer ${getAccessToken(session)}` },
       });
 
       if (res?.data?.rate) {
@@ -165,8 +177,13 @@ const POFromPIModal = ({ open, setOpen, pi }: IProps) => {
   };
 
   const onFinish = async (values: any) => {
+    if (!canViewCost) {
+      notification.error({ title: 'Không thể tạo PO', description: 'Bạn cần quyền xem giá vốn để tạo đơn mua hàng từ PI.' });
+      return;
+    }
+
     setSubmitting(true);
-    const accessToken = session?.access_token;
+    const accessToken = getAccessToken(session);
 
     const formattedLines = values.lines.map((l: any) => ({
       productId: l.productId,
@@ -175,15 +192,13 @@ const POFromPIModal = ({ open, setOpen, pi }: IProps) => {
       unit: l.unit,
       unitPrice: typeof l.unitPrice === 'number' ? l.unitPrice : parseFloat(String(l.unitPrice).replace(/,/g, '')) || 0,
     }));
-    
-    console.log('Formatted lines to send:', JSON.stringify(formattedLines));
 
     const res = await sendRequest<IBackendRes<any>>({
       url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/purchase-orders`,
       method: 'POST',
       body: {
         vendorId: values.supplierId,
-        proformaInvoiceId: pi?.id,
+        proformaInvoiceId: pi?._id,
         advancePaymentPercent: values.advancePaymentPercent,
         orderDate: new Date().toISOString(), // Use current date for orderDate
         expectedDeliveryDate: values.deliveryDate ? values.deliveryDate.format('YYYY-MM-DD') : undefined,
@@ -225,7 +240,7 @@ const POFromPIModal = ({ open, setOpen, pi }: IProps) => {
       confirmLoading={submitting}
       okText={t('createFromPI.okText')}
       cancelText={t('createFromPI.cancelText')}
-      okButtonProps={{ style: { background: '#13c2c2', borderColor: '#13c2c2' } }}
+      okButtonProps={{ disabled: !canViewCost, style: { background: '#13c2c2', borderColor: '#13c2c2' } }}
       destroyOnHidden
     >
       <div style={{
@@ -246,6 +261,16 @@ const POFromPIModal = ({ open, setOpen, pi }: IProps) => {
         </div>
       </div>
 
+      {!canViewCost && (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 20 }}
+          title="Giá vốn đang được ẩn theo phân quyền"
+          description="Tạo PO từ PI cần giá mua nội bộ. Vui lòng chuyển cho Purchasing/Finance hoặc tài khoản có quyền read:cost_fields."
+        />
+      )}
+
       <Form form={form} layout="vertical" onFinish={onFinish} initialValues={{ currency: 'VND', advancePaymentPercent: 50 }}>
         <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 16 }}>
           <Form.Item
@@ -255,7 +280,7 @@ const POFromPIModal = ({ open, setOpen, pi }: IProps) => {
           >
             <Select
               placeholder={t('createFromPI.form.supplierPlaceholder')}
-              options={suppliers.map(s => ({ value: s.id, label: s.name }))}
+              options={suppliers.map(s => ({ value: s._id, label: s.name }))}
             />
           </Form.Item>
 
@@ -263,7 +288,7 @@ const POFromPIModal = ({ open, setOpen, pi }: IProps) => {
             <Select
               onChange={handleCurrencyChange}
               options={[
-                { value: 'VND', label: 'VNĐ (₫)' },
+                { value: 'VND', label: 'VND (₫)' },
                 { value: 'USD', label: 'USD ($)' },
                 { value: 'EUR', label: 'EUR (€)' },
                 { value: 'CNY', label: 'CNY (¥)' },
@@ -294,17 +319,17 @@ const POFromPIModal = ({ open, setOpen, pi }: IProps) => {
                 <Form.List name="lines">
                   {(fields) => (
                     <div style={{ border: '1px solid #f0f0f0', borderRadius: 8, padding: 16, background: '#fafafa' }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: '3fr 1fr 1fr 2fr', gap: 16, marginBottom: 8, fontWeight: 500 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: canViewCost ? '3fr 1fr 1fr 2fr' : '3fr 1fr 1fr', gap: 16, marginBottom: 8, fontWeight: 500 }}>
                         <div>{t('createFromPI.form.columnProduct')}</div>
                         <div>{t('createFromPI.form.columnQty')}</div>
                         <div>{t('createFromPI.form.columnUnit')}</div>
-                        <div>{t('createFromPI.form.columnPurchasePrice', { currency })}</div>
+                        {canViewCost && <div>{t('createFromPI.form.columnPurchasePrice', { currency })}</div>}
                       </div>
 
                       {fields.map(({ key, name, ...restField }) => {
                         const productName = form.getFieldValue(['lines', name, 'productName']);
                         return (
-                          <div key={key} style={{ display: 'grid', gridTemplateColumns: '3fr 1fr 1fr 2fr', gap: 16, marginBottom: 8 }}>
+                          <div key={key} style={{ display: 'grid', gridTemplateColumns: canViewCost ? '3fr 1fr 1fr 2fr' : '3fr 1fr 1fr', gap: 16, marginBottom: 8 }}>
                             <div style={{ display: 'flex', alignItems: 'center' }}>
                               <Text strong>{productName}</Text>
                               <Form.Item {...restField} name={[name, 'productId']} style={{ display: 'none' }}>
@@ -320,35 +345,51 @@ const POFromPIModal = ({ open, setOpen, pi }: IProps) => {
                               <Input style={{ width: '100%' }} disabled />
                             </Form.Item>
 
-                            <Form.Item {...restField} name={[name, 'unitPrice']} rules={[{ required: true }]} style={{ marginBottom: 0 }}>
-                              <Space.Compact style={{ width: '100%' }}>
-                                <InputNumber
-                                  min={0}
-                                  style={{ width: '100%' }}
-                                  precision={2}
-                                  formatter={(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                                  parser={(value) => {
-                                    const parsed = parseFloat((value || '').replace(/,/g, ''));
-                                    return isNaN(parsed) ? 0 : parsed as any;
-                                  }}
-                                />
-                                <span style={{ 
-                                  display: 'flex', 
-                                  alignItems: 'center', 
-                                  padding: '0 12px', 
-                                  background: token.colorFillAlter,
-                                  border: `1px solid ${token.colorBorder}`,
-                                  borderLeft: 'none',
-                                  borderRadius: `0 ${token.borderRadius}px ${token.borderRadius}px 0`,
-                                  color: token.colorTextSecondary,
-                                  fontWeight: 600,
-                                  minWidth: 45,
-                                  justifyContent: 'center'
-                                }}>
-                                  {currencySymbol}
-                                </span>
-                              </Space.Compact>
-                            </Form.Item>
+                            {canViewCost && <div>
+                              <Form.Item {...restField} name={[name, 'unitPrice']} rules={[{ required: true }]} style={{ marginBottom: 0 }}>
+                                <Space.Compact style={{ width: '100%' }}>
+                                  <InputNumber
+                                    min={0}
+                                    style={{ width: '100%' }}
+                                    precision={2}
+                                    formatter={(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                                    parser={(value) => {
+                                      const parsed = parseFloat((value || '').replace(/,/g, ''));
+                                      return isNaN(parsed) ? 0 : parsed as any;
+                                    }}
+                                  />
+                                  <span style={{ 
+                                    display: 'flex', 
+                                    alignItems: 'center', 
+                                    padding: '0 12px', 
+                                    background: token.colorFillAlter,
+                                    border: `1px solid ${token.colorBorder}`,
+                                    borderLeft: 'none',
+                                    borderRadius: `0 ${token.borderRadius}px ${token.borderRadius}px 0`,
+                                    color: token.colorTextSecondary,
+                                    fontWeight: 600,
+                                    minWidth: 45,
+                                    justifyContent: 'center'
+                                  }}>
+                                    {currencySymbol}
+                                  </span>
+                                </Space.Compact>
+                              </Form.Item>
+                              <Form.Item
+                                noStyle
+                                shouldUpdate={(prev, curr) =>
+                                  prev.currency !== curr.currency ||
+                                  prev.lines?.[name]?.unitPrice !== curr.lines?.[name]?.unitPrice
+                                }
+                              >
+                                {({ getFieldValue }) => (
+                                  <AmountInWords
+                                    amount={getFieldValue(['lines', name, 'unitPrice'])}
+                                    currency={getFieldValue('currency')}
+                                  />
+                                )}
+                              </Form.Item>
+                            </div>}
                           </div>
                         );
                       })}

@@ -3,14 +3,14 @@
 import React, { useEffect, useState } from 'react';
 import { Table, Tag, Typography, Card, Space, Button, Tooltip, theme } from 'antd';
 import { useTranslations } from 'next-intl';
-import {ExportOutlined, EyeOutlined, PlusOutlined, RollbackOutlined} from '@ant-design/icons';
+import {EyeOutlined, PlusOutlined, RollbackOutlined} from '@ant-design/icons';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { usePurchaseReturns } from '@/hooks/usePurchaseReturns';
-import { useTheme } from '@/library/theme.context';
+import { useTheme } from '@/context/theme.context';
 import { formatDate } from '@/utils/format';
 import PurchaseReturnModal from './purchase-return.modal';
 
-const { Text, Title } = Typography;
+const { Text } = Typography;
 
 const PurchaseReturnTable = () => {
   const t = useTranslations('PurchaseReturn');
@@ -65,12 +65,7 @@ const PurchaseReturnTable = () => {
   ];
 
   return (
-    <div style={{ 
-      padding: '24px', 
-      backgroundColor: token.colorBgLayout, 
-      minHeight: '100vh',
-      transition: 'all 0.3s ease'
-    }}>
+    <>
       <div style={{ marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Space size="large">
           <PageHeader 
@@ -105,7 +100,7 @@ const PurchaseReturnTable = () => {
             columns={columns}
             dataSource={data}
             loading={loading}
-            rowKey="id"
+            rowKey="_id"
             bordered={false}
             pagination={{
               current: meta.current,
@@ -140,7 +135,7 @@ const PurchaseReturnTable = () => {
           background: transparent !important;
         }
       `}</style>
-    </div>
+    </>
   );
 };
 

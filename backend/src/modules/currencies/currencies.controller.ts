@@ -38,15 +38,15 @@ export class CurrenciesController {
     return this.currenciesService.getCrossRate(from, to, rateType ?? ExchangeRateType.TRANSFER);
   }
 
-  @Get(':id')
-  findCurrencyById(@Param('id') id: string) {
-    return this.currenciesService.findCurrencyById(id);
+  @Get(':_id')
+  findCurrencyById(@Param('_id') recordId: string) {
+    return this.currenciesService.findCurrencyById(recordId);
   }
 
-  @Patch(':id')
+  @Patch(':_id')
   @Roles('ADMIN')
-  updateCurrency(@Param('id') id: string, @Body() updateCurrencyDto: UpdateCurrencyDto) {
-    return this.currenciesService.updateCurrency(id, updateCurrencyDto);
+  updateCurrency(@Param('_id') recordId: string, @Body() updateCurrencyDto: UpdateCurrencyDto) {
+    return this.currenciesService.updateCurrency(recordId, updateCurrencyDto);
   }
 
   @Post('rates')
@@ -55,19 +55,19 @@ export class CurrenciesController {
     return this.currenciesService.createExchangeRate(createExchangeRateDto);
   }
 
-  @Get(':currencyId/rates')
+  @Get(':_id/rates')
   findExchangeRatesByCurrency(
-    @Param('currencyId') currencyId: string,
+    @Param('_id') currency_id: string,
     @Query('rateType') rateType?: ExchangeRateType,
   ) {
-    return this.currenciesService.findExchangeRatesByCurrency(currencyId, rateType);
+    return this.currenciesService.findExchangeRatesByCurrency(currency_id, rateType);
   }
 
-  @Get(':currencyId/rates/latest')
+  @Get(':_id/rates/latest')
   getLatestExchangeRate(
-    @Param('currencyId') currencyId: string,
+    @Param('_id') currency_id: string,
     @Query('rateType') rateType?: ExchangeRateType,
   ) {
-    return this.currenciesService.getLatestExchangeRate(currencyId, rateType ?? ExchangeRateType.TRANSFER);
+    return this.currenciesService.getLatestExchangeRate(currency_id, rateType ?? ExchangeRateType.TRANSFER);
   }
 }

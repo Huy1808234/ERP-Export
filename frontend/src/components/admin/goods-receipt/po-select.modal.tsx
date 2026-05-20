@@ -3,10 +3,11 @@
 import React, { useState, useEffect } from 'react';
 import { Modal, Table, Tag, Typography, Input, Space, Button } from 'antd';
 import { SearchOutlined, ShoppingCartOutlined } from '@ant-design/icons';
-import { sendRequest } from '@/utils/api';
+import { sendRequest } from '@/lib/api-client';
 import { useSession } from 'next-auth/react';
 import { useTranslations } from 'next-intl';
 import { formatDate } from '@/utils/format';
+import { getAccessToken } from '@/lib/auth-token';
 
 const { Text } = Typography;
 
@@ -24,7 +25,7 @@ const POSelectModal = (props: IProps) => {
   const [pos, setPos] = useState<any[]>([]);
 
   useEffect(() => {
-    if (isOpen && session?.access_token) {
+    if (isOpen && getAccessToken(session)) {
       fetchPOs();
     }
   }, [isOpen, session]);
@@ -39,12 +40,8 @@ const POSelectModal = (props: IProps) => {
           pageSize: 50,
           ...(search ? { poNumber: `/${search}/i` } : {})
         },
-        headers: { Authorization: `Bearer ${session?.access_token}` },
+        headers: { Authorization: `Bearer ${getAccessToken(session)}` },
       });
-      
-      // Log để debug nếu cần
-      console.log('PO Data:', res?.data);
-      
       if (res?.data) {
         // Kiểm tra cả hai trường hợp result hoặc results
         const list = res.data.results || res.data.result || [];
@@ -77,7 +74,7 @@ const POSelectModal = (props: IProps) => {
       title: t('poSelect.columns.actions'),
       key: 'action',
       render: (_: any, record: any) => (
-        <Button type="primary" size="small" onClick={() => onSelect(record.id)}>
+        <Button type="primary" size="small" onClick={() => onSelect(record._id)}>
           {t('poSelect.selectBtn')}
         </Button>
       ),
@@ -103,7 +100,7 @@ const POSelectModal = (props: IProps) => {
         dataSource={pos} 
         columns={columns} 
         loading={loading} 
-        rowKey="id" 
+        rowKey="_id" 
         size="small"
         pagination={{ pageSize: 5 }}
       />

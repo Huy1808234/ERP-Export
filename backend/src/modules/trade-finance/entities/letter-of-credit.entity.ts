@@ -1,7 +1,8 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, DeleteDateColumn } from 'typeorm';
+import { BeforeInsert, Column, CreateDateColumn, DeleteDateColumn, Entity, JoinColumn, ManyToOne, PrimaryColumn, UpdateDateColumn } from 'typeorm';
 import { SalesContract } from '@/modules/sales-contracts/entities/sales-contract.entity';
 import { User } from '@/modules/users/entities/user.entity';
 import { ColumnNumericTransformer } from '@/helpers/typeorm.util';
+import { createEntityId } from '@/common/ids/entity-id.util';
 
 export enum LCStatus {
   DRAFT = 'DRAFT',
@@ -21,8 +22,15 @@ export enum LCType {
 
 @Entity('letters_of_credit')
 export class LetterOfCredit {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
+  @PrimaryColumn({ type: 'varchar', length: 40, name: '_id' })
+  _id: string;
+
+  @BeforeInsert()
+  assignId() {
+    if (!this._id) {
+      this._id = createEntityId('lc');
+    }
+  }
 
   @Column({ unique: true })
   lcNumber: string;
@@ -80,10 +88,10 @@ export class LetterOfCredit {
   handlingInstructions: string; // Cách thức xử lý sai sót
 
   @Column()
-  createdById: string;
+  createdByUsername: string;
 
   @ManyToOne(() => User)
-  @JoinColumn({ name: 'createdById' })
+  @JoinColumn({ name: 'createdByUsername', referencedColumnName: 'username' })
   createdBy: User;
 
   @CreateDateColumn()

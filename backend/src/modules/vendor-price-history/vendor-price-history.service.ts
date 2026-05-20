@@ -19,7 +19,7 @@ export class VendorPriceHistoryService {
   ) {}
 
   private async validateVendor(vendorId: string) {
-    const vendor = await this.partnerRepository.findOneBy({ id: vendorId });
+    const vendor = await this.partnerRepository.findOneBy({ _id: vendorId });
     if (!vendor) throw new BadRequestException('Nha cung cap khong ton tai');
     if (vendor.partnerType !== PartnerType.SUPPLIER) {
       throw new BadRequestException('Doi tac khong phai nha cung cap');
@@ -27,7 +27,7 @@ export class VendorPriceHistoryService {
   }
 
   private async validateProduct(productId: string) {
-    const product = await this.productRepository.findOneBy({ id: productId });
+    const product = await this.productRepository.findOneBy({ _id: productId });
     if (!product) throw new BadRequestException('San pham khong ton tai');
   }
 
@@ -60,7 +60,7 @@ export class VendorPriceHistoryService {
 
   async findOne(id: string) {
     const history = await this.vendorPriceHistoryRepository.findOne({
-      where: { id },
+      where: { _id: id },
       relations: { vendor: true, product: true },
     });
 
@@ -82,12 +82,12 @@ export class VendorPriceHistoryService {
       payload.effectiveDate = new Date(payload.effectiveDate as any) as any;
     }
 
-    await this.vendorPriceHistoryRepository.update({ id: history.id }, payload);
+    await this.vendorPriceHistoryRepository.update({ _id: history._id }, payload);
     return this.findOne(id);
   }
 
   async remove(id: string) {
-    const result = await this.vendorPriceHistoryRepository.delete({ id });
+    const result = await this.vendorPriceHistoryRepository.delete({ _id: id });
     if (result.affected === 0) throw new NotFoundException('Khong tim thay lich su gia');
     return { id, deletedCount: result.affected };
   }

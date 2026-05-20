@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useRef, useMemo } from 'react';
-import { Button, Descriptions, Divider, Modal, Select, Space, Table, Tag, Typography, Spin, App } from 'antd';
+import { Button, Descriptions, Divider, Modal, Space, Table, Tag, Typography, Spin, App } from 'antd';
 import { 
   ShoppingCartOutlined, 
   PrinterOutlined, 
@@ -10,17 +10,18 @@ import {
   BarcodeOutlined,
   FileDoneOutlined
 } from '@ant-design/icons';
-import { Row, Col, Steps, Card } from 'antd';
+import { Steps } from 'antd';
 import { useReactToPrint } from 'react-to-print';
 import { useSession } from 'next-auth/react';
-import { sendRequest } from '@/utils/api';
+import { sendRequest } from '@/lib/api-client';
 
 // Chuyển sang Relative Path để tránh lỗi Alias
 import { IPurchaseOrder, IPOLine, POStatus } from '@/types/purchase-order';
-import { PO_STATUS_CONFIG, PO_STATUS_OPTIONS } from '@/constants/purchase-order';
+import { PO_STATUS_CONFIG } from '@/constants/purchase-order';
 import { formatDate } from '@/utils/format';
 import { useCurrency } from '@/hooks/useCurrency';
 import { useTranslations } from 'next-intl';
+import { getAccessToken } from '@/lib/auth-token';
 
 const { Text, Title } = Typography;
 
@@ -31,7 +32,7 @@ interface IProps {
   onSuccess: () => void;
 }
 
-const PurchaseOrderDetailModal: React.FC<IProps> = ({ poId, open, onClose, onSuccess }) => {
+const PurchaseOrderDetailModal: React.FC<IProps> = ({ poId, open, onClose }) => {
   const { notification } = App.useApp();
   const t = useTranslations('PurchaseOrder');
   const { data: session } = useSession();
@@ -40,6 +41,20 @@ const PurchaseOrderDetailModal: React.FC<IProps> = ({ poId, open, onClose, onSuc
   const [loading, setLoading] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
 
+  const vatSummaryLabel = useMemo(() => {
+    const rates = Array.from(
+      new Set(
+        (data?.items ?? [])
+          .map((item) => Number(item.taxRate))
+          .filter((rate) => Number.isFinite(rate)),
+      ),
+    );
+
+    if (rates.length === 0) return t('detail.vatLabel');
+
+    return `${t('detail.vatLabel')} (${rates.map((rate) => `${formatNumber(rate)}%`).join(', ')})`;
+  }, [data?.items, formatNumber, t]);
+
   const handlePrint = useReactToPrint({
     contentRef: printRef,
     documentTitle: `PO_${data?.poNumber || 'PDF'}`,
@@ -47,7 +62,7 @@ const PurchaseOrderDetailModal: React.FC<IProps> = ({ poId, open, onClose, onSuc
 
   // Tự động Fetch Detail theo ID khi mở Modal
   useEffect(() => {
-    if (!open || !poId || !session?.access_token) return;
+    if (!open || !poId || !getAccessToken(session)) return;
     
     const fetchDetail = async () => {
       setLoading(true);
@@ -55,10 +70,10 @@ const PurchaseOrderDetailModal: React.FC<IProps> = ({ poId, open, onClose, onSuc
         const res = await sendRequest<IBackendRes<IPurchaseOrder>>({
           url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/purchase-orders/${poId}`,
           method: 'GET',
-          headers: { Authorization: `Bearer ${session.access_token}` },
+          headers: { Authorization: `Bearer ${getAccessToken(session)}` },
         });
         if (res?.data) setData(res.data);
-      } catch (error) {
+      } catch {
         notification.error({ title: t('notifications.fetchError') });
       } finally {
         setLoading(false);
@@ -66,27 +81,7 @@ const PurchaseOrderDetailModal: React.FC<IProps> = ({ poId, open, onClose, onSuc
     };
 
     fetchDetail();
-  }, [poId, open, session]);
-
-  const handleUpdateStatus = async (status: POStatus) => {
-    if (!session?.access_token) return;
-    try {
-      const res = await sendRequest<IBackendRes<any>>({
-        url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/purchase-orders/${poId}`,
-        method: 'PATCH',
-        body: { status },
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      });
-
-      if (res?.data) {
-        notification.success({ title: t('notifications.updateSuccess') });
-        setData((prev: IPurchaseOrder | null) => prev ? { ...prev, status } : null);
-        onSuccess();
-      }
-    } catch (error) {
-      notification.error({ title: t('notifications.updateError') });
-    }
-  };
+  }, [poId, open, session, notification, t]);
 
   const lineColumns = useMemo(() => [
     { title: t('detail.columns.index'), key: 'index', render: (_: any, __: any, i: number) => i + 1, width: 45 },
@@ -139,14 +134,15 @@ const PurchaseOrderDetailModal: React.FC<IProps> = ({ poId, open, onClose, onSuc
         <Text strong>{formatMoney((record.quantity || 0) * (record.unitPrice || 0), data?.currency)}</Text>
       ),
     },
-  ], [data?.currency, formatMoney, formatNumber]);
+  ], [data?.currency, formatMoney, formatNumber, t]);
 
   // Helper to get status config safely - using any cast to suppress index error
   const getStatusConfig = (status?: POStatus) => {
     if (!status) return { color: 'default', label: '-' };
     const config = (PO_STATUS_CONFIG as any)[status];
     if (!config) return { color: 'default', label: status };
-    return { ...config, label: status ? t(`status.${status}`) : 'N/A' };
+    const statusKey = `status.${status}`;
+    return { ...config, label: status && t.has(statusKey) ? t(statusKey) : status || 'N/A' };
   };
 
   if (!data && !loading) return null;
@@ -181,10 +177,12 @@ const PurchaseOrderDetailModal: React.FC<IProps> = ({ poId, open, onClose, onSuc
           <>
             <div style={{ marginBottom: 24, padding: '0 16px' }}>
               <Steps
-                current={['DRAFT', 'SENT', 'PARTIAL_RECEIPT', 'RECEIVED', 'COMPLETED'].indexOf(data.status)}
+                current={['DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'SENT', 'PARTIAL_RECEIPT', 'RECEIVED', 'COMPLETED'].indexOf(data.status)}
                 size="small"
                 items={[
                   { title: t('steps.draft'), icon: <FileProtectOutlined /> },
+                  { title: t('steps.approval'), icon: <FileProtectOutlined /> },
+                  { title: t('steps.approved'), icon: <FileProtectOutlined /> },
                   { title: t('steps.ordered'), icon: <ShoppingCartOutlined /> },
                   { title: t('steps.receiving'), icon: <HistoryOutlined /> },
                   { title: t('steps.received'), icon: <BarcodeOutlined /> },
@@ -195,12 +193,9 @@ const PurchaseOrderDetailModal: React.FC<IProps> = ({ poId, open, onClose, onSuc
 
             <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 12 }}>
               <Text strong>{t('detail.orderStatusLabel')}</Text>
-              <Select
-                value={data.status}
-                style={{ width: 220 }}
-                onChange={handleUpdateStatus}
-                options={Object.keys(PO_STATUS_CONFIG).map(s => ({ value: s, label: s ? t(`status.${s}`) : 'N/A' }))}
-              />
+              <Tag color={getStatusConfig(data.status).color} style={{ marginInlineEnd: 0 }}>
+                {getStatusConfig(data.status).label}
+              </Tag>
             </div>
 
             {/* Print Container */}
@@ -237,7 +232,7 @@ const PurchaseOrderDetailModal: React.FC<IProps> = ({ poId, open, onClose, onSuc
                 bordered
                 dataSource={data.items ?? []}
                 columns={lineColumns}
-                rowKey={(record) => record.id || Math.random()}
+                rowKey={(record) => record._id || record.productId}
                 pagination={false}
                 summary={() => (
                   <Table.Summary fixed>
@@ -248,7 +243,7 @@ const PurchaseOrderDetailModal: React.FC<IProps> = ({ poId, open, onClose, onSuc
                       </Table.Summary.Cell>
                     </Table.Summary.Row>
                     <Table.Summary.Row key="tax">
-                      <Table.Summary.Cell index={0} colSpan={6} align="right"><Text strong>{t('detail.vatLabel')}</Text></Table.Summary.Cell>
+                      <Table.Summary.Cell index={0} colSpan={6} align="right"><Text strong>{vatSummaryLabel}</Text></Table.Summary.Cell>
                       <Table.Summary.Cell index={1} align="right">
                         <Text strong>{formatMoney(data.taxAmount, data.currency)}</Text>
                       </Table.Summary.Cell>

@@ -16,16 +16,16 @@ export class PurchaseReturnsController {
   @Get()
   @ResponseMessage('Lấy danh sách phiếu trả hàng thành công')
   findAll(
-    @Query() query: string,
+    @Query() query: any,
     @Query('current') current: string,
     @Query('pageSize') pageSize: string,
   ) {
-    return this.purchaseReturnsService.findAll(query, +current, +pageSize);
+    return this.purchaseReturnsService.findAll(query, Number(current || 1), Number(pageSize || 10));
   }
 
-  @Get(':id')
+  @Get(':_id')
   @ResponseMessage('Lấy chi tiết phiếu trả hàng thành công')
-  findOne(@Param('id') id: string) {
-    return this.purchaseReturnsService.findOne(id);
+  findOne(@Param('_id') recordId: string) {
+    return this.purchaseReturnsService.findOne(recordId);
   }
 }

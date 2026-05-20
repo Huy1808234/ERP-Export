@@ -17,19 +17,21 @@ import {
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Progress } from 'antd'; // Add Progress component
 import { useSession } from 'next-auth/react';
-import { useTheme } from '@/library/theme.context';
-import { sendRequest } from '@/utils/api';
+import { useTheme } from '@/context/theme.context';
+import { sendRequest } from '@/lib/api-client';
 import { GLOBAL_EXCHANGE_RATE } from '@/constants/currency.config';
+import { useTranslations, useLocale } from 'next-intl';
 import { useCurrency } from '@/hooks/useCurrency';
 import PartnerCreateModal from './partner.create';
 import PartnerUpdateModal from './partner.update';
 import type { ColumnsType } from 'antd/es/table';
+import { getAccessToken } from '@/lib/auth-token';
 
 const { Title, Text } = Typography;
 
 // --- 1. Định nghĩa Interfaces chuẩn ---
 interface IPartner {
-  id: string;
+  _id: string;
   name: string;
   partnerType: 'CUSTOMER' | 'SUPPLIER' | 'LOGISTICS';
   country: string;
@@ -58,10 +60,57 @@ interface IMeta {
   total: number;
 }
 
+type PartnerFilters = Partial<Pick<IPartner, 'country' | 'isActive' | 'partnerType' | 'region' | 'riskLevel'>>;
+type PartnerSortField = 'balance' | 'name' | 'partnerType' | 'updatedAt';
+type PartnerSortOrder = 'ascend' | 'descend';
+type PartnerSortConfig = {
+  field: PartnerSortField;
+  order: PartnerSortOrder;
+};
+
+const DEFAULT_PARTNER_SORT: PartnerSortConfig = {
+  field: 'updatedAt',
+  order: 'descend',
+};
+
+const cleanPartnerFilters = (values: PartnerFilters): PartnerFilters => {
+  return Object.fromEntries(
+    Object.entries(values).filter(([, value]) => value !== undefined && value !== null && value !== ''),
+  ) as PartnerFilters;
+};
+
+const toPartnerSortField = (value: unknown): PartnerSortField | null => {
+  if (value === 'balance' || value === 'name' || value === 'partnerType' || value === 'updatedAt') {
+    return value;
+  }
+
+  return null;
+};
+
+const toPartnerSortConfig = (sorter: unknown): PartnerSortConfig => {
+  if (!sorter || Array.isArray(sorter)) return DEFAULT_PARTNER_SORT;
+
+  const sortRecord = sorter as { columnKey?: unknown; field?: unknown; order?: unknown };
+  if (sortRecord.order !== 'ascend' && sortRecord.order !== 'descend') {
+    return DEFAULT_PARTNER_SORT;
+  }
+
+  const field = toPartnerSortField(sortRecord.columnKey) ?? toPartnerSortField(sortRecord.field);
+  if (!field) return DEFAULT_PARTNER_SORT;
+
+  return {
+    field,
+    order: sortRecord.order,
+  };
+};
+
 const PartnerTable = () => {
   const { data: session } = useSession();
   const [api, contextHolder] = notification.useNotification();
-  const accessToken = session?.user?.access_token;
+  const accessToken = getAccessToken(session);
+  const t = useTranslations('Partner');
+  const tCommon = useTranslations('Common');
+  const locale = useLocale();
 
   // --- States ---
   const [partners, setPartners] = useState<IPartner[]>([]);
@@ -90,8 +139,9 @@ const PartnerTable = () => {
   // --- Advanced Filter States ---
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [filterForm] = Form.useForm();
-  const [filters, setFilters] = useState<any>({});
-  const [sortConfig, setSortConfig] = useState<any>({ field: 'updatedAt', order: 'descend' });
+  const [filters, setFilters] = useState<PartnerFilters>({});
+  const activeFilterCount = Object.keys(filters).length;
+  const [sortConfig, setSortConfig] = useState<PartnerSortConfig>(DEFAULT_PARTNER_SORT);
 
   // --- 2. Logic Fetch Dữ liệu (useCallback để tối ưu) ---
   const { formatMoney, formatVND } = useCurrency();
@@ -101,8 +151,9 @@ const PartnerTable = () => {
     setIsFetching(true);
     try {
       // Build sort string for backend (e.g., "name,asc" or "-currentDebt")
-      let sortStr = sortConfig.field;
+      let sortStr: string = sortConfig.field;
       if (sortConfig.order === 'descend') sortStr = `-${sortStr}`;
+      const activeFilters = cleanPartnerFilters(filters);
 
       const res = await sendRequest<IBackendRes<any>>({
         url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/partners`,
@@ -111,8 +162,8 @@ const PartnerTable = () => {
           current: meta.current,
           pageSize: meta.pageSize,
           sort: sortStr,
-          ...(debouncedSearchText ? { name: `/${debouncedSearchText}/i` } : {}),
-          ...filters
+          ...(debouncedSearchText ? { search: debouncedSearchText } : {}),
+          ...activeFilters
         },
         headers: { Authorization: `Bearer ${accessToken}` },
       });
@@ -139,10 +190,10 @@ const PartnerTable = () => {
     });
 
     if (res?.data) {
-      notification.success({ title: 'Xóa đối tác thành công' });
+      notification.success({ title: t('notifications.deleteSuccess') });
       fetchPartners();
     } else {
-      notification.error({ title: 'Lỗi', description: res?.message });
+      notification.error({ title: t('notifications.errorTitle'), description: res?.message });
     }
   };
 
@@ -151,7 +202,7 @@ const PartnerTable = () => {
     setHistoryLoading(true);
     try {
       const res = await sendRequest<IBackendRes<any>>({
-        url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/partners/${record.id}/history`,
+        url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/partners/${record._id}/history`,
         method: 'GET',
         headers: { Authorization: `Bearer ${accessToken}` },
       });
@@ -168,8 +219,8 @@ const PartnerTable = () => {
     setIsFilterOpen(false);
   };
 
-  const onFilterFinish = (values: any) => {
-    setFilters(values);
+  const onFilterFinish = (values: PartnerFilters) => {
+    setFilters(cleanPartnerFilters(values));
     setMeta(prev => ({ ...prev, current: 1 }));
     setIsFilterOpen(false);
   };
@@ -178,12 +229,16 @@ const PartnerTable = () => {
     if (!accessToken) return;
 
     try {
-      api.info({ title: 'Đang chuẩn bị file Excel...', placement: 'topRight' });
+      api.info({ title: t('notifications.preparingExcel'), placement: 'topRight' });
 
-      const queryParams = new URLSearchParams({
-        ...(debouncedSearchText ? { name: `/${debouncedSearchText}/i` } : {}),
-        ...filters
-      });
+      const exportParams = {
+        sort: sortConfig.order === 'descend' ? `-${sortConfig.field}` : sortConfig.field,
+        ...(debouncedSearchText ? { search: debouncedSearchText } : {}),
+        ...cleanPartnerFilters(filters)
+      };
+      const queryParams = new URLSearchParams(
+        Object.entries(exportParams).map(([key, value]) => [key, String(value)]),
+      );
 
       const url = `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/partners/export?${queryParams.toString()}`;
 
@@ -200,34 +255,41 @@ const PartnerTable = () => {
         const downloadUrl = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = downloadUrl;
-        a.download = `DS_Doi_Tac_${new Date().toLocaleDateString('vi-VN').replace(/\//g, '-')}.xlsx`;
+        const filename = locale === 'vi' ? 'DS_Doi_Tac' : 'Partner_List';
+        a.download = `${filename}_${new Date().toLocaleDateString(locale === 'vi' ? 'vi-VN' : 'en-US').replace(/\//g, '-')}.xlsx`;
         document.body.appendChild(a);
         a.click();
         window.URL.revokeObjectURL(downloadUrl);
         a.remove();
-        api.success({ title: 'Xuất Excel thành công', placement: 'topRight' });
+        api.success({ title: t('notifications.exportSuccess'), placement: 'topRight' });
       } else {
         const errorData = await response.json();
         api.error({
-          title: 'Lỗi khi xuất Excel',
-          description: errorData?.message || 'Không thể tải file',
+          title: t('notifications.exportError'),
+          description: errorData?.message || (locale === 'vi' ? 'Không thể tải file' : 'Could not download file'),
           placement: 'topRight'
         });
       }
     } catch (error) {
       console.error('Export error:', error);
-      api.error({ title: 'Lỗi kết nối server', placement: 'topRight' });
+      api.error({ title: t('notifications.connectionError'), placement: 'topRight' });
     }
   };
 
   // --- 4. Cấu hình Columns (AntD 5 chuẩn chỉnh) ---
+  const getSortOrder = (field: PartnerSortField) => (
+    sortConfig.field === field ? sortConfig.order : null
+  );
+
   const columns: ColumnsType<IPartner> = useMemo(() => [
     {
-      title: 'ĐỐI TÁC',
+      title: t('table.partner'),
       dataIndex: 'name',
       fixed: 'left',
       width: 280,
       sorter: true,
+      sortDirections: ['ascend', 'descend'],
+      sortOrder: getSortOrder('name'),
       render: (text: string, record: IPartner) => (
         <Space size="middle">
           <Avatar
@@ -239,29 +301,31 @@ const PartnerTable = () => {
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             <Text strong style={{ fontSize: '14px' }}>{text}</Text>
             <Text type="secondary" style={{ fontSize: '12px' }}>
-              <GlobalOutlined /> {record.country || 'Việt Nam'}
+              <GlobalOutlined /> {record.country || (locale === 'vi' ? 'Việt Nam' : 'Vietnam')}
               {record.region ? ` (${record.region})` : ''}
-              {record.taxCode ? ` | MST: ${record.taxCode}` : ''}
+              {record.taxCode ? ` | ${t('table.taxCode')}: ${record.taxCode}` : ''}
             </Text>
           </div>
         </Space>
       ),
     },
     {
-      title: 'PHÂN LOẠI',
+      title: t('table.type'),
       dataIndex: 'partnerType',
       width: 150,
       sorter: true,
+      sortDirections: ['ascend', 'descend'],
+      sortOrder: getSortOrder('partnerType'),
       render: (type: string) => {
         let color = 'processing';
-        let label = 'Khách hàng';
+        let label = t('types.customer');
 
         if (type === 'SUPPLIER') {
           color = 'warning';
-          label = 'Nhà cung cấp';
+          label = t('types.supplier');
         } else if (type === 'LOGISTICS') {
           color = 'geekblue';
-          label = 'Đơn vị vận chuyển';
+          label = t('types.logistics');
         }
 
         return (
@@ -272,10 +336,12 @@ const PartnerTable = () => {
       },
     },
     {
-      title: 'TÀI CHÍNH (DEBT)',
-      key: 'debt',
+      title: t('table.debt'),
+      key: 'balance',
       width: 240,
-      sorter: (a, b) => (a.currentDebt || 0) - (b.currentDebt || 0),
+      sorter: true,
+      sortDirections: ['descend', 'ascend'],
+      sortOrder: getSortOrder('balance'),
       render: (_: any, record: IPartner) => {
         const isBuyer = record.partnerType === 'CUSTOMER';
         const currency = record.defaultCurrency || 'USD';
@@ -306,20 +372,20 @@ const PartnerTable = () => {
           displayUsage = Math.round(usagePercent).toString();
         }
 
-        const balanceLabel = isBuyer ? 'Dư nợ (Phải thu):' : 'Công nợ (Phải trả):';
+        const balanceLabel = isBuyer ? t('debt.receivable') : t('debt.payable');
 
         // Traffic Light System (Hệ thống đèn tín hiệu rủi ro)
         let statusColor = token.colorSuccess;
-        let statusText = 'An toàn';
+        let statusText = t('debt.safe');
         if (isOverLimit) {
           statusColor = token.colorError;
-          statusText = 'VƯỢT HẠN MỨC';
+          statusText = t('debt.overLimit');
         } else if (usagePercent > 90) {
           statusColor = token.colorError;
-          statusText = 'Báo động';
+          statusText = t('debt.alarm');
         } else if (usagePercent > 60) {
           statusColor = token.colorWarning;
-          statusText = 'Cần chú ý';
+          statusText = t('debt.attention');
         }
 
         return (
@@ -346,16 +412,16 @@ const PartnerTable = () => {
               <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: `1px dashed ${isDark ? '#334155' : '#f0f0f0'}` }}>
                 <Tooltip title={
                   <div style={{ padding: '4px' }}>
-                    <div>Hạn mức: <b>{formatMoney(limit, currency)}</b></div>
-                    <div>Đã dùng: <b>{formatMoney(primaryBalance, currency)}</b></div>
+                    <div>{t('debt.limit')}: <b>{formatMoney(limit, currency)}</b></div>
+                    <div>{t('debt.used')}: <b>{formatMoney(primaryBalance, currency)}</b></div>
                     <Divider style={{ margin: '4px 0', borderColor: 'rgba(255,255,255,0.2)' }} />
-                    <div>Khả dụng: <b style={{ color: '#52c41a' }}>{formatMoney(availableCredit, currency)}</b></div>
+                    <div>{t('debt.available')}: <b style={{ color: '#52c41a' }}>{formatMoney(availableCredit, currency)}</b></div>
                   </div>
                 }>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
                      <Space size={4}>
                         <div style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: statusColor }} />
-                        <span style={{ fontSize: '10px', color: '#8c8c8c' }}>Sử dụng:</span>
+                        <span style={{ fontSize: '10px', color: '#8c8c8c' }}>{t('debt.usage')}:</span>
                      </Space>
                      <Text strong style={{ fontSize: '11px', color: usagePercent > 90 ? token.colorError : undefined }}>
                         {displayUsage}%
@@ -374,7 +440,7 @@ const PartnerTable = () => {
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '2px' }}>
                       <Text type="secondary" style={{ fontSize: '9px', textTransform: 'uppercase' }}>{statusText}</Text>
                       <Text style={{ fontSize: '9px', color: token.colorSuccess }}>
-                        Còn: {formatMoney(availableCredit, currency)}
+                        {t('debt.remaining')}: {formatMoney(availableCredit, currency)}
                       </Text>
                     </div>
                   )}
@@ -386,15 +452,15 @@ const PartnerTable = () => {
       }
     },
     {
-      title: 'ĐÁNH GIÁ RỦI RO / NĂNG LỰC',
+      title: t('table.risk'),
       key: 'risk',
       width: 220,
       render: (_: any, record: IPartner) => {
         if (record.partnerType === 'CUSTOMER') {
           const riskConfig = {
-            LOW: { color: 'success', text: 'Rủi ro: Thấp' },
-            MEDIUM: { color: 'warning', text: 'Rủi ro: Trung bình' },
-            HIGH: { color: 'error', text: 'Rủi ro: Cao' }
+            LOW: { color: 'success', text: t('risk.low') },
+            MEDIUM: { color: 'warning', text: t('risk.medium') },
+            HIGH: { color: 'error', text: t('risk.high') }
           };
           const config = riskConfig[record.riskLevel] || riskConfig.LOW;
           return (
@@ -403,7 +469,7 @@ const PartnerTable = () => {
                 {config.text}
               </Tag>
               {record.isManualRisk && (
-                <Tooltip title="Rủi ro được chỉ định thủ công (Bởi Quản lý)">
+                <Tooltip title={t('risk.manualHint')}>
                   <LockOutlined style={{ color: token.colorTextDescription, fontSize: '12px' }} />
                 </Tooltip>
               )}
@@ -418,35 +484,35 @@ const PartnerTable = () => {
         if (hasScore) {
           return (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <Tooltip title={`Chất lượng: ${record.qualityScore} | Giao hàng: ${record.deliveryScore} | Giá: ${record.priceScore}`}>
+              <Tooltip title={`${t('risk.capacityScore')}: ${record.qualityScore} | ${t('risk.delivery')}: ${record.deliveryScore} | ${t('risk.price')}: ${record.priceScore}`}>
                 <Tag color="cyan" style={{ width: 'fit-content' }}>
-                  Điểm năng lực: {avgScore.toFixed(1)}
+                  {t('risk.capacityScore')}: {avgScore.toFixed(1)}
                 </Tag>
               </Tooltip>
-              {record.vendorCategory && <Text type="secondary" style={{ fontSize: 11 }}>Ngành: {record.vendorCategory}</Text>}
+              {record.vendorCategory && <Text type="secondary" style={{ fontSize: 11 }}>{t('risk.industry')}: {record.vendorCategory}</Text>}
             </div>
           );
         }
 
-        return <Text type="secondary" italic style={{ fontSize: 12 }}>Chưa có đánh giá</Text>;
+        return <Text type="secondary" italic style={{ fontSize: 12 }}>{t('risk.noAssessment')}</Text>;
       }
     },
     {
-      title: 'TRẠNG THÁI',
+      title: t('table.status'),
       dataIndex: 'isActive',
       width: 120,
       render: (active: boolean) => (
-        <Badge status={active ? 'success' : 'default'} text={active ? 'Hoạt động' : 'Đang khóa'} />
+        <Badge status={active ? 'success' : 'default'} text={active ? t('status.active') : t('status.inactive')} />
       )
     },
     {
-      title: 'THAO TÁC',
+      title: t('table.actions'),
       key: 'action',
       fixed: 'right',
       width: 120,
       render: (_: any, record: IPartner) => (
         <Space size="small">
-          <Tooltip title="Chỉnh sửa">
+          <Tooltip title={tCommon('edit')}>
             <Button
               type="text"
               icon={<EditOutlined style={{ color: '#1890ff' }} />}
@@ -456,17 +522,19 @@ const PartnerTable = () => {
           <Dropdown
             menu={{
               items: [
-                { key: '1', icon: <HistoryOutlined />, label: 'Xem lịch sử', onClick: () => openHistory(record) },
+                { key: '1', icon: <HistoryOutlined />, label: t('table.history'), onClick: () => openHistory(record) },
                 {
                   key: '2',
                   icon: <DeleteOutlined />,
                   label: (
                     <Popconfirm
-                      title="Xóa đối tác này?"
-                      onConfirm={() => confirmDelete(record.id)}
-                      okText="Xóa" cancelText="Hủy"
+                      title={t('notifications.confirmDelete')}
+                      onConfirm={() => confirmDelete(record._id)}
+                      okText={tCommon('delete')}
+                      cancelText={tCommon('cancel')}
+                      okButtonProps={{ danger: true }}
                     >
-                      <span>Xóa đối tác</span>
+                      <span style={{ color: token.colorError }}>{tCommon('delete')}</span>
                     </Popconfirm>
                   ),
                   danger: true
@@ -480,16 +548,14 @@ const PartnerTable = () => {
         </Space>
       ),
     },
-  ], [accessToken]);
+  ], [accessToken, sortConfig]);
 
   const { token } = theme.useToken();
   const { isDark } = useTheme();
 
   return (
     <div style={{
-      padding: '24px',
-      backgroundColor: isDark ? '#0f172a' : token.colorBgLayout,
-      minHeight: '100vh',
+      backgroundColor: 'transparent',
       transition: 'all 0.3s ease'
     }}>
       {contextHolder}
@@ -498,11 +564,11 @@ const PartnerTable = () => {
       <Row justify="space-between" align="bottom" style={{ marginBottom: '24px' }}>
         <Col>
           <PageHeader
-            title="Quản Lý Đối Tác"
+            title={t('title')}
             icon={<TeamOutlined />}
-            description="Quản lý thông tin nhà cung cấp và khách hàng"
+            description={t('subtitle')}
           />
-          <Text type="secondary">Hệ thống quản lý Buyer (Quốc tế) và Vendor (Nội địa)</Text>
+          <Text type="secondary">{t('systemDescription')}</Text>
         </Col>
         <Col>
           <Space>
@@ -512,7 +578,7 @@ const PartnerTable = () => {
               style={{ borderRadius: '8px' }}
               onClick={handleExport}
             >
-              Xuất Excel
+              {t('exportExcel')}
             </Button>
             <Button
               type="primary"
@@ -521,7 +587,7 @@ const PartnerTable = () => {
               onClick={() => setIsCreateModalOpen(true)}
               style={{ borderRadius: '8px', height: '40px' }}
             >
-              Thêm đối tác
+              {t('addPartner')}
             </Button>
           </Space>
         </Col>
@@ -532,7 +598,7 @@ const PartnerTable = () => {
         <Col xs={24} sm={12} lg={6}>
           <Card variant="borderless" hoverable style={{ borderRadius: '12px', background: isDark ? '#1e293b' : token.colorBgContainer }}>
             <Statistic
-              title={<Text type="secondary" style={{ color: isDark ? '#94a3b8' : undefined }}>Tổng Đối Tác</Text>}
+              title={<Text type="secondary" style={{ color: isDark ? '#94a3b8' : undefined }}>{t('stats.totalPartners')}</Text>}
               value={meta.total}
               prefix={<TeamOutlined style={{ color: isDark ? '#38bdf8' : token.colorPrimary }} />}
               styles={{ content: { color: isDark ? '#f8fafc' : undefined } }}
@@ -542,7 +608,7 @@ const PartnerTable = () => {
         <Col xs={24} sm={12} lg={6}>
           <Card variant="borderless" hoverable style={{ borderRadius: '12px', background: isDark ? '#1e293b' : token.colorBgContainer }}>
             <Statistic
-              title={<Text type="secondary" style={{ color: isDark ? '#94a3b8' : undefined }}>Tổng Phải Thu (Quy đổi VND)</Text>}
+              title={<Text type="secondary" style={{ color: isDark ? '#94a3b8' : undefined }}>{t('stats.receivable')}</Text>}
               value={partners.filter(p => p.partnerType === 'CUSTOMER').reduce((sum, p) => {
                 const currency = p.defaultCurrency || 'USD';
                 const amount = p.currentDebt || 0;
@@ -559,7 +625,7 @@ const PartnerTable = () => {
         <Col xs={24} sm={12} lg={6}>
           <Card variant="borderless" hoverable style={{ borderRadius: '12px', background: isDark ? '#1e293b' : token.colorBgContainer }}>
             <Statistic
-              title={<Text type="secondary" style={{ color: isDark ? '#94a3b8' : undefined }}>Tổng Phải Trả (Quy đổi VND)</Text>}
+              title={<Text type="secondary" style={{ color: isDark ? '#94a3b8' : undefined }}>{t('stats.payable')}</Text>}
               value={partners.filter(p => p.partnerType !== 'CUSTOMER').reduce((sum, p) => {
                 const currency = p.defaultCurrency || 'SUPPLIER' ? 'USD' : 'VND'; // Fallback logic
                 const actualCurrency = p.defaultCurrency || (p.partnerType === 'SUPPLIER' ? 'USD' : 'VND');
@@ -577,7 +643,7 @@ const PartnerTable = () => {
         <Col xs={24} sm={12} lg={6}>
           <Card variant="borderless" hoverable style={{ borderRadius: '12px', background: isDark ? '#1e293b' : token.colorBgContainer }}>
             <Statistic
-              title={<Text type="secondary" style={{ color: isDark ? '#94a3b8' : undefined }}>Cảnh Báo Rủi Ro</Text>}
+              title={<Text type="secondary" style={{ color: isDark ? '#94a3b8' : undefined }}>{t('stats.riskWarning')}</Text>}
               value={partners.filter(p => p.riskLevel === 'HIGH').length}
               styles={{ content: { color: '#cf1322' } }}
               prefix={<WarningOutlined />}
@@ -599,7 +665,7 @@ const PartnerTable = () => {
         <div style={{ padding: '20px 24px', display: 'flex', justifyContent: 'space-between' }}>
           <Space size="large">
             <Input
-              placeholder="Tìm tên, mã số thuế, quốc gia..."
+              placeholder={t('table.searchPlaceholder')}
               prefix={<SearchOutlined style={{ color: token.colorTextPlaceholder }} />}
               value={searchText}
               onChange={(e) => {
@@ -614,9 +680,9 @@ const PartnerTable = () => {
               icon={<FilterOutlined />}
               size="large"
               onClick={() => setIsFilterOpen(true)}
-              type={Object.keys(filters).length > 0 ? "primary" : "default"}
+              type={activeFilterCount > 0 ? "primary" : "default"}
             >
-              Bộ lọc nâng cao {Object.keys(filters).length > 0 && `(${Object.keys(filters).length})`}
+              {t('table.advancedFilter')} {activeFilterCount > 0 && `(${activeFilterCount})`}
             </Button>
             <Button
               icon={<ReloadOutlined />}
@@ -627,9 +693,9 @@ const PartnerTable = () => {
 
           {selectedRowKeys.length > 0 && (
             <Space>
-              <span style={{ color: token.colorTextSecondary }}>Đã chọn <b>{selectedRowKeys.length}</b> đối tác</span>
+              <span style={{ color: token.colorTextSecondary }}>{t('table.selectedCount', { count: selectedRowKeys.length })}</span>
               <Popconfirm
-                title={`Bạn có chắc chắn muốn xóa ${selectedRowKeys.length} đối tác đã chọn?`}
+                title={t('table.confirmBulkDelete', { count: selectedRowKeys.length })}
                 onConfirm={async () => {
                   const res = await sendRequest<IBackendRes<any>>({
                     url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/partners/bulk-delete`,
@@ -638,16 +704,16 @@ const PartnerTable = () => {
                     headers: { Authorization: `Bearer ${accessToken}` },
                   });
                   if (res?.data) {
-                    api.success({ title: 'Thao tác thành công', description: res.message });
+                    api.success({ title: tCommon('success'), description: res.message });
                     setSelectedRowKeys([]);
                     fetchPartners();
                   }
                 }}
-                okText="Xóa tất cả"
-                cancelText="Hủy"
+                okText={t('table.bulkDelete')}
+                cancelText={t('table.reset')}
                 okButtonProps={{ danger: true }}
               >
-                <Button danger type="primary" icon={<DeleteOutlined />}>Xóa hàng loạt</Button>
+                <Button danger type="primary" icon={<DeleteOutlined />}>{t('table.bulkDelete')}</Button>
               </Popconfirm>
             </Space>
           )}
@@ -655,7 +721,7 @@ const PartnerTable = () => {
 
         <div className="premium-table">
           <Table
-            rowKey="id"
+            rowKey={(record: any) => record._id || record.code || record.taxCode}
             columns={columns}
             dataSource={partners}
             loading={isFetching}
@@ -665,26 +731,23 @@ const PartnerTable = () => {
               selectedRowKeys,
               onChange: (keys) => setSelectedRowKeys(keys),
             }}
-            onChange={(pagination, filters, sorter: any) => {
+            onChange={(pagination, _tableFilters, sorter, extra) => {
+              const nextSortConfig = toPartnerSortConfig(sorter);
+
               setMeta(prev => ({
                 ...prev,
-                current: pagination.current || 1,
+                current: extra.action === 'sort' ? 1 : pagination.current || 1,
                 pageSize: pagination.pageSize || 10
               }));
 
-              if (sorter.field) {
-                setSortConfig({
-                  field: sorter.field,
-                  order: sorter.order
-                });
-              }
+              setSortConfig(nextSortConfig);
             }}
             pagination={{
               current: meta.current,
               pageSize: meta.pageSize,
               total: meta.total,
               showSizeChanger: true,
-              showTotal: (total) => `Tổng cộng ${total} đối tác`,
+              showTotal: (total) => t('table.totalCount', { total }),
             }}
           />
         </div>
@@ -711,7 +774,7 @@ const PartnerTable = () => {
         title={
           <Space>
             <FilterOutlined />
-            <span>BỘ LỌC NÂNG CAO</span>
+            <span>{t('table.advancedFilter').toUpperCase()}</span>
           </Space>
         }
         placement="right"
@@ -720,8 +783,8 @@ const PartnerTable = () => {
         size="default"
         extra={
           <Space>
-            <Button onClick={handleResetFilters}>Đặt lại</Button>
-            <Button type="primary" onClick={() => filterForm.submit()}>Áp dụng</Button>
+            <Button onClick={handleResetFilters}>{t('table.reset')}</Button>
+            <Button type="primary" onClick={() => filterForm.submit()}>{t('table.apply')}</Button>
           </Space>
         }
       >
@@ -731,81 +794,202 @@ const PartnerTable = () => {
           onFinish={onFilterFinish}
           initialValues={filters}
         >
-          <Form.Item label="Loại đối tác" name="partnerType">
+          <Form.Item label={t('table.partnerType')} name="partnerType">
             <Select
               allowClear
-              placeholder="Tất cả loại đối tác"
+              placeholder={t('table.allTypes')}
               options={[
-                { value: 'CUSTOMER', label: 'Khách hàng (Buyer)' },
-                { value: 'SUPPLIER', label: 'Nhà cung cấp (Vendor)' },
-                { value: 'LOGISTICS', label: 'Đơn vị vận chuyển' },
+                { value: 'CUSTOMER', label: `${t('types.customer')} (Buyer)` },
+                { value: 'SUPPLIER', label: `${t('types.supplier')} (Vendor)` },
+                { value: 'LOGISTICS', label: t('types.logistics') },
               ]}
             />
           </Form.Item>
 
-          <Form.Item label="Khu vực thương mại" name="region">
+          <Form.Item label={t('table.region')} name="region">
             <Select
               allowClear
-              placeholder="Chọn khu vực"
+              placeholder={t('table.allRegions')}
               options={[
-                { value: 'EU', label: 'Châu Âu (EU)' },
-                { value: 'US', label: 'Hoa Kỳ (US)' },
-                { value: 'ASEAN', label: 'Đông Nam Á (ASEAN)' },
-                { value: 'APAC', label: 'Châu Á - Thái Bình Dương' },
+                { value: 'EU', label: t('regions.EU') },
+                { value: 'US', label: t('regions.US') },
+                { value: 'ASEAN', label: t('regions.ASEAN') },
+                { value: 'APAC', label: t('regions.APAC') },
               ]}
             />
           </Form.Item>
 
-          <Form.Item label="Mức độ rủi ro (Buyer)" name="riskLevel">
+          <Form.Item label={t('table.riskLevel')} name="riskLevel">
             <Select
               allowClear
-              placeholder="Chọn mức rủi ro"
+              placeholder={t('table.allRisks')}
               options={[
-                { value: 'LOW', label: 'Thấp' },
-                { value: 'MEDIUM', label: 'Trung bình' },
-                { value: 'HIGH', label: 'Cao' },
+                { value: 'LOW', label: t('risk.low') },
+                { value: 'MEDIUM', label: t('risk.medium') },
+                { value: 'HIGH', label: t('risk.high') },
               ]}
             />
           </Form.Item>
 
-          <Form.Item label="Trạng thái hoạt động" name="isActive">
+          <Form.Item label={t('table.activeStatus')} name="isActive">
             <Select
               allowClear
-              placeholder="Tất cả trạng thái"
+              placeholder={t('table.allStatus')}
               options={[
-                { value: true, label: 'Đang hoạt động' },
-                { value: false, label: 'Đang khóa' },
+                { value: true, label: t('status.active') },
+                { value: false, label: t('status.inactive') },
               ]}
             />
           </Form.Item>
 
           <Divider />
 
-          <Form.Item label="Quốc gia" name="country">
-            <Input placeholder="Ví dụ: Vietnam, USA..." allowClear />
+          <Form.Item label={t('table.country')} name="country">
+            <Input placeholder={t('form.placeholders.country')} allowClear />
           </Form.Item>
 
-          <Form.Item label="Mã số thuế" name="taxCode">
-            <Input placeholder="Nhập MST" allowClear />
-          </Form.Item>
         </Form>
       </Drawer>
 
       <Drawer
-        title={<Space><HistoryOutlined /> Chi tiết lịch sử giao dịch</Space>}
+        title={<Space><HistoryOutlined /> {t('table.historyTitle')}</Space>}
         size="default"
         onClose={() => setHistoryOpen(false)}
         open={historyOpen}
         destroyOnHidden
       >
-        {historyLoading ? <div style={{ textAlign: 'center', padding: 50 }}>Đang tải...</div> : (
+        {historyLoading ? <div style={{ textAlign: 'center', padding: 50 }}>{tCommon('loading')}</div> : (
           <>
             <Title level={4}>{historyData?.partner?.name}</Title>
             <Divider />
             <Tabs items={
+              historyData?.partner?.partnerType === 'SUPPLIER' ? [
+                {
+                  key: '1', label: t('history.purchaseOrders'),
+                  children: (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                      {(historyData?.purchaseOrders?.items || []).length > 0 ? (
+                        (historyData?.purchaseOrders?.items || []).map((item: any) => (
+                          <div key={item._id} style={{
+                            padding: '16px',
+                            background: isDark ? '#1e293b' : '#f8f9fa',
+                            borderRadius: '12px',
+                            border: `1px solid ${isDark ? '#334155' : '#f0f0f0'}`,
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center'
+                          }}>
+                            <div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                                <Text strong style={{ fontSize: 14 }}>{item.poNumber}</Text>
+                                <Tag color={item.status === 'COMPLETED' ? 'green' : item.status === 'CANCELLED' ? 'red' : 'blue'} style={{ borderRadius: 4, fontSize: 10 }}>
+                                  {item.status}
+                                </Tag>
+                              </div>
+                              <Text type="secondary" style={{ fontSize: 12 }}>
+                                {item.orderDate ? new Date(item.orderDate).toLocaleDateString('vi-VN') : tCommon('noData')}
+                              </Text>
+                            </div>
+                            <div style={{ textAlign: 'right' }}>
+                              <Text strong style={{ color: token.colorSuccess, fontSize: 15 }}>
+                                {formatMoney(Number(item.totalAmount || 0), item.currency || 'VND')}
+                              </Text>
+                              <br />
+                              <Text type="secondary" style={{ fontSize: 12 }}>
+                                {(item.items || []).length} {t('history.items')}
+                              </Text>
+                            </div>
+                          </div>
+                        ))
+                      ) : <Empty description={t('history.noPurchaseOrders')} />}
+                    </div>
+                  )
+                },
+                {
+                  key: '2', label: t('history.vendorInvoices'),
+                  children: (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                      {(historyData?.vendorInvoices?.items || []).length > 0 ? (
+                        (historyData?.vendorInvoices?.items || []).map((item: any) => (
+                          <div key={item._id} style={{
+                            padding: '16px',
+                            background: isDark ? '#1e293b' : '#f8f9fa',
+                            borderRadius: '12px',
+                            border: `1px solid ${isDark ? '#334155' : '#f0f0f0'}`,
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center'
+                          }}>
+                            <div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                                <Text strong>{item.invoiceNumber}</Text>
+                                <Tag color={item.status === 'PAID' ? 'green' : item.status === 'CANCELLED' ? 'red' : 'orange'}>{item.status}</Tag>
+                              </div>
+                              <Text type="secondary" style={{ fontSize: 12 }}>
+                                PO: {item.purchaseOrder?.poNumber || item.purchaseOrderId}
+                              </Text>
+                            </div>
+                            <Text strong style={{ color: '#1890ff' }}>
+                              {formatMoney(Number(item.totalAmount || 0), item.currency || 'VND')}
+                            </Text>
+                          </div>
+                        ))
+                      ) : <Empty description={t('history.noVendorInvoices')} />}
+                    </div>
+                  )
+                },
+                {
+                  key: '3', label: t('history.payables'),
+                  children: (
+                    <div>
+                      <Row gutter={12} style={{ marginBottom: 16 }}>
+                        <Col span={12}>
+                          <Statistic title={t('history.remaining')} value={historyData?.payables?.summary?.remainingAmount || 0} formatter={(value) => formatMoney(Number(value), historyData?.partner?.defaultCurrency || 'VND')} />
+                        </Col>
+                        <Col span={12}>
+                          <Statistic title={t('history.overdue')} value={historyData?.payables?.summary?.overdueCount || 0} styles={{ content: { color: token.colorError } }} />
+                        </Col>
+                      </Row>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                        {(historyData?.payables?.items || []).length > 0 ? (
+                          (historyData?.payables?.items || []).map((item: any) => {
+                            const remaining = Math.max(Number(item.amount || 0) - Number(item.paidAmount || 0), 0);
+                            return (
+                              <div key={item._id} style={{
+                                padding: '16px',
+                                background: isDark ? '#1e293b' : '#f8f9fa',
+                                borderRadius: '12px',
+                                border: `1px solid ${isDark ? '#334155' : '#f0f0f0'}`,
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center'
+                              }}>
+                                <div>
+                                  <Text strong>{item.invoiceNumber || item._id}</Text>
+                                  <br />
+                                  <Text type="secondary" style={{ fontSize: 12 }}>
+                                    {t('history.dueDate')}: {item.dueDate ? new Date(item.dueDate).toLocaleDateString('vi-VN') : tCommon('noData')}
+                                  </Text>
+                                </div>
+                                <div style={{ textAlign: 'right' }}>
+                                  <Tag color={item.status === 'PAID' ? 'green' : item.status === 'PARTIAL' ? 'blue' : 'orange'}>{item.status}</Tag>
+                                  <br />
+                                  <Text strong style={{ color: token.colorError }}>
+                                    {formatMoney(remaining, item.currency || 'VND')}
+                                  </Text>
+                                </div>
+                              </div>
+                            );
+                          })
+                        ) : <Empty description={t('history.noPayables')} />}
+                      </div>
+                    </div>
+                  )
+                }
+              ] :
               historyData?.partner?.partnerType === 'LOGISTICS' ? [
                 {
-                  key: '1', label: 'Lô hàng đã đi',
+                  key: '1', label: t('history.shipments'),
                   children: (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                       {(historyData?.shipments?.items || []).length > 0 ? (
@@ -819,7 +1003,7 @@ const PartnerTable = () => {
                             CLOSED: 'purple'
                           };
                           return (
-                            <div key={item.id} style={{
+                            <div key={item._id} style={{
                               padding: '16px',
                               background: isDark ? '#1e293b' : '#f8f9fa',
                               borderRadius: '12px',
@@ -841,34 +1025,66 @@ const PartnerTable = () => {
                               </div>
                               <div style={{ textAlign: 'right' }}>
                                 <Text strong style={{ fontSize: 13 }}>
-                                  B/L: {item.blNumber || 'Chưa có'}
+                                  B/L: {item.blNumber || tCommon('noData')}
                                 </Text>
                               </div>
                             </div>
                           );
                         })
-                      ) : <Empty description="Chưa có dữ liệu vận tải" />}
+                      ) : <Empty description={t('history.noShipments')} />}
                     </div>
                   )
                 },
                 {
-                  key: '2', label: 'Công nợ phải trả',
+                  key: '2', label: t('history.payables'),
                   children: (
-                    <div style={{ padding: '20px', textAlign: 'center' }}>
-                       <Statistic 
-                          title="Tổng công nợ phải trả (AP)" 
-                          value={historyData?.partner?.apBalance || 0} 
-                          suffix={historyData?.partner?.defaultCurrency || 'USD'}
-                          valueStyle={{ color: '#cf1322' }}
+                    <div>
+                       <Statistic
+                          title={t('history.totalPayables')}
+                          value={historyData?.payables?.summary?.remainingAmount || historyData?.partner?.apBalance || 0}
+                          formatter={(value) => formatMoney(Number(value), historyData?.partner?.defaultCurrency || 'VND')}
+                          styles={{ content: { color: '#cf1322' } }}
                        />
                        <Divider />
-                       <Text type="secondary">Chi tiết các hóa đơn vận tải đang được cập nhật...</Text>
+                       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                         {(historyData?.payables?.items || []).length > 0 ? (
+                           (historyData?.payables?.items || []).map((item: any) => {
+                             const remaining = Math.max(Number(item.amount || 0) - Number(item.paidAmount || 0), 0);
+                             return (
+                               <div key={item._id} style={{
+                                 padding: '16px',
+                                 background: isDark ? '#1e293b' : '#f8f9fa',
+                                 borderRadius: '12px',
+                                 border: `1px solid ${isDark ? '#334155' : '#f0f0f0'}`,
+                                 display: 'flex',
+                                 justifyContent: 'space-between',
+                                 alignItems: 'center'
+                               }}>
+                                 <div>
+                                   <Text strong>{item.invoiceNumber || item._id}</Text>
+                                   <br />
+                                   <Text type="secondary" style={{ fontSize: 12 }}>
+                                     {t('history.dueDate')}: {item.dueDate ? new Date(item.dueDate).toLocaleDateString('vi-VN') : tCommon('noData')}
+                                   </Text>
+                                 </div>
+                                 <div style={{ textAlign: 'right' }}>
+                                   <Tag color={item.status === 'PAID' ? 'green' : item.status === 'PARTIAL' ? 'blue' : 'orange'}>{item.status}</Tag>
+                                   <br />
+                                   <Text strong style={{ color: token.colorError }}>
+                                     {formatMoney(remaining, item.currency || 'VND')}
+                                   </Text>
+                                 </div>
+                               </div>
+                             );
+                           })
+                         ) : <Empty description={t('history.noPayables')} />}
+                       </div>
                     </div>
                   )
                 }
               ] : [
                 {
-                  key: '1', label: 'Báo giá',
+                  key: '1', label: t('history.quotations'),
                   children: (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                       {(historyData?.quotations?.items || []).length > 0 ? (
@@ -882,7 +1098,7 @@ const PartnerTable = () => {
                             EXPIRED: 'volcano'
                           };
                           return (
-                            <div key={item.id} style={{
+                            <div key={item._id} style={{
                               padding: '16px',
                               background: isDark ? '#1e293b' : '#f8f9fa',
                               borderRadius: '12px',
@@ -910,17 +1126,17 @@ const PartnerTable = () => {
                             </div>
                           );
                         })
-                      ) : <Empty description="Chưa có dữ liệu báo giá" />}
+                      ) : <Empty description={t('history.noQuotations')} />}
                     </div>
                   )
                 },
                 {
-                  key: '2', label: 'Hóa đơn PI',
+                  key: '2', label: t('history.piInvoices'),
                   children: (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                       {(historyData?.proformaInvoices?.items || []).length > 0 ? (
                         (historyData?.proformaInvoices?.items || []).map((item: any) => (
-                          <div key={item.id} style={{
+                          <div key={item._id} style={{
                             padding: '16px',
                             background: isDark ? '#1e293b' : '#f8f9fa',
                             borderRadius: '12px',
@@ -943,7 +1159,7 @@ const PartnerTable = () => {
                             </div>
                           </div>
                         ))
-                      ) : <Empty description="Chưa có dữ liệu hóa đơn PI" />}
+                      ) : <Empty description={t('history.noPI')} />}
                     </div>
                   )
                 },

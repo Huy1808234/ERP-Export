@@ -1,43 +1,64 @@
-import NextAuth, { DefaultSession } from "next-auth";
-import { JWT } from "next-auth/jwt";
+import type { DefaultSession } from "next-auth";
 
 export interface IPermission {
-  _id: string;
+  _id?: string;
   name: string;
-  apiPath: string;
-  method: string;
-  module: string;
+  apiPath?: string;
+  method?: string;
+  module?: string;
 }
 
 export interface IRole {
-  _id: string;
+  _id?: string;
   name: string;
   permissions?: IPermission[];
 }
 
+export interface IAuthSessionUser {
+  _id?: string;
+  username?: string;
+  email?: string;
+  name?: string;
+  roleName?: string | null;
+  role?: IRole;
+  partnerId?: string | null;
+}
+
+export interface IUser extends IAuthSessionUser {
+  email: string;
+  name: string;
+  role: IRole;
+}
+
 declare module "next-auth" {
   interface Session {
-    user: {
-      access_token?: string;
-      _id?: string;
-      email?: string;
-      name?: string;
-      role?: IRole;
-    } & DefaultSession["user"];
-    access_token?: string;
+    user: IAuthSessionUser & DefaultSession["user"];
+    accessToken?: string;
+    accessTokenExpiresAt?: number;
+    error?: "RefreshAccessTokenError";
   }
 
   interface User {
-    access_token?: string;
+    accessToken?: string;
+    refreshToken?: string;
+    accessTokenExpiresAt?: number;
     _id?: string;
+    username?: string;
+    roleName?: string | null;
     role?: IRole;
+    partnerId?: string | null;
   }
 }
 
 declare module "next-auth/jwt" {
   interface JWT {
-    access_token?: string;
+    user?: IAuthSessionUser;
+    accessToken?: string;
+    refreshToken?: string;
+    accessTokenExpiresAt?: number;
+    error?: "RefreshAccessTokenError";
     _id?: string;
+    roleName?: string | null;
     role?: IRole;
   }
 }

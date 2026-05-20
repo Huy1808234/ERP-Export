@@ -1,10 +1,11 @@
 import ProformaInvoiceTable from '@/components/admin/proforma-invoice/pi.table';
+import AdminPageScroll from '@/components/layout/admin.page-scroll';
 
 const ProformaInvoicePage = () => {
   return (
-    <div style={{ padding: 24 }}>
+    <AdminPageScroll>
       <ProformaInvoiceTable />
-    </div>
+    </AdminPageScroll>
   );
 };
 

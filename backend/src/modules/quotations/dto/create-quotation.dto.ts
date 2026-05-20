@@ -1,9 +1,10 @@
-import { IsArray, IsDateString, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, ValidateNested } from 'class-validator';
+import { IsArray, IsDateString, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { Incoterm } from '../entities/quotation.entity';
+import { IsEntityId } from '@/common/ids/entity-id.validator';
 
 class QuotationItemDto {
-  @IsUUID()
+  @IsEntityId()
   @IsNotEmpty()
   productId: string;
 
@@ -25,7 +26,7 @@ class QuotationItemDto {
 }
 
 export class CreateQuotationDto {
-  @IsUUID()
+  @IsEntityId()
   @IsNotEmpty()
   customerId: string;
 
@@ -92,6 +93,22 @@ export class CreateQuotationDto {
   @IsString()
   @IsOptional()
   otherFeeCurrency?: string;
+
+  @IsNumber()
+  @IsOptional()
+  domesticTransportCost?: number;
+
+  @IsNumber()
+  @IsOptional()
+  portCharges?: number;
+
+  @IsNumber()
+  @IsOptional()
+  seaFreight?: number;
+
+  @IsNumber()
+  @IsOptional()
+  insuranceCost?: number;
 
   @IsArray()
   @ValidateNested({ each: true })

@@ -1,8 +1,13 @@
-import { Entity, Column, PrimaryColumn, UpdateDateColumn } from 'typeorm';
+import { BeforeInsert, Column, Entity, Index, PrimaryColumn, UpdateDateColumn } from 'typeorm';
+import { createEntityId } from '@/common/ids/entity-id.util';
 
 @Entity('settings')
 export class Setting {
-  @PrimaryColumn()
+  @PrimaryColumn({ type: 'varchar', length: 40, name: '_id' })
+  _id: string;
+
+  @Index('UQ_settings_key', { unique: true })
+  @Column()
   key: string;
 
   @Column({ type: 'text', nullable: true })
@@ -13,4 +18,11 @@ export class Setting {
 
   @UpdateDateColumn()
   updatedAt: Date;
+
+  @BeforeInsert()
+  assignId() {
+    if (!this._id) {
+      this._id = createEntityId('setting');
+    }
+  }
 }

@@ -9,6 +9,8 @@ import { Shipment } from '../shipments/entities/shipment.entity';
 import { Product } from '../products/entities/product.entity';
 import { LetterOfCredit } from '../trade-finance/entities/letter-of-credit.entity';
 import { SalesContract } from '../sales-contracts/entities/sales-contract.entity';
+import { AccountReceivable } from '../account-receivables/entities/account-receivable.entity';
+import { AccountPayable } from '../account-payables/entities/account-payable.entity';
 import { AccountingModule } from '../accounting/accounting.module';
 import { TradeFinanceModule } from '../trade-finance/trade-finance.module';
 
@@ -21,7 +23,9 @@ import { TradeFinanceModule } from '../trade-finance/trade-finance.module';
       Partner, 
       Shipment,
       Product,
-      LetterOfCredit
+      LetterOfCredit,
+      AccountReceivable,
+      AccountPayable,
     ]),
     AccountingModule,
     TradeFinanceModule,

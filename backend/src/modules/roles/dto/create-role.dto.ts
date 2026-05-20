@@ -16,5 +16,5 @@ export class CreateRoleDto {
   @IsArray()
   @IsString({ each: true })
   @IsOptional()
-  permissionIds?: string[];
+  permissionRefs?: string[];
 }

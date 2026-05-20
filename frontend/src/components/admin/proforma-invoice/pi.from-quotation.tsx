@@ -27,8 +27,10 @@ import {
 } from '@ant-design/icons';
 import { useEffect, useMemo, useState } from 'react';
 import { getSession } from 'next-auth/react';
-import { sendRequest } from '@/utils/api';
+import { Clock, DollarSign, FileText, Zap } from 'lucide-react';
+import { sendRequest } from '@/lib/api-client';
 import { useTranslations } from 'next-intl';
+import { getAccessToken } from '@/lib/auth-token';
 
 const { Text, Title } = Typography;
 
@@ -36,7 +38,7 @@ interface IProps {
   open: boolean;
   setOpen: (v: boolean) => void;
   quotation: any;
-  fetchPIs: () => void;
+  onSuccess: () => void;
 }
 
 /**
@@ -45,17 +47,40 @@ interface IProps {
  * 2. Pre-validation: Using useMemo to provide real-time financial feedback.
  * 3. UX: Grouping related fields and providing clear hierarchy.
  */
-const PIFromQuotationModal = ({ open, setOpen, quotation, fetchPIs }: IProps) => {
+const PIFromQuotationModal = ({ open, setOpen, quotation, onSuccess }: IProps) => {
   const { notification } = App.useApp();
+  const tPI = useTranslations('ProformaInvoice');
   const tInc = useTranslations('Incoterms');
   const { token } = theme.useToken();
   const [form] = Form.useForm();
   const [submitting, setSubmitting] = useState(false);
+  const [bankDetailPreview, setBankDetailPreview] = useState<string>('');
+
+  const paymentTermsOptions = [
+    { label: '30% T/T Deposit, 70% after B/L', value: 'TT_30_70_BL' },
+    { label: '100% T/T Advance', value: 'TT_100_ADVANCE' },
+    { label: 'L/C at sight', value: 'LC_AT_SIGHT' },
+    { label: '30% T/T Deposit, 70% before Shipment', value: 'TT_30_70_SHIPMENT' },
+    { label: 'CAD (Cash Against Documents)', value: 'CAD' },
+  ];
+
+  const bankOptions = [
+    { 
+      label: 'VIETCOMBANK - ABC IMPORT EXPORT', 
+      value: 'VCB_ABC', 
+      fullInfo: 'Bank Name: VIETCOMBANK\nBeneficiary: CÔNG TY TNHH XUẤT NHẬP KHẨU ABC\nAccount Number: 0123456789\nSwift Code: BFTVVNVX' 
+    },
+    { 
+      label: 'BIDV - ABC IMPORT EXPORT', 
+      value: 'BIDV_ABC', 
+      fullInfo: 'Bank Name: BIDV\nBeneficiary: CÔNG TY TNHH XUẤT NHẬP KHẨU ABC\nAccount Number: 9876543210\nSwift Code: BIDVVNVX' 
+    }
+  ];
 
   useEffect(() => {
     const fetchBankInfo = async () => {
       const currentSession = await getSession();
-      const accessToken = currentSession?.user?.access_token;
+      const accessToken = getAccessToken(currentSession);
       if (accessToken && open && quotation && !form.getFieldValue('bankInfo')) {
         const bankSetting = await sendRequest<IBackendRes<any>>({
           url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/settings/COMPANY_BANK_INFO`,
@@ -63,18 +88,35 @@ const PIFromQuotationModal = ({ open, setOpen, quotation, fetchPIs }: IProps) =>
           headers: { Authorization: `Bearer ${accessToken}` },
         });
         if (bankSetting?.data?.value) {
-          form.setFieldValue('bankInfo', bankSetting.data.value);
+          form.setFieldValue('bankInfo', 'VCB_ABC'); // Default to VCB for demo
+          setBankDetailPreview(bankOptions[0].fullInfo);
         }
       }
     };
 
     if (open && quotation) {
+      // SENIOR LOGIC: Advanced Payment Term Mapping (Key & Label)
+      let detectedPercent = 30; // Default
+      const terms = quotation.paymentTerms || '';
+      
+      if (terms.includes('100')) {
+        detectedPercent = 100;
+      } else if (terms.includes('30_70') || terms.includes('30%')) {
+        detectedPercent = 30;
+      } else if (terms.includes('CAD') || terms.includes('LC_AT_SIGHT')) {
+        detectedPercent = 0; // Usually no deposit for LC/CAD if handled via bank
+      }
+
       form.setFieldsValue({
-        depositPercent: 30,
-        paymentTerms: quotation.paymentTerms ?? '30% T/T deposit, 70% balance before shipment',
+        depositPercent: detectedPercent,
+        paymentTerms: quotation.paymentTerms,
         deliveryTime: quotation.deliveryTime ?? '30-45 working days after receiving deposit',
         logisticsFee: quotation.logisticsFee || 0,
         otherFee: quotation.otherFee || 0,
+        domesticTransportCost: quotation.domesticTransportCost || 0,
+        portCharges: quotation.portCharges || 0,
+        seaFreight: quotation.seaFreight || 0,
+        insuranceCost: quotation.insuranceCost || 0,
         bankInfo: quotation.bankInfo,
       });
       fetchBankInfo();
@@ -88,19 +130,29 @@ const PIFromQuotationModal = ({ open, setOpen, quotation, fetchPIs }: IProps) =>
 
   // Watch form values for real-time calculations
   const depositPercent = Form.useWatch('depositPercent', form) ?? 30;
-  const watchedLogisticsFee = Form.useWatch('logisticsFee', form) ?? 0;
-  const watchedOtherFee = Form.useWatch('otherFee', form) ?? 0;
+  const watchedLogisticsFee = Form.useWatch('logisticsFee', form) || 0;
+  const watchedOtherFee = Form.useWatch('otherFee', form) || 0;
+  const watchedSeaFreight = Form.useWatch('seaFreight', form) || 0;
+  const watchedInsurance = Form.useWatch('insuranceCost', form) || 0;
+  const watchedDomestic = Form.useWatch('domesticTransportCost', form) || 0;
+  const watchedPort = Form.useWatch('portCharges', form) || 0;
 
   // Real-time financial calculations
   const financialSummary = useMemo(() => {
     if (!quotation) return { subTotal: 0, currentTotal: 0, depositAmount: 0 };
     
     const subTotal = parseFloat(quotation.totalAmount ?? 0) - (quotation.logisticsFee || 0) - (quotation.otherFee || 0);
-    const currentTotal = subTotal + watchedLogisticsFee + watchedOtherFee;
+    const currentTotal = subTotal + 
+                        Number(watchedLogisticsFee) + 
+                        Number(watchedOtherFee) +
+                        Number(watchedSeaFreight) +
+                        Number(watchedInsurance) +
+                        Number(watchedDomestic) +
+                        Number(watchedPort);
     const depositAmount = (currentTotal * depositPercent) / 100;
     
     return { subTotal, currentTotal, depositAmount };
-  }, [quotation, depositPercent, watchedLogisticsFee, watchedOtherFee]);
+  }, [quotation, depositPercent, watchedLogisticsFee, watchedOtherFee, watchedSeaFreight, watchedInsurance, watchedDomestic, watchedPort]);
 
   const onFinish = async (values: any) => {
     setSubmitting(true);
@@ -110,29 +162,28 @@ const PIFromQuotationModal = ({ open, setOpen, quotation, fetchPIs }: IProps) =>
         url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/proforma-invoices/from-quotation`,
         method: 'POST',
         body: {
-          quotationId: quotation.id,
+          quotationId: quotation._id,
           ...values,
           depositAmount: financialSummary.depositAmount
         },
-        headers: { Authorization: `Bearer ${(currentSession as any)?.user?.access_token}` },
+        headers: { Authorization: `Bearer ${getAccessToken(currentSession)}` },
       });
 
       if (res?.data) {
         notification.success({ 
-          title: 'Chuyển đổi PI thành công',
-          description: `Hóa đơn ${res.data.piNumber} đã được khởi tạo từ báo giá ${quotation.quotationNumber}.`,
-          placement: 'topRight'
+          title: tPI('createFromQuotation.notifications.success'),
+          description: tPI('createFromQuotation.notifications.successDetail', { piNumber: res.data.piNumber, quotationNumber: quotation.quotationNumber })
         });
         handleClose();
-        fetchPIs();
+        onSuccess();
       } else {
         notification.error({ 
-          title: 'Lỗi chuyển đổi', 
-          description: res?.message || 'Không thể tạo PI từ báo giá này.' 
+          title: tPI('createFromQuotation.notifications.error'), 
+          description: res?.message || tPI('createFromQuotation.notifications.errorDetail') 
         });
       }
     } catch (error) {
-      notification.error({ title: 'Lỗi hệ thống', description: 'Vui lòng kiểm tra lại kết nối.' });
+      notification.error({ title: tPI('createFromQuotation.notifications.systemError'), description: tPI('createFromQuotation.notifications.connectionError') });
     } finally {
       setSubmitting(false);
     }
@@ -143,208 +194,228 @@ const PIFromQuotationModal = ({ open, setOpen, quotation, fetchPIs }: IProps) =>
   return (
     <Modal
       title={
-        <Space size="middle">
-          <div style={{ 
-            width: 32, height: 32, borderRadius: 8, 
-            background: 'linear-gradient(135deg, #722ed1 0%, #391085 100%)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center'
-          }}>
-            <ThunderboltOutlined style={{ color: '#fff' }} />
-          </div>
-          <Title level={4} style={{ margin: 0 }}>Chuyển đổi Báo giá sang PI</Title>
-        </Space>
+        <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+          <Zap size={20} className="text-blue-600" />
+          <span className="text-lg font-semibold text-slate-800">{tPI('createFromQuotation.modalTitle')}</span>
+        </div>
       }
       open={open}
       onOk={() => form.submit()}
       onCancel={handleClose}
       centered
-      mask={{ closable: false }}
-      destroyOnHidden
-      width={720}
+      width={800}
       confirmLoading={submitting}
-      okText="Xác nhận & Tạo PI"
-      cancelText="Hủy bỏ"
+      okText={tPI('createFromQuotation.okText')}
+      cancelText={tPI('createFromQuotation.cancelText')}
       okButtonProps={{ 
-        size: 'large', 
-        style: { borderRadius: 8, fontWeight: 600, height: 45, padding: '0 32px' } 
+        className: "bg-blue-600 hover:bg-blue-700 h-11 px-8 rounded-lg font-semibold border-none" 
       }}
       cancelButtonProps={{ 
-        size: 'large', 
-        style: { borderRadius: 8, height: 45 } 
+        className: "h-11 rounded-lg border-slate-200 text-slate-600 hover:text-slate-800" 
       }}
     >
-      <div style={{ marginTop: 16 }}>
-        {/* Quotation Reference Header */}
-        <Card 
-          size="small" 
-          style={{ 
-            background: 'rgba(114, 46, 209, 0.04)', 
-            border: '1px dashed #d3adf7',
-            borderRadius: 12,
-            marginBottom: 24
+      <div className="py-4 space-y-6">
+        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 grid grid-cols-3 gap-4">
+          <div className="flex flex-col gap-1">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{tPI('createFromQuotation.baseQuotation')}</span>
+            <span className="text-sm font-bold text-slate-700">{quotation.quotationNumber}</span>
+          </div>
+          <div className="flex flex-col gap-1 border-x border-slate-200 px-4">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{tPI('createFromQuotation.customer')}</span>
+            <span className="text-sm font-semibold text-slate-600 truncate">{quotation.customer?.name}</span>
+          </div>
+          <div className="flex flex-col gap-1 items-end">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{tPI('createFromQuotation.terms')}</span>
+            <Tag color="purple" className="m-0 rounded-md font-bold border-none bg-purple-100 text-purple-700 px-3 py-0.5">
+              {quotation.incoterm ? tInc(quotation.incoterm) : '-'}
+            </Tag>
+          </div>
+        </div>
+
+        <Form 
+          form={form} 
+          layout="vertical" 
+          onFinish={onFinish} 
+          requiredMark={false}
+          className="space-y-6"
+          onValuesChange={(changedValues) => {
+            if (changedValues.paymentTerms) {
+              const term = changedValues.paymentTerms;
+              let newPercent = 30;
+              if (term.includes('100')) newPercent = 100;
+              else if (term.includes('30_70') || term.includes('30%')) newPercent = 30;
+              else if (term.includes('CAD') || term.includes('LC_AT_SIGHT')) newPercent = 0;
+              form.setFieldsValue({ depositPercent: newPercent });
+            }
           }}
         >
-          <Row justify="space-between" align="middle">
-            <Col>
-              <Space orientation="vertical" size={0}>
-                <Text type="secondary" style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.5 }}>Báo giá gốc</Text>
-                <Text strong style={{ fontSize: 16 }}>{quotation.quotationNumber}</Text>
-              </Space>
-            </Col>
-            <Col>
-              <Space orientation="vertical" size={0} align="end">
-                <Text type="secondary" style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.5 }}>Khách hàng</Text>
-                <Text strong>{quotation.customer?.name}</Text>
-              </Space>
-            </Col>
-            <Col>
-              <Tag color="purple" style={{ borderRadius: 6, fontWeight: 700, padding: '2px 10px' }}>{quotation.incoterm ? tInc(quotation.incoterm) : '-'}</Tag>
-            </Col>
-          </Row>
-        </Card>
-
-        <Form form={form} layout="vertical" onFinish={onFinish} requiredMark="optional">
-          <Row gutter={24}>
-            {/* Financial Adjustments */}
-            <Col span={24}>
-              <Divider titlePlacement="left" style={{ margin: '0 0 20px 0' }}>
-                <Space><DollarOutlined style={{ color: token.colorPrimary }} /> <Text strong>Điều chỉnh tài chính</Text></Space>
-              </Divider>
-            </Col>
+          <div>
+            <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+              <span className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-[10px]">1</span>
+              {tPI('createFromQuotation.sections.finance')}
+            </h3>
             
-            <Col span={12}>
+            <div className="grid grid-cols-2 gap-x-6 gap-y-2">
               <Form.Item
-                label="Tỷ lệ tiền cọc (%)"
+                label={<span className="text-slate-600 font-medium">{tPI('createFromQuotation.form.depositPercent')}</span>}
                 name="depositPercent"
-                rules={[{ required: true, message: 'Vui lòng nhập % cọc' }]}
+                className="mb-4"
               >
                 <InputNumber
                   min={0}
                   max={100}
-                  suffix="%"
-                  style={{ width: '100%', height: 40, borderRadius: 8 }}
-                  placeholder="30"
+                  className="w-full h-10 rounded-lg text-right pr-2"
+                  suffix={<span className="text-slate-400 font-bold">%</span>}
                 />
               </Form.Item>
-            </Col>
 
-            <Col span={12}>
-              <div style={{ 
-                padding: '12px 16px', 
-                background: '#fffbe6', 
-                border: '1px solid #ffe58f', 
-                borderRadius: 8,
-                height: 40,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                marginTop: 29
-              }}>
-                <Text type="secondary">Số tiền cọc:</Text>
-                <Text strong style={{ color: '#fa8c16' }}>
-                  {quotation.currency} {financialSummary.depositAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                </Text>
-              </div>
-            </Col>
-
-            <Col span={12}>
-              <Form.Item label="Phí Logistics (Cập nhật)" name="logisticsFee">
+              <Form.Item 
+                label={<span className="text-slate-600 font-medium">{tPI('createFromQuotation.form.seaFreight')}</span>} 
+                name="seaFreight"
+              >
                 <InputNumber 
-                  min={0} 
-                  style={{ width: '100%', height: 40, borderRadius: 8 }} 
+                  className="w-full h-10 rounded-lg text-right" 
+                  min={0}
+                  prefix={<span className="text-slate-400 text-xs">{quotation.currency}</span>}
                   formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                  parser={v => Number(v?.replace(/\$\s?|(,*)/g, '')) as any}
                 />
               </Form.Item>
-            </Col>
 
-            <Col span={12}>
-              <Form.Item label="Phí khác (Cập nhật)" name="otherFee">
+              <Form.Item 
+                label={<span className="text-slate-600 font-medium">{tPI('createFromQuotation.form.insurance')}</span>} 
+                name="insuranceCost"
+              >
                 <InputNumber 
-                  min={0} 
-                  style={{ width: '100%', height: 40, borderRadius: 8 }} 
+                  className="w-full h-10 rounded-lg text-right" 
+                  min={0}
+                  prefix={<span className="text-slate-400 text-xs">{quotation.currency}</span>}
                   formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                  parser={v => Number(v?.replace(/\$\s?|(,*)/g, '')) as any}
                 />
               </Form.Item>
-            </Col>
 
-            <Col span={24}>
-              <div style={{ 
-                textAlign: 'right', 
-                padding: '16px 24px', 
-                background: '#fff1f0', 
-                border: '1px solid #ffa39e', 
-                borderRadius: 12,
-                marginBottom: 24
-              }}>
-                <Text style={{ fontSize: 14 }}>TỔNG GIÁ TRỊ PI DỰ KIẾN:</Text>
-                <div style={{ fontSize: 24, fontWeight: 900, color: '#f5222d' }}>
-                  {quotation.currency} {financialSummary.currentTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                </div>
+              <Form.Item 
+                label={<span className="text-slate-600 font-medium">{tPI('createFromQuotation.form.domesticTransport')}</span>} 
+                name="domesticTransportCost"
+              >
+                <InputNumber 
+                  className="w-full h-10 rounded-lg text-right" 
+                  min={0}
+                  prefix={<span className="text-slate-400 text-xs">{quotation.currency}</span>}
+                  formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                />
+              </Form.Item>
+
+              <Form.Item 
+                label={<span className="text-slate-600 font-medium">{tPI('createFromQuotation.form.portCharges')}</span>} 
+                name="portCharges"
+              >
+                <InputNumber 
+                  className="w-full h-10 rounded-lg text-right" 
+                  min={0}
+                  prefix={<span className="text-slate-400 text-xs">{quotation.currency}</span>}
+                  formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                />
+              </Form.Item>
+
+              <Form.Item 
+                label={<span className="text-slate-600 font-medium">{tPI('createFromQuotation.form.otherFee')}</span>} 
+                name="otherFee"
+              >
+                <InputNumber 
+                  className="w-full h-10 rounded-lg text-right" 
+                  min={0}
+                  prefix={<span className="text-slate-400 text-xs">{quotation.currency}</span>}
+                  formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                />
+              </Form.Item>
+            </div>
+
+            <div className="mt-2 bg-blue-50 border border-blue-100 rounded-xl p-5 flex justify-between items-center shadow-sm">
+              <div className="space-y-1">
+                <p className="text-[10px] font-bold text-blue-400 uppercase tracking-widest">{tPI('createFromQuotation.summary.depositTitle')}</p>
+                <p className="text-lg font-bold text-slate-700">
+                  <span className="text-sm font-normal text-slate-400 mr-1">{quotation.currency}</span>
+                  {financialSummary.depositAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                </p>
               </div>
-            </Col>
+              <div className="text-right space-y-1">
+                <p className="text-[10px] font-bold text-blue-400 uppercase tracking-widest">{tPI('createFromQuotation.summary.totalTitle')}</p>
+                <p className="text-2xl font-black text-blue-600 tracking-tight">
+                  <span className="text-sm font-medium text-blue-400 mr-2">{quotation.currency}</span>
+                  {financialSummary.currentTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                </p>
+              </div>
+            </div>
+          </div>
 
-            {/* Terms & Info */}
-            <Col span={24}>
-              <Divider titlePlacement="left" style={{ margin: '0 0 20px 0' }}>
-                <Space><CreditCardOutlined style={{ color: token.colorPrimary }} /> <Text strong>Điều khoản & Thông tin</Text></Space>
-              </Divider>
-            </Col>
+          <div>
+            <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+              <span className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-[10px]">2</span>
+              {tPI('createFromQuotation.sections.payment')}
+            </h3>
 
-            <Col span={12}>
+            <div className="grid grid-cols-2 gap-6 mb-4">
               <Form.Item
-                label="Điều khoản thanh toán"
+                label={<span className="text-slate-600 font-medium">{tPI('createFromQuotation.form.paymentTerms')}</span>}
                 name="paymentTerms"
-                rules={[{ required: true, message: 'Vui lòng nhập điều khoản' }]}
+                rules={[{ required: true }]}
+              >
+                <Select
+                  options={paymentTermsOptions}
+                  className="w-full h-10 rounded-lg"
+                  placeholder={tPI('createFromQuotation.form.paymentTermsPlaceholder')}
+                />
+              </Form.Item>
+
+              <Form.Item
+                label={<span className="text-slate-600 font-medium">{tPI('createFromQuotation.form.deliveryTime')}</span>}
+                name="deliveryTime"
               >
                 <Input 
-                  prefix={<CreditCardOutlined style={{ color: '#bfbfbf' }} />}
-                  placeholder="VD: 30% T/T deposit..." 
-                  style={{ height: 40, borderRadius: 8 }}
+                  prefix={<Clock size={16} className="text-slate-400" />}
+                  className="w-full h-10 rounded-lg"
+                  placeholder={tPI('createFromQuotation.form.deliveryTimePlaceholder')}
                 />
               </Form.Item>
-            </Col>
+            </div>
 
-            <Col span={12}>
-              <Form.Item label="Thời gian giao hàng" name="deliveryTime">
-                <Input 
-                  prefix={<ClockCircleOutlined style={{ color: '#bfbfbf' }} />}
-                  placeholder="VD: 30-45 working days..." 
-                  style={{ height: 40, borderRadius: 8 }}
-                />
-              </Form.Item>
-            </Col>
-
-            <Col span={24}>
-              <Form.Item 
-                label={
-                  <Space><BankOutlined /> <Text>Thông tin tài khoản thụ hưởng (Swift/Bank)</Text></Space>
-                } 
+            <div className="grid grid-cols-1 gap-4">
+              <Form.Item
+                label={<span className="text-slate-600 font-medium">{tPI('createFromQuotation.form.bankAccount')}</span>}
                 name="bankInfo"
               >
-                <Input.TextArea
-                  rows={4}
-                  style={{ borderRadius: 8 }}
-                  placeholder="Nhập thông tin tài khoản ngân hàng..."
+                <Select
+                  placeholder={tPI('createFromQuotation.form.bankAccountPlaceholder')}
+                  className="w-full h-10"
+                  options={bankOptions}
+                  onChange={(val) => {
+                    const selected = bankOptions.find(b => b.value === val);
+                    if (selected) setBankDetailPreview(selected.fullInfo);
+                  }}
                 />
               </Form.Item>
-            </Col>
 
-            <Col span={24}>
-              <Form.Item 
-                label={
-                  <Space><InfoCircleOutlined /> <Text>Ghi chú bổ sung</Text></Space>
-                } 
-                name="notes"
+              {bankDetailPreview && (
+                <div className="bg-slate-50 border border-slate-200 border-dashed rounded-lg p-4 text-[13px] text-slate-500 leading-relaxed">
+                  <pre className="font-sans whitespace-pre-wrap m-0">{bankDetailPreview}</pre>
+                </div>
+              )}
+
+              <Form.Item
+                label={<span className="text-slate-600 font-medium">{tPI('createFromQuotation.form.note')}</span>}
+                name="note"
               >
-                <Input.TextArea rows={2} style={{ borderRadius: 8 }} placeholder="Các lưu ý đặc biệt dành cho lô hàng này..." />
+                <Input.TextArea
+                  rows={3}
+                  className="rounded-lg"
+                  placeholder={tPI('createFromQuotation.form.notePlaceholder')}
+                />
               </Form.Item>
-            </Col>
-            </Row>
-          </Form>
-        </div>
-      </Modal>
+            </div>
+          </div>
+        </Form>
+      </div>
+    </Modal>
   );
 };
 

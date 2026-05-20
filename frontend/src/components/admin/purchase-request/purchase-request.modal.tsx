@@ -3,9 +3,9 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Modal, Form, Input, DatePicker, Select, InputNumber, 
-  Button, Space, Typography, Divider, Row, Col, Card, Tooltip, Badge, Tag
+  Button, Space, Typography, Divider, Row, Col, Card, Badge, Tag, theme
 } from 'antd';
-import { notification } from '@/library/antd.static';
+import { notification } from '@/providers/antd-static';
 import { 
   PlusOutlined, 
   DeleteOutlined, 
@@ -19,17 +19,20 @@ import {
   ThunderboltOutlined,
   SafetyCertificateOutlined,
   BankOutlined,
-  FlagOutlined,
   ProjectOutlined
 } from '@ant-design/icons';
 import { useSession } from 'next-auth/react';
-import { sendRequest } from '@/utils/api';
+import { sendRequest } from '@/lib/api-client';
 import { IProduct } from '@/types/product';
 import { IPurchaseRequestItem } from '@/types/purchase-request';
 import dayjs, { Dayjs } from 'dayjs';
 import { useTranslations } from 'next-intl';
+import { useTheme } from '@/context/theme.context';
+import { getAccessToken } from '@/lib/auth-token';
+import AmountInWords from '@/components/ui/AmountInWords';
+import { canReadCostFields } from '@/lib/field-access';
 
-const { Text, Title } = Typography;
+const { Text } = Typography;
 
 interface IProps {
   isOpen: boolean;
@@ -68,7 +71,10 @@ const PRIORITY_OPTIONS = (t: any) => [
 const PurchaseRequestModal = (props: IProps) => {
   const { isOpen, setIsOpen, fetchData, initialData, mode = 'create' } = props;
   const t = useTranslations('PurchaseRequest');
+  const { token } = theme.useToken();
+  const { isDark } = useTheme();
   const { data: session } = useSession();
+  const canViewCost = canReadCostFields(session?.user);
   const [form] = Form.useForm<IFormValues>();
   const [loading, setLoading] = useState<boolean>(false);
   const [products, setProducts] = useState<IProduct[]>([]);
@@ -107,7 +113,7 @@ const PurchaseRequestModal = (props: IProps) => {
   // Fetch products for selection
   useEffect(() => {
     const fetchProducts = async () => {
-      const accessToken = session?.access_token;
+      const accessToken = getAccessToken(session);
       if (!accessToken) return;
 
       try {
@@ -138,6 +144,7 @@ const PurchaseRequestModal = (props: IProps) => {
         requestDate: dayjs(initialData.createdAt),
         expectedDate: initialData.expectedDate ? dayjs(initialData.expectedDate) : undefined,
         items: initialData.items.map((item: any) => ({
+          _id: item._id,
           productId: item.productId,
           quantity: item.quantity,
           unit: item.unit,
@@ -151,14 +158,14 @@ const PurchaseRequestModal = (props: IProps) => {
   }, [isOpen, initialData, form, mode]);
 
   const handleProductChange = (productId: string, index: number) => {
-    const product = products.find(p => p.id === productId);
+    const product = products.find(p => p._id === productId);
     if (product) {
       const currentItems = form.getFieldValue('items') || [];
       const updatedItems = [...currentItems];
       updatedItems[index] = {
         ...updatedItems[index],
         unit: product.unitOfMeasure || 'PCS',
-        estimatedPrice: product.purchasePriceVnd || 0,
+        ...(canViewCost ? { estimatedPrice: product.purchasePriceVnd || 0 } : {}),
       };
       form.setFieldsValue({ items: updatedItems });
     }
@@ -180,7 +187,7 @@ const PurchaseRequestModal = (props: IProps) => {
     }
 
     setLoading(true);
-    const accessToken = session?.access_token;
+    const accessToken = getAccessToken(session);
 
     try {
       const payload = {
@@ -188,6 +195,7 @@ const PurchaseRequestModal = (props: IProps) => {
         requiredDate: values.requestDate.format('YYYY-MM-DD'),
         expectedDate: values.expectedDate?.format('YYYY-MM-DD'),
         items: values.items.map((item: IPurchaseRequestItem) => ({
+          _id: item._id,
           productId: item.productId,
           quantity: item.quantity,
           unit: item.unit,
@@ -198,7 +206,7 @@ const PurchaseRequestModal = (props: IProps) => {
 
       const res = await sendRequest<IBackendRes<any>>({
         url: mode === 'edit' 
-            ? `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/purchase-requests/${initialData.id}`
+            ? `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/purchase-requests/${initialData._id}`
             : `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/purchase-requests`,
         method: mode === 'edit' ? 'PATCH' : 'POST',
         body: payload,
@@ -213,12 +221,21 @@ const PurchaseRequestModal = (props: IProps) => {
       } else {
         notification.error({ title: t('notifications.errorTitle'), description: res?.message });
       }
-    } catch (error) {
+    } catch {
       notification.error({ title: t('notifications.systemError') });
     } finally {
       setLoading(false);
     }
   };
+
+  const modalBg = isDark ? '#020617' : '#f8f9fa';
+  const cardBg = isDark ? '#0f172a' : '#ffffff';
+  const cardBorder = isDark ? '#1e293b' : '#f0f0f0';
+  const mutedText = isDark ? '#94a3b8' : '#8c8c8c';
+  const summaryBg = isDark
+    ? 'linear-gradient(180deg, #0f172a 0%, #111827 100%)'
+    : 'linear-gradient(180deg, #fff 0%, #f0f5ff 100%)';
+  const summaryInnerBg = isDark ? 'rgba(30, 41, 59, 0.65)' : 'rgba(255,255,255,0.6)';
 
   return (
     <Modal
@@ -231,10 +248,10 @@ const PurchaseRequestModal = (props: IProps) => {
             <ShoppingCartOutlined style={{ color: '#fff', fontSize: 20 }} />
           </div>
           <div>
-            <div style={{ fontWeight: 800, fontSize: 17, color: '#262626', lineHeight: 1.2 }}>
+            <div style={{ fontWeight: 800, fontSize: 17, color: token.colorText, lineHeight: 1.2 }}>
                 {mode === 'view' ? t('modal.titleView') : mode === 'edit' ? t('modal.titleEdit') : t('modal.titleCreate')}
             </div>
-            <Text style={{ fontSize: 12, color: '#8c8c8c' }}>{t('title')}</Text>
+            <Text style={{ fontSize: 12, color: token.colorTextSecondary }}>{t('title')}</Text>
           </div>
         </Space>
       }
@@ -245,16 +262,16 @@ const PurchaseRequestModal = (props: IProps) => {
         <Button key="close" onClick={() => setIsOpen(false)}>{t('modal.closeBtn')}</Button>
       ] : undefined}
       confirmLoading={loading}
-      width={1100}
-      destroyOnHidden
+      width={1280}
       mask={{ closable: false }}
       okText={t('modal.submitBtn')}
       cancelText={t('modal.cancelBtn')}
       style={{ top: 20 }}
+      className="purchase-request-modal"
       styles={{
-        header: { padding: '20px 24px', borderBottom: '1px solid #f0f0f0' },
-        body: { padding: '0', background: '#f8f9fa' },
-        footer: { padding: '16px 24px', borderTop: '1px solid #f0f0f0', background: '#fff' }
+        header: { padding: '20px 24px', borderBottom: `1px solid ${cardBorder}`, background: cardBg },
+        body: { padding: '0', background: modalBg },
+        footer: { padding: '16px 24px', borderTop: `1px solid ${cardBorder}`, background: cardBg }
       }}
     >
       <Form
@@ -269,25 +286,33 @@ const PurchaseRequestModal = (props: IProps) => {
         }}
         style={{ padding: '24px' }}
       >
-        <Row gutter={24}>
-          <Col span={16}>
-            <Card variant="borderless" style={{ borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
+        <Row gutter={[24, 24]}>
+          <Col xs={24} xl={16}>
+            <Card
+              variant="borderless"
+              style={{
+                borderRadius: 12,
+                background: cardBg,
+                border: `1px solid ${cardBorder}`,
+                boxShadow: isDark ? '0 12px 30px rgba(0,0,0,0.25)' : '0 2px 8px rgba(0,0,0,0.04)',
+              }}
+            >
               <Divider plain style={{ marginTop: 0 }}>
                 <Space><InfoCircleOutlined style={{ color: '#1890ff' }} /> <Text strong>{t('modal.infoDivider')}</Text></Space>
               </Divider>
 
-              <Row gutter={16}>
-                <Col span={8}>
+              <Row gutter={[16, 8]}>
+                <Col xs={24} md={8}>
                   <Form.Item label={t('modal.form.requestDate')} name="requestDate" rules={[{ required: true, message: t('modal.form.required') }]}>
                     <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" placeholder={t('modal.form.datePlaceholder')} />
                   </Form.Item>
                 </Col>
-                <Col span={8}>
+                <Col xs={24} md={8}>
                   <Form.Item label={t('modal.form.expectedDate')} name="expectedDate">
                     <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" placeholder={t('modal.form.datePlaceholder')} />
                   </Form.Item>
                 </Col>
-                <Col span={8}>
+                <Col xs={24} md={8}>
                   <Form.Item label={t('modal.form.priority')} name="priority" rules={[{ required: true }]}>
                     <Select
                       options={PRIORITY_OPTIONS(t).map(opt => ({
@@ -299,8 +324,9 @@ const PurchaseRequestModal = (props: IProps) => {
                 </Col>
               </Row>
 
-              <Row gutter={16}>
-                <Col span={12}>
+              <Row gutter={[16, 8]}>
+                <Col xs={24} md={12}>
+                  <Form.Item label={t('modal.form.department') || "Bộ phận"} name="department">
                     <Select
                       placeholder={t('modal.form.deptPlaceholder')}
                       popupRender={(menu) => (
@@ -326,10 +352,11 @@ const PurchaseRequestModal = (props: IProps) => {
                         value: dept.value
                       }))}
                     />
-                  </Col>
-                <Col span={12}>
+                  </Form.Item>
+                </Col>
+                <Col xs={24} md={12}>
                   <Form.Item label={t('modal.form.project')} name="project">
-                    <Input prefix={<ProjectOutlined style={{ color: '#8c8c8c' }} />} placeholder={t('modal.form.projectPlaceholder')} />
+                    <Input prefix={<ProjectOutlined style={{ color: mutedText }} />} placeholder={t('modal.form.projectPlaceholder')} />
                   </Form.Item>
                 </Col>
               </Row>
@@ -340,21 +367,44 @@ const PurchaseRequestModal = (props: IProps) => {
             </Card>
           </Col>
 
-          <Col span={8}>
-            <Card variant="borderless" style={{ height: '100%', borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.04)', background: 'linear-gradient(180deg, #fff 0%, #f0f5ff 100%)' }}>
+          <Col xs={24} xl={8}>
+            <Card
+              variant="borderless"
+              style={{
+                height: '100%',
+                borderRadius: 12,
+                background: summaryBg,
+                border: `1px solid ${cardBorder}`,
+                boxShadow: isDark ? '0 12px 30px rgba(0,0,0,0.25)' : '0 2px 8px rgba(0,0,0,0.04)',
+              }}
+            >
                 <Divider plain style={{ marginTop: 0 }}>
                     <Space><CalculatorOutlined style={{ color: '#fa8c16' }} /> <Text strong>{t('modal.summaryDivider')}</Text></Space>
                 </Divider>
                 
-                <div style={{ padding: '20px 0', textAlign: 'center' }}>
-                    <div style={{ color: '#8c8c8c', fontSize: 13, marginBottom: 8, fontWeight: 500 }}>{t('modal.form.totalEstimated')}</div>
-                    <div style={{ color: '#fa8c16', fontSize: 32, fontWeight: 900, letterSpacing: -1 }}>
-                        {grandTotal.toLocaleString('vi-VN')}
+                {canViewCost ? (
+                  <div style={{ padding: '20px 0', textAlign: 'center' }}>
+                      <div style={{ color: mutedText, fontSize: 13, marginBottom: 8, fontWeight: 500 }}>{t('modal.form.totalEstimated')}</div>
+                      <div style={{ color: '#fa8c16', fontSize: 32, fontWeight: 900, letterSpacing: -1 }}>
+                          {grandTotal.toLocaleString('vi-VN')}
+                      </div>
+                      <Tag color="orange" style={{ marginTop: 8, borderRadius: 4, fontWeight: 600 }}>VND</Tag>
+                      <AmountInWords
+                        amount={grandTotal}
+                        currency="VND"
+                        style={{ maxWidth: 260, margin: '10px auto 0' }}
+                      />
+                  </div>
+                ) : (
+                  <div style={{ padding: '24px 0', textAlign: 'center' }}>
+                    <SafetyCertificateOutlined style={{ color: token.colorPrimary, fontSize: 30 }} />
+                    <div style={{ marginTop: 12, color: mutedText, fontSize: 13 }}>
+                      Giá dự kiến được ẩn theo phân quyền.
                     </div>
-                    <Tag color="orange" style={{ marginTop: 8, borderRadius: 4, fontWeight: 600 }}>VND</Tag>
-                </div>
+                  </div>
+                )}
 
-                <div style={{ marginTop: 20, background: 'rgba(255,255,255,0.6)', padding: '16px', borderRadius: 10, border: '1px solid #d6e4ff' }}>
+                <div style={{ marginTop: 20, background: summaryInnerBg, padding: '16px', borderRadius: 10, border: `1px solid ${isDark ? '#334155' : '#d6e4ff'}` }}>
                     <Space orientation="vertical" style={{ width: '100%' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                             <Text type="secondary">{t('modal.form.itemCount')}</Text>
@@ -384,17 +434,18 @@ const PurchaseRequestModal = (props: IProps) => {
                   variant="borderless"
                   style={{ 
                     marginBottom: 12, 
-                    border: '1px solid #f0f0f0', 
+                    border: `1px solid ${cardBorder}`,
                     borderRadius: 12,
-                    background: '#fff'
+                    background: cardBg
                   }}
-                  styles={{ body: { padding: '16px' } }}
+                  className="pr-item-card"
+                  styles={{ body: { padding: '16px', overflowX: 'auto' } }}
                 >
-                  <Row gutter={16} align="middle">
+                  <Row gutter={16} align="top" wrap={false} className="pr-item-row">
                     <Col span={1} style={{ textAlign: 'center' }}>
                         <Text type="secondary" style={{ fontWeight: 700 }}>#{index + 1}</Text>
                     </Col>
-                    <Col span={8}>
+                    <Col span={6}>
                       <Form.Item
                         {...restField}
                         label={index === 0 ? t('modal.form.product') : ""}
@@ -409,7 +460,7 @@ const PurchaseRequestModal = (props: IProps) => {
                           onChange={(val) => handleProductChange(val, index)}
                           options={products.map(p => ({ 
                             label: `[${p.sku}] ${p.vietnameseName}`, 
-                            value: p.id 
+                            value: p._id 
                           }))}
                         />
                       </Form.Item>
@@ -425,7 +476,7 @@ const PurchaseRequestModal = (props: IProps) => {
                         <InputNumber min={0.01} style={{ width: '100%' }} />
                       </Form.Item>
                     </Col>
-                    <Col span={3}>
+                    <Col span={2}>
                       <Form.Item
                         {...restField}
                         label={index === 0 ? t('modal.form.unit') : ""}
@@ -436,22 +487,35 @@ const PurchaseRequestModal = (props: IProps) => {
                         <Input placeholder={t('modal.form.unitPlaceholder')} />
                       </Form.Item>
                     </Col>
-                    <Col span={4}>
+                    {canViewCost && (
+                      <Col span={3}>
+                        <Form.Item
+                          {...restField}
+                          label={index === 0 ? t('modal.form.estimatedPrice') : ""}
+                          name={[name, 'estimatedPrice']}
+                          rules={[{ required: true }]}
+                          style={{ marginBottom: 0 }}
+                        >
+                          <InputNumber
+                            style={{ width: '100%' }}
+                            formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                            parser={v => v ? Number(v.replace(/\$\s?|(,*)/g, '')) : 0}
+                          />
+                        </Form.Item>
+                      </Col>
+                    )}
+                    <Col span={canViewCost ? 4 : 7}>
                       <Form.Item
                         {...restField}
-                        label={index === 0 ? t('modal.form.estimatedPrice') : ""}
-                        name={[name, 'estimatedPrice']}
-                        rules={[{ required: true }]}
+                        label={index === 0 ? t('modal.form.note') || "Ghi chú" : ""}
+                        name={[name, 'note']}
                         style={{ marginBottom: 0 }}
                       >
-                        <InputNumber
-                          style={{ width: '100%' }}
-                          formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                          parser={v => v ? Number(v.replace(/\$\s?|(,*)/g, '')) : 0}
-                        />
+                        <Input placeholder="Ghi chú thêm" />
                       </Form.Item>
                     </Col>
-                    <Col span={4}>
+                    {canViewCost && (
+                    <Col span={3}>
                       {index === 0 && <div style={{ height: 30 }} />}
                       <div style={{ textAlign: 'right' }}>
                         <Text type="secondary" style={{ fontSize: 11 }}>{t('modal.form.lineSubtotal')}</Text><br/>
@@ -462,6 +526,7 @@ const PurchaseRequestModal = (props: IProps) => {
                         </Text>
                       </div>
                     </Col>
+                    )}
                     <Col span={1}>
                       {index === 0 && <div style={{ height: 30 }} />}
                       <Button type="text" danger onClick={() => remove(name)} icon={<DeleteOutlined />} disabled={mode === 'view'} />
@@ -484,6 +549,32 @@ const PurchaseRequestModal = (props: IProps) => {
           )}
         </Form.List>
       </Form>
+      <style jsx global>{`
+        .purchase-request-modal .ant-modal-content {
+          background: ${modalBg} !important;
+          padding: 0 !important;
+          overflow: hidden;
+        }
+        .purchase-request-modal .ant-modal-header {
+          margin-bottom: 0 !important;
+        }
+        .purchase-request-modal .ant-modal-close {
+          color: ${token.colorTextSecondary} !important;
+        }
+        .purchase-request-modal .ant-form-item-label > label {
+          white-space: nowrap;
+        }
+        .purchase-request-modal .pr-item-row {
+          min-width: ${canViewCost ? '1080px' : '760px'};
+        }
+        .purchase-request-modal .pr-item-card .ant-card-body::-webkit-scrollbar {
+          height: 6px;
+        }
+        .purchase-request-modal .pr-item-card .ant-card-body::-webkit-scrollbar-thumb {
+          background: ${isDark ? '#475569' : '#d9d9d9'};
+          border-radius: 999px;
+        }
+      `}</style>
     </Modal>
   );
 };

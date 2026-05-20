@@ -1,20 +1,18 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards } from '@nestjs/common';
-import { RolesService } from './roles.service';
-import { CreateRoleDto } from './dto/create-role.dto';
-import { UpdateRoleDto } from './dto/update-role.dto';
-import { CreatePermissionDto } from './dto/create-permission.dto';
-import { UpdatePermissionDto } from './dto/update-permission.dto';
+import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Roles } from '../../decorator/customize';
 import { JwtAuthGuard } from '../../auth/passport/jwt-auth.guard';
 import { RolesGuard } from '../../auth/passport/roles.guard';
-import { Roles } from '../../decorator/customize';
+import { CreatePermissionDto } from './dto/create-permission.dto';
+import { CreateRoleDto } from './dto/create-role.dto';
+import { UpdatePermissionDto } from './dto/update-permission.dto';
+import { UpdateRoleDto } from './dto/update-role.dto';
+import { RolesService } from './roles.service';
 
 @Controller('roles')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('ADMIN', 'DIRECTOR', 'MANAGER')
 export class RolesController {
   constructor(private readonly rolesService: RolesService) {}
-
-  // --- Roles API ---
 
   @Post()
   createRole(@Body() createRoleDto: CreateRoleDto) {
@@ -26,24 +24,6 @@ export class RolesController {
     return this.rolesService.findAllRoles();
   }
 
-  @Get(':id')
-  findRoleById(@Param('id') id: string) {
-    return this.rolesService.findRoleById(id);
-  }
-
-  @Patch(':id')
-  updateRole(@Param('id') id: string, @Body() updateRoleDto: UpdateRoleDto) {
-    return this.rolesService.updateRole(id, updateRoleDto);
-  }
-
-  @Delete(':id')
-  @Roles('ADMIN', 'DIRECTOR') 
-  removeRole(@Param('id') id: string) {
-    return this.rolesService.removeRole(id);
-  }
-
-  // --- Permissions API ---
-
   @Post('permissions')
   createPermission(@Body() createPermissionDto: CreatePermissionDto) {
     return this.rolesService.createPermission(createPermissionDto);
@@ -54,18 +34,37 @@ export class RolesController {
     return this.rolesService.findAllPermissions();
   }
 
-  @Get('permissions/:id')
-  findPermissionById(@Param('id') id: string) {
-    return this.rolesService.findPermissionById(id);
+  @Get('permissions/:permission_ref')
+  findPermissionByRef(@Param('permission_ref') permission_ref: string) {
+    return this.rolesService.findPermissionByRef(permission_ref);
   }
 
-  @Patch('permissions/:id')
-  updatePermission(@Param('id') id: string, @Body() updatePermissionDto: UpdatePermissionDto) {
-    return this.rolesService.updatePermission(id, updatePermissionDto);
+  @Patch('permissions/:permission_ref')
+  updatePermission(
+    @Param('permission_ref') permission_ref: string,
+    @Body() updatePermissionDto: UpdatePermissionDto,
+  ) {
+    return this.rolesService.updatePermission(permission_ref, updatePermissionDto);
   }
 
-  @Delete('permissions/:id')
-  removePermission(@Param('id') id: string) {
-    return this.rolesService.removePermission(id);
+  @Delete('permissions/:permission_ref')
+  removePermission(@Param('permission_ref') permission_ref: string) {
+    return this.rolesService.removePermission(permission_ref);
+  }
+
+  @Get(':role_ref')
+  findRoleByRef(@Param('role_ref') role_ref: string) {
+    return this.rolesService.findRoleByRef(role_ref);
+  }
+
+  @Patch(':role_ref')
+  updateRole(@Param('role_ref') role_ref: string, @Body() updateRoleDto: UpdateRoleDto) {
+    return this.rolesService.updateRole(role_ref, updateRoleDto);
+  }
+
+  @Delete(':role_ref')
+  @Roles('ADMIN', 'DIRECTOR')
+  removeRole(@Param('role_ref') role_ref: string) {
+    return this.rolesService.removeRole(role_ref);
   }
 }

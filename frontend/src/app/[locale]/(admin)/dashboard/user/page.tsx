@@ -1,10 +1,11 @@
 import UserTable from "@/components/admin/user/user.table";
+import AdminPageScroll from "@/components/layout/admin.page-scroll";
 
 const ManageUserPage = () => {
     return (
-        <div>
+        <AdminPageScroll>
             <UserTable />
-        </div>
+        </AdminPageScroll>
     )
 }
 

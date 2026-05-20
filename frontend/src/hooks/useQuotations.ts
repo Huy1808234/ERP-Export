@@ -1,9 +1,10 @@
 import { useCallback, useState } from 'react';
 import { getSession } from 'next-auth/react';
-import { notification } from '@/library/antd.static';
+import { notification } from '@/providers/antd-static';
 
-import { sendRequest } from '@/utils/api';
+import { sendRequest } from '@/lib/api-client';
 import type { IQuotation, IPaginationMeta } from '@/types/o2c';
+import { getAccessToken } from '@/lib/auth-token';
 
 interface FetchQuotationsParams {
   current: number;
@@ -23,10 +24,6 @@ interface QuotationListResponse {
     pageSize?: number;
   };
 }
-
-const getAccessToken = (session?: any): string | undefined => {
-  return session?.access_token ?? session?.user?.access_token;
-};
 
 export const useQuotations = () => {
   const [data, setData] = useState<IQuotation[]>([]);
@@ -50,6 +47,7 @@ export const useQuotations = () => {
         queryParams: {
           current: params.current,
           pageSize: params.pageSize,
+          populate: 'customer,createdBy',
           ...(params.search ? { quotationNumber: `/${params.search}/i` } : {}),
         },
         headers: { Authorization: `Bearer ${accessToken}` },
@@ -68,9 +66,14 @@ export const useQuotations = () => {
           pageSize: params.pageSize,
           total,
         });
+      } else {
+        notification.error({ 
+          title: 'Lỗi tải danh sách báo giá', 
+          description: res?.message || 'Không thể kết nối với máy chủ' 
+        });
       }
     } catch (error) {
-      notification.error({ title: 'Lỗi tải danh sách báo giá' });
+      notification.error({ title: 'Lỗi hệ thống khi tải báo giá' });
     } finally {
       setLoading(false);
     }

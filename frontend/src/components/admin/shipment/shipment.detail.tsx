@@ -27,12 +27,13 @@ import { ContainerOutlined, DeleteOutlined, PlusOutlined, TruckOutlined, Printer
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useReactToPrint } from 'react-to-print';
 import { getSession } from 'next-auth/react';
-import { useTheme } from '@/library/theme.context';
+import { useTheme } from '@/context/theme.context';
 
-import { sendRequest } from '@/utils/api';
+import { sendRequest } from '@/lib/api-client';
 import { SHIPMENT_STATUS_CONFIG, SHIPMENT_STATUS_KEYS } from '@/constants/o2c';
 import type { IContainer, IShipment, ShipmentStatus } from '@/types/o2c';
 import { formatDate } from '@/utils/format';
+import { getAccessToken } from '@/lib/auth-token';
 
 const { Text } = Typography;
 
@@ -42,17 +43,6 @@ interface IProps {
   onClose: () => void;
   onSuccess: () => void;
 }
-
-interface SessionTokenShape {
-  access_token?: string;
-  user?: {
-    access_token?: string;
-  };
-}
-
-const getAccessToken = (session?: SessionTokenShape | null): string | undefined => {
-  return session?.access_token ?? session?.user?.access_token;
-};
 
 const ShipmentDetailDrawer = ({ shipmentId, open, onClose, onSuccess }: IProps) => {
   const { notification } = App.useApp();
@@ -87,7 +77,7 @@ const ShipmentDetailDrawer = ({ shipmentId, open, onClose, onSuccess }: IProps) 
     setLoading(true);
     try {
       const session = await getSession();
-      const accessToken = getAccessToken(session as SessionTokenShape | null);
+      const accessToken = getAccessToken(session);
 
       if (!accessToken) {
         notification.error({ title: 'Phiên đăng nhập đã hết hạn' });
@@ -122,7 +112,7 @@ const ShipmentDetailDrawer = ({ shipmentId, open, onClose, onSuccess }: IProps) 
 
     try {
       const session = await getSession();
-      const accessToken = getAccessToken(session as SessionTokenShape | null);
+      const accessToken = getAccessToken(session);
 
       if (!accessToken) {
         notification.error({ title: 'Phiên đăng nhập đã hết hạn' });
@@ -153,7 +143,7 @@ const ShipmentDetailDrawer = ({ shipmentId, open, onClose, onSuccess }: IProps) 
 
     try {
       const session = await getSession();
-      const accessToken = getAccessToken(session as SessionTokenShape | null);
+      const accessToken = getAccessToken(session);
 
       if (!accessToken) {
         notification.error({ title: 'Phiên đăng nhập đã hết hạn' });
@@ -187,7 +177,7 @@ const ShipmentDetailDrawer = ({ shipmentId, open, onClose, onSuccess }: IProps) 
 
     try {
       const session = await getSession();
-      const accessToken = getAccessToken(session as SessionTokenShape | null);
+      const accessToken = getAccessToken(session);
 
       if (!accessToken) {
         notification.error({ title: 'Phiên đăng nhập đã hết hạn' });
@@ -217,7 +207,7 @@ const ShipmentDetailDrawer = ({ shipmentId, open, onClose, onSuccess }: IProps) 
   const fetchPartners = useCallback(async () => {
     try {
       const session = await getSession();
-      const accessToken = getAccessToken(session as SessionTokenShape | null);
+      const accessToken = getAccessToken(session);
       
       const res = await sendRequest<IBackendRes<any>>({
         url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/partners?pageSize=100`,
@@ -257,7 +247,7 @@ const ShipmentDetailDrawer = ({ shipmentId, open, onClose, onSuccess }: IProps) 
 
     try {
       const session = await getSession();
-      const accessToken = getAccessToken(session as SessionTokenShape | null);
+      const accessToken = getAccessToken(session);
 
       if (!accessToken) {
         notification.error({ title: 'Phiên đăng nhập đã hết hạn' });
@@ -364,10 +354,19 @@ const ShipmentDetailDrawer = ({ shipmentId, open, onClose, onSuccess }: IProps) 
               <Descriptions.Item label="Ngày cập cảng (ETA)">{formatDate(data.eta)}</Descriptions.Item>
               
               <Descriptions.Item label="Cước biển (USD)">
-                <Text type="danger" strong>{(data.freightCost || 0).toLocaleString()} USD</Text>
+                <Text type="danger" strong>{(data.freightCost || 0).toLocaleString()} {data.freightCurrency || 'USD'}</Text>
+              </Descriptions.Item>
+              <Descriptions.Item label="Bảo hiểm (USD)">
+                <Text type="danger" strong>{(data.insuranceCost || 0).toLocaleString()} {data.insuranceCurrency || 'USD'}</Text>
               </Descriptions.Item>
               <Descriptions.Item label="Phí Local (VND)">
-                <Text type="danger" strong>{(data.localChargesVnd || 0).toLocaleString()} ₫</Text>
+                <Text type="warning" strong>{(data.localChargesVnd || 0).toLocaleString()} ₫</Text>
+              </Descriptions.Item>
+              <Descriptions.Item label="Phí Trucking (VND)">
+                <Text type="warning" strong>{(data.truckingCostVnd || 0).toLocaleString()} ₫</Text>
+              </Descriptions.Item>
+              <Descriptions.Item label="Phí Hải quan (VND)">
+                <Text type="warning" strong>{(data.customsFeeVnd || 0).toLocaleString()} ₫</Text>
               </Descriptions.Item>
             </Descriptions>
 
@@ -434,7 +433,7 @@ const ShipmentDetailDrawer = ({ shipmentId, open, onClose, onSuccess }: IProps) 
                              if (!data || !shipmentId) return;
                              try {
                                const session = await getSession();
-                               const accessToken = getAccessToken(session as SessionTokenShape | null);
+                               const accessToken = getAccessToken(session);
                                if (!accessToken) return;
 
                                const newChecklist = { ...(data.documentChecklist || {}), [doc.key]: val };
@@ -514,7 +513,7 @@ const ShipmentDetailDrawer = ({ shipmentId, open, onClose, onSuccess }: IProps) 
               options={partners
                 .filter(p => p.partnerType === 'LOGISTICS' || p.partnerType === 'SUPPLIER')
                 .map(p => ({
-                  value: p.id,
+                  value: p._id,
                   label: p.name,
                 }))}
             />

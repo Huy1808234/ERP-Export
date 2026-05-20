@@ -1,10 +1,11 @@
 import FinancePage from "@/components/admin/finance/finance.page";
+import AdminPageScroll from "@/components/layout/admin.page-scroll";
 
 const FinanceRoutePage = () => {
     return (
-        <div>
+        <AdminPageScroll>
             <FinancePage />
-        </div>
+        </AdminPageScroll>
     );
 };
 

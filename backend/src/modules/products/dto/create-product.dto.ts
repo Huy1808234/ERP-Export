@@ -1,5 +1,6 @@
 import { Transform } from 'class-transformer';
-import { IsBoolean, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Min } from 'class-validator';
+import { IsBoolean, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { IsEntityId } from '@/common/ids/entity-id.validator';
 
 const trimString = () =>
   Transform(({ value }) => {
@@ -138,7 +139,7 @@ export class CreateProductDto {
   exportCurrency?: string;
 
   @IsOptional()
-  @IsUUID('4', { message: 'preferredSupplierId không hợp lệ' })
+  @IsEntityId({ message: 'preferredSupplierId phai la _id hop le' })
   preferredSupplierId?: string;
 
   @trimString()
@@ -150,6 +151,19 @@ export class CreateProductDto {
   @IsOptional()
   @IsString()
   note?: string;
+
+  @trimString()
+  @IsOptional()
+  @IsString()
+  imageUrl?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isBestseller?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isNew?: boolean;
 
   @IsOptional()
   @IsBoolean()

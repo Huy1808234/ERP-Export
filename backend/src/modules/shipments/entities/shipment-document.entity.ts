@@ -1,5 +1,6 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { BeforeInsert, Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryColumn, UpdateDateColumn } from 'typeorm';
 import { Shipment } from './shipment.entity';
+import { createEntityId } from '@/common/ids/entity-id.util';
 
 export enum DocumentType {
   COMMERCIAL_INVOICE = 'COMMERCIAL_INVOICE',
@@ -13,13 +14,20 @@ export enum DocumentType {
 
 @Entity('shipment_documents')
 export class ShipmentDocument {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
+  @PrimaryColumn({ type: 'varchar', length: 40, name: '_id' })
+  _id: string;
+
+  @BeforeInsert()
+  assignId() {
+    if (!this._id) {
+      this._id = createEntityId('shp_doc');
+    }
+  }
 
   @Column()
   shipmentId: string;
 
-  @ManyToOne(() => Shipment, (shipment) => shipment.id)
+  @ManyToOne(() => Shipment)
   @JoinColumn({ name: 'shipmentId' })
   shipment: Shipment;
 

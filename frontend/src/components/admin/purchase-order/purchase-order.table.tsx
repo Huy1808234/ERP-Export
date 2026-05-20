@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { Button, Popconfirm, Space, Table, Tag, Input, Select, Typography, Card, Tooltip } from 'antd';
+import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
+import { App, Button, Popconfirm, Space, Table, Tag, Input, Select, Typography, Card, Tooltip } from 'antd';
 import {
   DeleteOutlined,
   EyeOutlined,
@@ -17,13 +17,15 @@ import {
   SafetyCertificateOutlined
 } from '@ant-design/icons';
 import { PageHeader } from '@/components/ui/PageHeader';
-import { Row, Col, Statistic, Divider, theme } from 'antd';
+import { Row, Col, Statistic, theme } from 'antd';
 import { debounce } from '@/utils/debounce';
-import { useTheme } from '@/library/theme.context';
+import { useTheme } from '@/context/theme.context';
 import { useTranslations } from 'next-intl';
+import { useRouter } from '@/i18n/routing';
+import { useSearchParams } from 'next/navigation';
 
 import { usePurchaseOrders } from '@/hooks/usePurchaseOrders';
-import { PO_STATUS_CONFIG, PO_STATUS_OPTIONS } from '@/constants/purchase-order';
+import { PO_STATUS_CONFIG } from '@/constants/purchase-order';
 import { IPurchaseOrder, POStatus } from '@/types/purchase-order';
 import { formatDate } from '@/utils/format';
 import { useCurrency } from '@/hooks/useCurrency';
@@ -31,24 +33,29 @@ import GoodsReceiptModal from '../goods-receipt/goods-receipt.modal';
 import VendorInvoiceModal from '../vendor-invoice/vendor-invoice.modal';
 import PurchaseOrderDetailModal from './purchase-order.detail';
 
-const { Text, Title } = Typography;
+const { Text } = Typography;
 
 const PurchaseOrderTable: React.FC = () => {
   const { data, meta, loading, fetchPOs, deletePO, stats, fetchStats, sendPO } = usePurchaseOrders();
   const t = useTranslations('PurchaseOrder');
   const { token } = theme.useToken();
+  const { modal } = App.useApp();
   const { isDark } = useTheme();
   const { formatMoney, formatVND } = useCurrency();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const actionInitializedRef = useRef<string | null>(null);
 
   const [filters, setFilters] = useState({
     searchText: '',
     status: undefined as string | undefined,
   });
+  const { current, pageSize } = meta;
   
   const localizedStatusOptions = useMemo(() => 
     Object.keys(PO_STATUS_CONFIG).map(status => ({
       value: status,
-      label: status ? t(`status.${status}`) : 'N/A'
+      label: status && t.has(`status.${status}`) ? t(`status.${status}`) : status || 'N/A'
     })), [t]);
 
   const [isDetailOpen, setIsDetailOpen] = useState(false);
@@ -56,15 +63,32 @@ const PurchaseOrderTable: React.FC = () => {
   const [isInvoiceOpen, setIsInvoiceOpen] = useState(false);
   const [selectedPoId, setSelectedPoId] = useState<string | null>(null);
 
+  useEffect(() => {
+    const poId = searchParams.get('poId');
+    const action = searchParams.get('action');
+
+    if (!poId || !action) return;
+    if (!['detail', 'grn', 'invoice'].includes(action)) return;
+
+    const actionKey = `${poId}:${action}`;
+    if (actionInitializedRef.current === actionKey) return;
+    actionInitializedRef.current = actionKey;
+
+    setSelectedPoId(poId);
+    if (action === 'detail') setIsDetailOpen(true);
+    if (action === 'grn') setIsGrnOpen(true);
+    if (action === 'invoice') setIsInvoiceOpen(true);
+  }, [searchParams]);
+
   const loadData = useCallback(() => {
     fetchPOs({
-      current: meta.current,
-      pageSize: meta.pageSize,
+      current,
+      pageSize,
       poNumber: filters.searchText,
       status: filters.status,
     });
     fetchStats();
-  }, [meta.current, meta.pageSize, filters.searchText, filters.status, fetchPOs, fetchStats]);
+  }, [current, pageSize, filters.searchText, filters.status, fetchPOs, fetchStats]);
 
   useEffect(() => {
     loadData();
@@ -91,9 +115,26 @@ const PurchaseOrderTable: React.FC = () => {
     setIsDetailOpen(true);
   }, []);
 
+  const handleOpenThreeWayMatching = useCallback((id: string) => {
+    router.push(`/dashboard/purchase/matching?poId=${id}`);
+  }, [router]);
+
   const handleSend = useCallback(async (id: string) => {
-    await sendPO(id, () => loadData());
-  }, [sendPO, loadData]);
+    const result = await sendPO(id, () => loadData());
+    if (!result.requiresNoRuleConfirmation) return;
+
+    modal.confirm({
+      title: 'Chưa có rule duyệt PO',
+      content:
+        'Đơn mua hàng này chưa match rule phê duyệt PURCHASE_ORDER. Nếu tiếp tục, PO sẽ được gửi thẳng nhà cung cấp và không tạo workflow duyệt. Bạn có chắc muốn gửi không?',
+      okText: 'Vẫn gửi NCC',
+      cancelText: 'Quay lại',
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        await sendPO(id, () => loadData(), { confirmNoApprovalRule: true });
+      },
+    });
+  }, [modal, sendPO, loadData]);
 
   const handleDelete = useCallback(async (id: string) => {
     await deletePO(id, () => loadData());
@@ -149,7 +190,12 @@ const PurchaseOrderTable: React.FC = () => {
       width: 130,
       render: (status: POStatus) => {
         const config = (PO_STATUS_CONFIG as any)[status] || { color: 'default' };
-        return <Tag color={config.color} style={{ borderRadius: 4 }}>{status ? t(`status.${status}`) : 'N/A'}</Tag>;
+        const statusKey = `status.${status}`;
+        return (
+          <Tag color={config.color} style={{ borderRadius: 4 }}>
+            {status && t.has(statusKey) ? t(statusKey) : status || 'N/A'}
+          </Tag>
+        );
       },
     },
     {
@@ -157,7 +203,13 @@ const PurchaseOrderTable: React.FC = () => {
       key: 'action',
       align: 'center' as const,
       width: 180,
-      render: (_: any, record: IPurchaseOrder) => (
+      render: (_: any, record: IPurchaseOrder) => {
+        const canCreateGoodsReceipt = ['SENT', 'PARTIAL_RECEIPT'].includes(record.status);
+        const canCreateInvoice = ['PARTIAL_RECEIPT', 'RECEIVED'].includes(record.status);
+        const canOpenMatching = record.status === 'COMPLETED';
+        const canSendOrSubmit = ['DRAFT', 'REJECTED', 'APPROVED'].includes(record.status);
+
+        return (
         // stopPropagation ở wrapper Space: mọi click trong cột Thao tác
         // (kể cả nút "Xóa" bên trong Popconfirm overlay) đều không bubble
         // lên onRow.onClick → tránh mở modal chi tiết khi xóa
@@ -167,62 +219,59 @@ const PurchaseOrderTable: React.FC = () => {
               type="text"
               size="small"
               icon={<EyeOutlined style={{ color: '#1677ff', fontSize: 16 }} />}
-              onClick={() => handleOpenDetail(record.id)}
+              onClick={() => handleOpenDetail(record._id)}
             />
           </Tooltip>
-          {record.status === 'DRAFT' && (
-             <Tooltip title={t('tooltips.sendOrder')}>
+          {canSendOrSubmit && (
+             <Tooltip title={record.status === 'APPROVED' ? t('tooltips.sendOrder') : t('tooltips.submitApproval')}>
               <Button
                 type="text"
                 size="small"
                 icon={<SendOutlined style={{ color: '#fa8c16', fontSize: 16 }} />}
-                onClick={() => handleSend(record.id)}
+                onClick={() => handleSend(record._id)}
               />
             </Tooltip>
           )}
-          {record.status === 'SENT' && (
-            <>
-              <Tooltip title={t('tooltips.goodsReceipt')}>
-                <Button
-                  type="text"
-                  size="small"
-                  icon={<BarcodeOutlined style={{ color: '#08979c' }} />}
-                  onClick={() => {
-                    setSelectedPoId(record.id);
-                    setIsGrnOpen(true);
-                  }}
-                />
-              </Tooltip>
-              <Tooltip title={t('tooltips.createInvoice')}>
-                <Button
-                  type="text"
-                  size="small"
-                  icon={<FileDoneOutlined style={{ color: '#722ed1' }} />}
-                  onClick={() => {
-                    setSelectedPoId(record.id);
-                    setIsInvoiceOpen(true);
-                  }}
-                />
-              </Tooltip>
-            </>
+          {canCreateGoodsReceipt && (
+            <Tooltip title={t('tooltips.goodsReceipt')}>
+              <Button
+                type="text"
+                size="small"
+                icon={<BarcodeOutlined style={{ color: '#08979c' }} />}
+                onClick={() => {
+                  setSelectedPoId(record._id);
+                  setIsGrnOpen(true);
+                }}
+              />
+            </Tooltip>
           )}
-          {record.status !== 'DRAFT' && (
+          {canCreateInvoice && (
+            <Tooltip title={t('tooltips.createInvoice')}>
+              <Button
+                type="text"
+                size="small"
+                icon={<FileDoneOutlined style={{ color: '#722ed1' }} />}
+                onClick={() => {
+                  setSelectedPoId(record._id);
+                  setIsInvoiceOpen(true);
+                }}
+              />
+            </Tooltip>
+          )}
+          {canOpenMatching && (
             <Tooltip title={t('tooltips.threeWayMatching')}>
               <Button
                 type="text"
                 size="small"
                 icon={<SafetyCertificateOutlined style={{ color: '#52c41a', fontSize: 16 }} />}
-                onClick={() => {
-                  setSelectedPoId(record.id);
-                  handleOpenDetail(record.id);
-                }}
+                onClick={() => handleOpenThreeWayMatching(record._id)}
               />
             </Tooltip>
           )}
           <Popconfirm
             title={t('popconfirm.deleteTitle')}
             description={t('popconfirm.deleteDesc')}
-            onConfirm={() => handleDelete(record.id)}
+            onConfirm={() => handleDelete(record._id)}
             okText={t('popconfirm.okText')}
             cancelText={t('popconfirm.cancelText')}
             okButtonProps={{ danger: true }}
@@ -235,9 +284,10 @@ const PurchaseOrderTable: React.FC = () => {
             />
           </Popconfirm>
         </Space>
-      ),
+        );
+      },
     },
-  ], [handleDelete, handleOpenDetail]);
+  ], [formatMoney, handleDelete, handleOpenDetail, handleOpenThreeWayMatching, handleSend, t]);
 
   const summary = useMemo(() => ({
     total: stats?.total || 0,
@@ -247,9 +297,7 @@ const PurchaseOrderTable: React.FC = () => {
 
   return (
     <div style={{ 
-      padding: '24px', 
-      backgroundColor: isDark ? '#0f172a' : token.colorBgLayout, 
-      minHeight: '100vh',
+      backgroundColor: 'transparent',
       transition: 'all 0.3s ease'
     }}>
       <PageHeader 
@@ -383,7 +431,7 @@ const PurchaseOrderTable: React.FC = () => {
           <Table<IPurchaseOrder>
             columns={columns}
             dataSource={data}
-            rowKey={(record) => record.id || record.poNumber || Math.random()}
+            rowKey={(record) => record._id || record.poNumber}
             loading={loading}
             bordered={false}
             size="middle"
@@ -395,10 +443,9 @@ const PurchaseOrderTable: React.FC = () => {
               showTotal: (total) => t('table.totalCount', { total }),
               onChange: handleTableChange,
             }}
-            rowClassName="hover:bg-slate-900/40 transition-colors"
             onRow={(record) => ({
               style: { cursor: 'pointer' },
-              onClick: () => handleOpenDetail(record.id),
+              onClick: () => handleOpenDetail(record._id),
             })}
           />
         </div>
@@ -410,18 +457,23 @@ const PurchaseOrderTable: React.FC = () => {
         }
         .premium-table .ant-table-thead > tr > th {
           background: ${isDark ? 'rgba(30, 41, 59, 0.5)' : '#fafafa'} !important;
-          color: ${isDark ? '#8c8c8c' : '#595959'} !important;
+          color: ${isDark ? '#94a3b8' : '#595959'} !important;
           font-weight: 600 !important;
-          border-bottom: 1px solid ${isDark ? '#303030' : '#f0f0f0'} !important;
+          border-bottom: 1px solid ${isDark ? '#334155' : '#f0f0f0'} !important;
         }
         .premium-table .ant-table-tbody > tr > td {
-          border-bottom: 1px solid ${isDark ? '#303030' : '#f0f0f0'} !important;
+          background: transparent !important;
+          color: ${isDark ? '#e2e8f0' : token.colorText} !important;
+          border-bottom: 1px solid ${isDark ? '#334155' : '#f0f0f0'} !important;
+        }
+        .premium-table .ant-table-tbody > tr:hover > td {
+          background: ${isDark ? 'rgba(51, 65, 85, 0.45)' : '#f8fafc'} !important;
         }
         .premium-table .ant-table-placeholder {
           background: transparent !important;
         }
         .premium-table .ant-table-placeholder .ant-empty-description {
-            color: #595959 !important;
+          color: ${isDark ? '#94a3b8' : '#595959'} !important;
         }
       `}</style>
 
@@ -440,10 +492,10 @@ const PurchaseOrderTable: React.FC = () => {
       />
 
       <VendorInvoiceModal
-        isOpen={isInvoiceOpen}
-        setIsOpen={setIsInvoiceOpen}
-        poId={selectedPoId}
-        fetchData={loadData}
+        open={isInvoiceOpen}
+        onCancel={() => setIsInvoiceOpen(false)}
+        onSuccess={loadData}
+        purchaseOrderId={selectedPoId ?? undefined}
       />
     </div>
   );

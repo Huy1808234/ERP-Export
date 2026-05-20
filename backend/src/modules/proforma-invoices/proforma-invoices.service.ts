@@ -8,11 +8,15 @@ import { UpdateProformaInvoiceDto } from '@/modules/proforma-invoices/dto/update
 import { User } from '@/modules/users/entities/user.entity';
 import { QuotationsService } from '../quotations/quotations.service';
 import { QuotationStatus, Incoterm } from '../quotations/entities/quotation.entity';
+import { validateIncotermLogisticsFee } from '@/helpers/incoterm.util';
 import { ProductsService } from '../products/products.service';
 import { CurrenciesService } from '../currencies/currencies.service';
 import { ExchangeRateType } from '../currencies/entities/exchange-rate.entity';
 import { Decimal } from 'decimal.js';
 import { AccountingService } from '../accounting/accounting.service';
+import { createOpaqueCode } from '@/common/ids/entity-id.util';
+import { ApprovalMatrixService } from '../approval-matrix/approval-matrix.service';
+import { ApprovalDocumentType } from '../approval-matrix/entities/approval-rule.entity';
 
 @Injectable()
 export class ProformaInvoicesService implements OnModuleInit {
@@ -26,6 +30,7 @@ export class ProformaInvoicesService implements OnModuleInit {
     private currenciesService: CurrenciesService,
     private accountingService: AccountingService,
     private dataSource: DataSource,
+    private approvalMatrixService: ApprovalMatrixService,
   ) {}
 
   async onModuleInit() {
@@ -37,6 +42,12 @@ export class ProformaInvoicesService implements OnModuleInit {
         BEGIN
           IF NOT EXISTS (SELECT 1 FROM pg_type t JOIN pg_enum e ON t.oid = e.enumtypid WHERE t.typname = 'proforma_invoices_status_enum' AND e.enumlabel = 'ACCEPTED') THEN
             ALTER TYPE proforma_invoices_status_enum ADD VALUE 'ACCEPTED';
+          END IF;
+          IF NOT EXISTS (SELECT 1 FROM pg_type t JOIN pg_enum e ON t.oid = e.enumtypid WHERE t.typname = 'proforma_invoices_status_enum' AND e.enumlabel = 'PENDING_APPROVAL') THEN
+            ALTER TYPE proforma_invoices_status_enum ADD VALUE 'PENDING_APPROVAL';
+          END IF;
+          IF NOT EXISTS (SELECT 1 FROM pg_type t JOIN pg_enum e ON t.oid = e.enumtypid WHERE t.typname = 'proforma_invoices_status_enum' AND e.enumlabel = 'REJECTED') THEN
+            ALTER TYPE proforma_invoices_status_enum ADD VALUE 'REJECTED';
           END IF;
         END
         $$;
@@ -55,8 +66,8 @@ export class ProformaInvoicesService implements OnModuleInit {
 
     try {
       const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-      const randomStr = Math.random().toString(36).substring(2, 6).toUpperCase();
-      const piNumber = `PI-${dateStr}-${randomStr}`;
+      const suffix = createOpaqueCode('pi_no').split('_').pop()?.toUpperCase();
+      const piNumber = `PI-${dateStr}-${suffix}`;
 
       let itemsSum = new Decimal(0);
       for (const item of items) {
@@ -76,7 +87,13 @@ export class ProformaInvoicesService implements OnModuleInit {
         otherFeeInDoc = otherFeeInDoc.times(new Decimal(crossRateObj.rate));
       }
 
-      const totalAmount = itemsSum.plus(logisticsFeeInDoc).plus(otherFeeInDoc);
+      const totalAmount = itemsSum
+        .plus(logisticsFeeInDoc)
+        .plus(otherFeeInDoc)
+        .plus(Number(createPiDto.domesticTransportCost || 0))
+        .plus(Number(createPiDto.portCharges || 0))
+        .plus(Number(createPiDto.seaFreight || 0))
+        .plus(Number(createPiDto.insuranceCost || 0));
 
       let exchangeRate = createPiDto.exchangeRate;
       if (!exchangeRate) {
@@ -94,7 +111,7 @@ export class ProformaInvoicesService implements OnModuleInit {
         otherFeeCurrency: createPiDto.otherFeeCurrency || docCurrency,
         totalAmount: totalAmount.toNumber(),
         totalAmountVnd: totalAmount.times(new Decimal(exchangeRate)).toNumber(),
-        createdById: user.id,
+        createdByUsername: user.username,
         status: PIStatus.DRAFT,
       });
 
@@ -106,7 +123,7 @@ export class ProformaInvoicesService implements OnModuleInit {
       }));
 
       for (const item of piItems) {
-        item.proformaInvoiceId = savedPi.id;
+        item.proformaInvoiceId = savedPi._id;
         await queryRunner.manager.save(item);
       }
 
@@ -115,7 +132,7 @@ export class ProformaInvoicesService implements OnModuleInit {
       }
 
       await queryRunner.commitTransaction();
-      return this.findOne(savedPi.id);
+      return this.findOne(savedPi._id);
     } catch (err) {
       await queryRunner.rollbackTransaction();
       throw new BadRequestException(err.message);
@@ -129,13 +146,34 @@ export class ProformaInvoicesService implements OnModuleInit {
     if (!quotationId) throw new BadRequestException('Quotation ID is required');
 
     const quotation = await this.quotationsService.findOne(quotationId);
+    
+    // Phân tách rõ ràng các trường hợp lỗi logic
+    if (quotation.status === QuotationStatus.CONVERTED) {
+      throw new BadRequestException(`Báo giá ${quotation.quotationNumber} đã được chuyển đổi sang PI trước đó.`);
+    }
+
     if (quotation.status !== QuotationStatus.ACCEPTED && quotation.status !== QuotationStatus.SENT) {
-      throw new BadRequestException('Quotation must be SENT or ACCEPTED to convert to PI');
+      throw new BadRequestException(
+        `Không thể chuyển đổi: Báo giá đang ở trạng thái "${quotation.status}". ` +
+        `Yêu cầu trạng thái SENT (Đã gửi) hoặc ACCEPTED (Chấp nhận).`
+      );
+    }
+
+    // Tech Lead Logic: Validate Incoterm vs Logistics Fee
+    const validation = validateIncotermLogisticsFee(quotation.incoterm, {
+      logisticsFee: quotation.logisticsFee,
+      seaFreight: quotation.seaFreight,
+      insuranceCost: quotation.insuranceCost,
+      domesticTransportCost: quotation.domesticTransportCost,
+      portCharges: quotation.portCharges
+    });
+    if (!validation.isValid) {
+      throw new BadRequestException(`Lỗi từ Báo giá gốc: ${validation.message}`);
     }
 
     const piDto: CreateProformaInvoiceDto = {
       customerId: quotation.customerId,
-      quotationId: quotation.id,
+      quotationId: quotation._id,
       incoterm: dto.incoterm || quotation.incoterm,
       incotermLocation: dto.incotermLocation || quotation.incotermLocation,
       portOfLoading: dto.portOfLoading || quotation.portOfLoading,
@@ -149,6 +187,11 @@ export class ProformaInvoicesService implements OnModuleInit {
       logisticsFeeCurrency: dto.logisticsFeeCurrency || quotation.logisticsFeeCurrency || 'USD',
       otherFee: dto.otherFee !== undefined ? dto.otherFee : (quotation.otherFee || 0),
       otherFeeCurrency: dto.otherFeeCurrency || quotation.otherFeeCurrency || 'USD',
+      bankInfo: dto.bankInfo || quotation.bankInfo,
+      domesticTransportCost: dto.domesticTransportCost !== undefined ? dto.domesticTransportCost : (quotation.domesticTransportCost || 0),
+      portCharges: dto.portCharges !== undefined ? dto.portCharges : (quotation.portCharges || 0),
+      seaFreight: dto.seaFreight !== undefined ? dto.seaFreight : (quotation.seaFreight || 0),
+      insuranceCost: dto.insuranceCost !== undefined ? dto.insuranceCost : (quotation.insuranceCost || 0),
       depositAmount: dto.depositAmount || 0,
       depositPercent: dto.depositPercent !== undefined ? dto.depositPercent : 30,
       items: quotation.items.map(item => ({
@@ -191,7 +234,7 @@ export class ProformaInvoicesService implements OnModuleInit {
 
   async findOne(id: string) {
     const pi = await this.piRepository.findOne({
-      where: { id },
+      where: { _id: id },
       relations: ['customer', 'createdBy', 'quotation', 'items', 'items.product'],
     });
     if (!pi) throw new NotFoundException('Proforma Invoice not found');
@@ -205,16 +248,99 @@ export class ProformaInvoicesService implements OnModuleInit {
     return this.piRepository.save(pi);
   }
 
-  async updateStatus(id: string, status: PIStatus) {
+  async updateStatus(id: string, status: PIStatus, user?: User) {
     const pi = await this.findOne(id);
     if (!pi) throw new NotFoundException('Proforma Invoice not found');
 
-    const validStatuses = [PIStatus.DRAFT, PIStatus.SENT, PIStatus.ACCEPTED, PIStatus.CANCELLED];
+    const validStatuses = [
+      PIStatus.DRAFT,
+      PIStatus.PENDING_APPROVAL,
+      PIStatus.SENT,
+      PIStatus.ACCEPTED,
+      PIStatus.REJECTED,
+      PIStatus.CANCELLED,
+    ];
     if (!validStatuses.includes(status)) {
        throw new BadRequestException(`Trạng thái ${status} không hợp lệ cho Báo giá (PI). Vui lòng thực hiện tại Hợp đồng (Sales Contract).`);
     }
 
+    if (
+      [PIStatus.SENT, PIStatus.PENDING_APPROVAL].includes(status) &&
+      [PIStatus.DRAFT, PIStatus.REJECTED].includes(pi.status)
+    ) {
+      const amountVnd =
+        Number(pi.totalAmountVnd || 0) ||
+        (await this.currenciesService.convertToBase(
+          Number(pi.totalAmount || 0),
+          pi.currency,
+        ));
+      const matchingRule = await this.approvalMatrixService.findMatchingRule(
+        ApprovalDocumentType.PROFORMA_INVOICE,
+        amountVnd,
+        pi.currency,
+      );
+
+      if (!matchingRule) {
+        pi.status = PIStatus.SENT;
+        pi.approvedByUsername = user?.username || pi.createdByUsername;
+        pi.approvedAt = new Date();
+        pi.rejectionReason = null;
+        return this.piRepository.save(pi);
+      }
+
+      return this.dataSource.transaction(async (manager) => {
+        const approvalRequest =
+          await this.approvalMatrixService.createRequestInTransaction(
+            manager,
+            {
+              ruleId: matchingRule._id,
+              documentType: ApprovalDocumentType.PROFORMA_INVOICE,
+              documentId: pi._id,
+              documentNumber: pi.piNumber,
+              title: `Approve Proforma Invoice ${pi.piNumber}`,
+              currency: pi.currency,
+              amount: Number(pi.totalAmount || 0),
+              amountVnd,
+              metadata: {
+                customerId: pi.customerId,
+                customerName: pi.customer?.name || null,
+                quotationId: pi.quotationId,
+                incoterm: pi.incoterm,
+                source: 'proforma_invoices.updateStatus',
+              },
+            },
+            user,
+          );
+
+        pi.status = PIStatus.PENDING_APPROVAL;
+        pi.approvalWorkflowRequestId = approvalRequest?._id || null;
+        pi.submittedForApprovalByUsername =
+          user?.username || pi.createdByUsername;
+        pi.submittedForApprovalAt = new Date();
+        pi.approvedByUsername = null;
+        pi.approvedAt = null;
+        pi.rejectedByUsername = null;
+        pi.rejectedAt = null;
+        pi.rejectionReason = null;
+
+        const savedPi = await manager.save(pi);
+        return {
+          ...savedPi,
+          approvalRequest,
+        };
+      });
+    }
+
+    if (pi.status === PIStatus.PENDING_APPROVAL) {
+      throw new BadRequestException('PI is already pending approval');
+    }
+
     pi.status = status;
     return this.piRepository.save(pi);
+  }
+
+  async remove(id: string) {
+    const pi = await this.findOne(id);
+    return this.piRepository.softRemove(pi);
   }
 }

@@ -1,9 +1,10 @@
 import { useCallback, useState } from 'react';
 import { getSession } from 'next-auth/react';
-import { notification } from '@/library/antd.static';
+import { notification } from '@/providers/antd-static';
 
-import { sendRequest } from '@/utils/api';
+import { sendRequest } from '@/lib/api-client';
 import type { IShipment, IPaginationMeta } from '@/types/o2c';
+import { getAccessToken } from '@/lib/auth-token';
 
 interface FetchShipmentsParams {
   current: number;
@@ -11,17 +12,6 @@ interface FetchShipmentsParams {
   search?: string;
   sort?: string;
 }
-
-interface SessionTokenShape {
-  access_token?: string;
-  user?: {
-    access_token?: string;
-  };
-}
-
-const getAccessToken = (session?: any): string | undefined => {
-  return session?.access_token ?? session?.user?.access_token;
-};
 
 export const useShipments = (session?: any) => {
   const [data, setData] = useState<IShipment[]>([]);
@@ -34,14 +24,15 @@ export const useShipments = (session?: any) => {
     if (directToken) return directToken;
 
     const currentSession = await getSession();
-    return getAccessToken(currentSession as SessionTokenShape | null);
+    return getAccessToken(currentSession);
   }, [session]);
 
   const fetchShipments = useCallback(
-    async (params: any) => {
+    async (params: FetchShipmentsParams & Record<string, unknown>) => {
       setLoading(true);
       try {
         const accessToken = await resolveAccessToken();
+        const { current, pageSize, sort, search, ...filters } = params;
 
         if (!accessToken) {
           notification.error({ title: 'Phiên đăng nhập đã hết hạn' });
@@ -52,11 +43,11 @@ export const useShipments = (session?: any) => {
           url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/shipments`,
           method: 'GET',
           queryParams: {
-            current: params.current,
-            pageSize: params.pageSize,
-            ...(params.sort ? { sort: params.sort } : {}),
-            ...(params.search ? { search: params.search } : {}),
-            ...params, // Pass other filters like status, pol, pod
+            current,
+            pageSize,
+            ...(sort ? { sort } : {}),
+            ...(search ? { search } : {}),
+            ...filters,
           },
           headers: { Authorization: `Bearer ${accessToken}` },
         });
@@ -64,8 +55,8 @@ export const useShipments = (session?: any) => {
           if (res?.data) {
             setData(res.data.results ?? []);
             setMeta({
-              current: res.data.meta?.current ?? params.current,
-              pageSize: res.data.meta?.pageSize ?? params.pageSize,
+              current: res.data.meta?.current ?? current,
+              pageSize: res.data.meta?.pageSize ?? pageSize,
               total: res.data.meta?.total ?? 0,
             });
           }
@@ -79,7 +70,7 @@ export const useShipments = (session?: any) => {
           if (statsRes?.data) {
             setStats(statsRes.data);
           }
-      } catch (error) {
+      } catch {
         notification.error({ title: 'Lỗi tải danh sách lô hàng' });
       } finally {
         setLoading(false);
@@ -104,13 +95,14 @@ export const useShipments = (session?: any) => {
           headers: { Authorization: `Bearer ${accessToken}` },
         });
 
+
         if (res?.data) {
           notification.success({ title: 'Xóa lô hàng thành công' });
           onSuccess?.();
         } else {
           notification.error({ title: 'Có lỗi xảy ra', description: res?.message });
         }
-      } catch (error) {
+      } catch {
         notification.error({ title: 'Lỗi hệ thống khi xóa lô hàng' });
       }
     },
@@ -126,19 +118,35 @@ export const useShipments = (session?: any) => {
           return;
         }
 
-        const res = await sendRequest<IBackendRes<unknown>>({
-          url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/shipments/${id}/issue-stock`,
+        const draftRes = await sendRequest<IBackendRes<{ _id: string; deliveryNumber?: string }>>({
+          url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/inventory/export-deliveries/from-shipment/${id}`,
+          method: 'POST',
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+
+        if (!draftRes?.data?._id) {
+          notification.error({ title: 'Loi xuat kho', description: draftRes?.message });
+          return;
+        }
+
+        const res = await sendRequest<IBackendRes<{ deliveryNumber?: string }>>({
+          url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/inventory/export-deliveries/${draftRes.data._id}/issue`,
           method: 'PATCH',
           headers: { Authorization: `Bearer ${accessToken}` },
         });
 
         if (res?.data) {
-          notification.success({ title: 'Xác nhận xuất kho thành công' });
+          notification.success({
+            title: 'Xac nhan xuat kho thanh cong',
+            description: res.data.deliveryNumber
+              ? `Da issue phieu xuat kho ${res.data.deliveryNumber}`
+              : undefined,
+          });
           onSuccess?.();
         } else {
-          notification.error({ title: 'Lỗi xuất kho', description: res?.message });
+          notification.error({ title: 'Loi xuat kho', description: res?.message });
         }
-      } catch (error) {
+      } catch {
         notification.error({ title: 'Lỗi hệ thống khi xác nhận xuất kho' });
       }
     },

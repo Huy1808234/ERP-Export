@@ -1,21 +1,21 @@
 'use client'
 import React, { useState } from 'react';
 import { Button, Divider, Form, Input } from 'antd';
-import { notification } from '@/library/antd.static';
+import { notification } from '@/providers/antd-static';
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import { Link, useRouter } from "@/i18n/routing";
-import { sendRequest } from '@/utils/api';
+import { sendRequest } from '@/lib/api-client';
 
 const Verify = ({ id }: { id: string }) => {
     const router = useRouter();
     const [loading, setLoading] = useState(false);
 
-    const onFinish = async (values: { id: string; code: string }) => {
+    const onFinish = async (values: { code: string }) => {
         setLoading(true);
         const res = await sendRequest<IBackendRes<any>>({
             method: "POST",
             url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/auth/check-code`,
-            body: { id: id, code: values.code }
+            body: { accountRef: id, code: values.code }
         })
         setLoading(false);
         if (res?.data) {
@@ -61,7 +61,7 @@ const Verify = ({ id }: { id: string }) => {
               background: "linear-gradient(to right, #34d399, #22d3ee)",
               WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", margin: "0 0 8px 0"
             }}>
-              "Kích hoạt"
+              Kích hoạt
             </h1>
             <p style={{ color: "#94a3b8", fontSize: "15px", margin: 0 }}>
               Nhập mã kích hoạt đã được gửi đến email của bạn

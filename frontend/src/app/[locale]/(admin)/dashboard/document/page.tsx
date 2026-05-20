@@ -1,10 +1,11 @@
 import DocumentsPage from "@/components/admin/documents/documents.page";
+import AdminPageScroll from "@/components/layout/admin.page-scroll";
 
 const DocumentsRoutePage = () => {
     return (
-        <div>
+        <AdminPageScroll>
             <DocumentsPage />
-        </div>
+        </AdminPageScroll>
     );
 };
 

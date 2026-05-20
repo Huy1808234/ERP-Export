@@ -1,12 +1,20 @@
-import { Column, CreateDateColumn, DeleteDateColumn, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+import { BeforeInsert, Column, CreateDateColumn, DeleteDateColumn, Entity, Index, JoinColumn, ManyToOne, PrimaryColumn, UpdateDateColumn } from 'typeorm';
 import { ColumnNumericTransformer } from '@/helpers/typeorm.util';
 import { Partner } from '@/modules/partners/entities/partner.entity';
+import { createEntityId } from '@/common/ids/entity-id.util';
 
 @Entity('products')
 @Index('idx_products_hscode', ['hsCode'])
 export class Product {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
+  @PrimaryColumn({ type: 'varchar', length: 40, name: '_id' })
+  _id: string;
+
+  @BeforeInsert()
+  assignId() {
+    if (!this._id) {
+      this._id = createEntityId('prod');
+    }
+  }
 
   @Column({ unique: true })
   sku: string;
@@ -83,6 +91,15 @@ export class Product {
 
   @Column({ type: 'text', nullable: true })
   description: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  imageUrl: string | null;
+
+  @Column({ default: false })
+  isBestseller: boolean;
+
+  @Column({ default: false })
+  isNew: boolean;
 
   @Column({ type: 'text', nullable: true })
   note: string | null;

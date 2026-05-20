@@ -2,7 +2,7 @@ import { Controller, Get, Post, Body, Patch, Param, Delete, Query } from '@nestj
 import { ShipmentsService } from './shipments.service';
 import { CreateShipmentDto } from './dto/create-shipment.dto';
 import { UpdateShipmentDto } from './dto/update-shipment.dto';
-import { ResponseMessage, User, Roles } from '@/decorator/customize';
+import { ResponseMessage, User, Roles, Public } from '@/decorator/customize';
 import { User as UserEntity } from '@/modules/users/entities/user.entity';
 import { ShipmentStatus } from './entities/shipment.entity';
 
@@ -31,30 +31,37 @@ export class ShipmentsController {
     return this.shipmentsService.getStats();
   }
 
-  @Get(':id')
+  @Get(':_id')
   @Roles('ADMIN', 'MANAGER', 'LOGISTICS', 'SALES_EXPORT', 'ACCOUNTANT')
-  @ResponseMessage('Fetch shipment by id')
-  findOne(@Param('id') id: string) {
-    return this.shipmentsService.findOne(id);
+  @ResponseMessage('Fetch shipment by recordId')
+  findOne(@Param('_id') recordId: string) {
+    return this.shipmentsService.findOne(recordId);
   }
 
-  @Patch(':id')
+  @Patch(':_id')
   @Roles('ADMIN', 'MANAGER', 'LOGISTICS')
   @ResponseMessage('Update shipment successfully')
-  update(@Param('id') id: string, @Body() updateShipmentDto: UpdateShipmentDto) {
-    return this.shipmentsService.update(id, updateShipmentDto);
+  update(@Param('_id') recordId: string, @Body() updateShipmentDto: UpdateShipmentDto) {
+    return this.shipmentsService.update(recordId, updateShipmentDto);
   }
 
-  @Patch(':id/issue-stock')
+  @Patch(':_id/issue-stock')
   @ResponseMessage('Xác nhận xuất kho thành công')
-  issueStock(@Param('id') id: string, @User() user: any) {
-    return this.shipmentsService.issueStock(id, user);
+  issueStock(@Param('_id') recordId: string, @User() user: any) {
+    return this.shipmentsService.issueStock(recordId, user);
   }
 
-  @Patch(':id/status')
+  @Patch(':_id/status')
   @Roles('ADMIN', 'MANAGER', 'LOGISTICS')
   @ResponseMessage('Update shipment status')
-  updateStatus(@Param('id') id: string, @Body('status') status: ShipmentStatus) {
-    return this.shipmentsService.updateStatus(id, status);
+  updateStatus(@Param('_id') recordId: string, @Body('status') status: ShipmentStatus) {
+    return this.shipmentsService.updateStatus(recordId, status);
+  }
+
+  @Get('tracking/:number')
+  @Public()
+  @ResponseMessage('Tra cứu vận đơn thành công')
+  tracking(@Param('number') number: string) {
+    return this.shipmentsService.tracking(number);
   }
 }

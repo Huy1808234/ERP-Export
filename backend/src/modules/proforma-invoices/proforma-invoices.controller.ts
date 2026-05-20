@@ -28,21 +28,31 @@ export class ProformaInvoicesController {
     return this.piService.findAll(query);
   }
 
-  @Get(':id')
-  @ResponseMessage('Fetch PI by id')
-  findOne(@Param('id') id: string) {
-    return this.piService.findOne(id);
+  @Get(':_id')
+  @ResponseMessage('Fetch PI by recordId')
+  findOne(@Param('_id') recordId: string) {
+    return this.piService.findOne(recordId);
   }
 
-  @Patch(':id')
+  @Patch(':_id')
   @ResponseMessage('Update PI successfully')
-  update(@Param('id') id: string, @Body() updatePiDto: UpdateProformaInvoiceDto) {
-    return this.piService.update(id, updatePiDto);
+  update(@Param('_id') recordId: string, @Body() updatePiDto: UpdateProformaInvoiceDto) {
+    return this.piService.update(recordId, updatePiDto);
   }
 
-  @Patch(':id/status')
+  @Patch(':_id/status')
   @ResponseMessage('Update PI status')
-  updateStatus(@Param('id') id: string, @Body('status') status: PIStatus) {
-    return this.piService.updateStatus(id, status);
+  updateStatus(
+    @Param('_id') recordId: string,
+    @Body('status') status: PIStatus,
+    @User() user: UserEntity,
+  ) {
+    return this.piService.updateStatus(recordId, status, user);
+  }
+
+  @Delete(':_id')
+  @ResponseMessage('Delete PI successfully')
+  remove(@Param('_id') recordId: string) {
+    return this.piService.remove(recordId);
   }
 }

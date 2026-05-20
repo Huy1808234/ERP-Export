@@ -4,11 +4,13 @@ import React, { useState, useEffect } from 'react';
 import { Modal, Table, Tag, Typography, Button, Space, Input } from 'antd';
 import { ShoppingCartOutlined, SearchOutlined } from '@ant-design/icons';
 import { useTranslations } from 'next-intl';
-import { sendRequest } from '@/utils/api';
+import { sendRequest } from '@/lib/api-client';
 import { useSession } from 'next-auth/react';
 import { formatDate } from '@/utils/format';
+import { getAccessToken } from '@/lib/auth-token';
 
 const { Text } = Typography;
+const INVOICE_ELIGIBLE_PO_STATUSES = 'PARTIAL_RECEIPT,RECEIVED';
 
 interface IProps {
   isOpen: boolean;
@@ -24,7 +26,7 @@ const POSelectForInvoiceModal = (props: IProps) => {
   const [pos, setPos] = useState<any[]>([]);
 
   useEffect(() => {
-    if (isOpen && session?.access_token) {
+    if (isOpen && getAccessToken(session)) {
       fetchPOs();
     }
   }, [isOpen, session]);
@@ -37,9 +39,10 @@ const POSelectForInvoiceModal = (props: IProps) => {
         method: 'GET',
         queryParams: { 
           pageSize: 50,
+          status: INVOICE_ELIGIBLE_PO_STATUSES,
           ...(search ? { poNumber: `/${search}/i` } : {})
         },
-        headers: { Authorization: `Bearer ${session?.access_token}` },
+        headers: { Authorization: `Bearer ${getAccessToken(session)}` },
       });
       if (res?.data) {
         const list = res.data.results || res.data.result || [];
@@ -72,7 +75,7 @@ const POSelectForInvoiceModal = (props: IProps) => {
       title: t('poSelect.columns.actions'),
       key: 'action',
       render: (_: any, record: any) => (
-        <Button type="primary" size="small" onClick={() => onSelect(record.id)}>
+        <Button type="primary" size="small" onClick={() => onSelect(record._id)}>
           {t('poSelect.selectBtn')}
         </Button>
       ),
@@ -98,7 +101,7 @@ const POSelectForInvoiceModal = (props: IProps) => {
         dataSource={pos} 
         columns={columns} 
         loading={loading} 
-        rowKey="id" 
+        rowKey="_id" 
         size="small"
         pagination={{ pageSize: 5 }}
       />

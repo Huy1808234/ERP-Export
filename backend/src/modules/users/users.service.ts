@@ -3,62 +3,111 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { CreateUserDto } from './dto/create-user.dto';
-import { UpdateUserDto } from './dto/update-user.dto';
-import { CodeAuthDto, ChangePasswordAuthDto } from '@/auth/dto/create-auth.dto';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { User } from './entities/user.entity';
-import { hashPasswordHelper } from '@/helpers/util';
-
-import { v4 as uuidv4 } from 'uuid';
 import dayjs from 'dayjs';
 import { MailerService } from '@nestjs-modules/mailer';
+import { In, Repository } from 'typeorm';
+import { CodeAuthDto, ChangePasswordAuthDto } from '@/auth/dto/create-auth.dto';
+import { normalizeRoleName } from '@/common/auth/role-catalog';
+import { createOpaqueCode, normalizeUsername } from '@/common/ids/entity-id.util';
+import { hashPasswordHelper } from '@/helpers/util';
+import { Role } from '../roles/entities/role.entity';
+import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
+import { User } from './entities/user.entity';
 
 @Injectable()
 export class UsersService {
   constructor(
     @InjectRepository(User)
     private userRepository: Repository<User>,
+    @InjectRepository(Role)
+    private roleRepository: Repository<Role>,
     private mailerService: MailerService,
-  ) { }
+  ) {}
 
-  private isValidUUID(uuid: string): boolean {
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    return uuidRegex.test(uuid);
+  async isEmailExist(email: string) {
+    return this.userRepository.existsBy({ email });
   }
 
-  isEmailExist = async (email: string) => {
-    return await this.userRepository.existsBy({ email });
-  };
+  async isUsernameExist(username: string, excludeUserRef?: string) {
+    const existing = await this.userRepository.findOne({
+      where: { username },
+      select: ['_id', 'username'],
+    });
 
-  async create(createUserDto: CreateUserDto) {
-    const { name, email, password, phone, address, image, roleId, isActive } = createUserDto;
-
-    const isExist = await this.isEmailExist(email);
-    if (isExist) {
-      throw new BadRequestException(
-        `Email đã tồn tại: ${email}. Vui lòng sử dụng email khác.`,
-      );
+    if (!existing) {
+      return false;
     }
 
+    return existing._id !== excludeUserRef && existing.username !== excludeUserRef;
+  }
+
+  private async resolveRoleName(roleName?: string | null): Promise<string | null> {
+    if (!roleName) {
+      return null;
+    }
+
+    const normalizedRoleName = normalizeRoleName(roleName);
+    const role = await this.roleRepository.findOne({ where: { name: normalizedRoleName } });
+    if (!role) {
+      throw new BadRequestException(`Role does not exist: ${roleName}`);
+    }
+
+    return role.name;
+  }
+
+  private async createAvailableUsername(seed: string, excludeUserRef?: string) {
+    const base = normalizeUsername(seed) || `user.${Date.now()}`;
+    let username = base;
+    let attempt = 1;
+
+    while (await this.isUsernameExist(username, excludeUserRef)) {
+      attempt += 1;
+      username = `${base}.${attempt}`;
+    }
+
+    return username;
+  }
+
+  private sanitizeUser(user: User | null) {
+    if (!user) {
+      return null;
+    }
+
+    const { password, ...safeUser } = user;
+    return safeUser;
+  }
+
+  async create(createUserDto: CreateUserDto) {
+    const { name, email, password, phone, address, image, roleName, username, isActive } =
+      createUserDto;
+
+    if (await this.isEmailExist(email)) {
+      throw new BadRequestException(`Email already exists: ${email}`);
+    }
+
+    const safeUsername = await this.createAvailableUsername(username || email.split('@')[0] || name);
+    const resolvedRoleName = await this.resolveRoleName(roleName);
     const hashPassword = await hashPasswordHelper(password);
 
     const user = this.userRepository.create({
       name,
+      username: safeUsername,
       email,
       password: hashPassword,
       phone,
       address,
       image,
-      roleId,
+      roleName: resolvedRoleName,
       isActive: isActive ?? false,
     });
 
     const savedUser = await this.userRepository.save(user);
 
     return {
-      id: savedUser.id,
+      _id: savedUser._id,
+      username: savedUser.username,
     };
   }
 
@@ -74,15 +123,19 @@ export class UsersService {
 
     const skip = (current - 1) * pageSize;
 
-    const queryBuilder = this.userRepository.createQueryBuilder('user')
-      .leftJoinAndSelect('user.role', 'role');
+    const queryBuilder = this.userRepository
+      .createQueryBuilder('user')
+      .leftJoinAndSelect('user.role', 'role')
+      .leftJoinAndSelect('role.permissions', 'permissions');
 
     for (const key in filter) {
       const aliasKey = key.includes('.') ? key : `user.${key}`;
       const paramKey = key.replace('.', '_');
 
       if (filter[key] instanceof RegExp) {
-        queryBuilder.andWhere(`${aliasKey} ILIKE :${paramKey}`, { [paramKey]: `%${filter[key].source}%` });
+        queryBuilder.andWhere(`${aliasKey} ILIKE :${paramKey}`, {
+          [paramKey]: `%${filter[key].source}%`,
+        });
       } else {
         queryBuilder.andWhere(`${aliasKey} = :${paramKey}`, { [paramKey]: filter[key] });
       }
@@ -92,108 +145,143 @@ export class UsersService {
       for (const key in sort) {
         queryBuilder.addOrderBy(`user.${key}`, (sort as any)[key] === 1 ? 'ASC' : 'DESC');
       }
+    } else {
+      queryBuilder.addOrderBy('user.createdAt', 'DESC');
     }
 
     queryBuilder.skip(skip).take(pageSize);
 
     const [resultsRaw, totalItems] = await queryBuilder.getManyAndCount();
     const totalPages = Math.ceil(totalItems / pageSize);
-
-    const results = resultsRaw.map(user => {
-      const { password, ...userWithoutPassword } = user;
-      return userWithoutPassword;
-    });
+    const results = resultsRaw.map((user) => this.sanitizeUser(user));
 
     return { results, totalPages, totalItems };
   }
 
-  async findOne(id: string) {
-    if (!this.isValidUUID(id)) {
-      throw new BadRequestException(`ID không hợp lệ: ${id}`);
-    }
-    return await this.userRepository.findOne({
-      where: { id },
-      relations: ['role']
-    });
-  }
-
-  async findByEmail(email: string) {
-    return await this.userRepository.findOneBy({ email });
-  }
-
-  async findByName(name: string) {
-    return await this.userRepository.findOneBy({ name });
-  }
-
-  async update(id: string, updateUserDto: UpdateUserDto) {
-    if (!this.isValidUUID(id)) {
-      throw new BadRequestException(`ID không hợp lệ: ${id}`);
-    }
-
-    const { id: dummy, ...updateData } = updateUserDto;
-
-    await this.userRepository.update({ id }, updateData);
+  async findOne(userRef: string) {
     const user = await this.userRepository.findOne({
-      where: { id },
-      relations: ['role']
+      where: [{ _id: userRef }, { username: userRef }],
+      relations: ['role', 'role.permissions'],
     });
 
     if (!user) {
-      throw new NotFoundException(`User không tồn tại`);
+      throw new NotFoundException(`User not found: ${userRef}`);
     }
 
-    const { password, ...responseData } = user;
+    return this.sanitizeUser(user);
+  }
+
+  async findByEmail(email: string) {
+    return this.userRepository.findOne({
+      where: { email },
+      relations: ['role', 'role.permissions'],
+    });
+  }
+
+  async findByUsername(username: string) {
+    return this.userRepository.findOne({
+      where: { username },
+      relations: ['role', 'role.permissions'],
+    });
+  }
+
+  async updateRefreshToken(
+    username: string,
+    refreshTokenHash: string | null,
+    refreshTokenExpiresAt: Date | null,
+  ) {
+    await this.userRepository.update(
+      { username },
+      {
+        refreshTokenHash,
+        refreshTokenExpiresAt,
+      },
+    );
+  }
+
+  async findByName(name: string) {
+    return this.userRepository.findOne({
+      where: { name },
+      relations: ['role', 'role.permissions'],
+    });
+  }
+
+  async update(userRef: string, updateUserDto: UpdateUserDto) {
+    const user = await this.userRepository.findOne({
+      where: [{ _id: userRef }, { username: userRef }],
+      relations: ['role', 'role.permissions'],
+    });
+
+    if (!user) {
+      throw new NotFoundException('User does not exist');
+    }
+
+    const updateData: Partial<User> = { ...updateUserDto };
+
+    if (updateUserDto.username && updateUserDto.username !== user.username) {
+      updateData.username = await this.createAvailableUsername(updateUserDto.username, user._id);
+    }
+
+    if (Object.prototype.hasOwnProperty.call(updateUserDto, 'roleName')) {
+      updateData.roleName = await this.resolveRoleName(updateUserDto.roleName);
+    }
+
+    await this.userRepository.update({ _id: user._id }, updateData);
+    const updatedUser = await this.userRepository.findOne({
+      where: { _id: user._id },
+      relations: ['role', 'role.permissions'],
+    });
 
     return {
-      message: 'Cập nhật user thành công',
-      data: responseData,
+      message: 'User updated successfully',
+      data: this.sanitizeUser(updatedUser),
     };
   }
 
-  async remove(id: string) {
-    if (!this.isValidUUID(id)) {
-      throw new BadRequestException(`ID không hợp lệ: ${id}`);
+  async remove(userRef: string) {
+    const user = await this.userRepository.findOne({
+      where: [{ _id: userRef }, { username: userRef }],
+      select: ['_id', 'username'],
+    });
+
+    if (!user) {
+      throw new NotFoundException(`User not found: ${userRef}`);
     }
 
-    const result = await this.userRepository.delete({ id });
-
-    if (result.affected === 0) {
-      throw new NotFoundException(`Không tìm thấy user với id: ${id}`);
-    }
+    const result = await this.userRepository.delete({ _id: user._id });
 
     return {
-      message: 'Xoá user thành công',
+      message: 'User deleted successfully',
       deletedCount: result.affected,
     };
   }
 
-  async bulkRemove(ids: string[]) {
-    const result = await this.userRepository.delete(ids);
+  async bulkRemove(userRefs: string[]) {
+    const result = await this.userRepository.delete({ _id: In(userRefs) });
     return {
-      message: `Xoá thành công ${result.affected} người dùng`,
+      message: `Deleted ${result.affected} users successfully`,
       deletedCount: result.affected,
     };
   }
 
   async handleRegister(createUserDto: CreateUserDto) {
-    const { name, email, password } = createUserDto;
+    const { name, email, password, username } = createUserDto;
 
-    const isExist = await this.isEmailExist(email);
-    if (isExist) {
-      throw new BadRequestException(
-        `Email đã tồn tại: ${email}. Vui lòng sử dụng email khác.`,
-      );
+    if (await this.isEmailExist(email)) {
+      throw new BadRequestException(`Email already exists: ${email}`);
     }
 
     const hashPassword = await hashPasswordHelper(password);
-    const codeId = uuidv4();
+    const codeId = createOpaqueCode('activation');
+    const safeUsername = await this.createAvailableUsername(username || email.split('@')[0] || name);
 
     const user = this.userRepository.create({
       name,
+      username: safeUsername,
       email,
       password: hashPassword,
       isActive: false,
-      codeId: codeId,
+      codeId,
       codeExpired: dayjs().add(5, 'minutes').toDate(),
     });
     const savedUser = await this.userRepository.save(user);
@@ -201,40 +289,41 @@ export class UsersService {
     try {
       await this.mailerService.sendMail({
         to: savedUser.email,
-        subject: 'Kích hoạt tài khoản amit group ✔',
+        subject: 'Activate your Mini ERP account',
         template: 'register',
         context: {
-          name: savedUser?.name ?? savedUser.email,
+          name: savedUser?.name ?? savedUser.username,
           activationCode: savedUser.codeId,
         },
       });
     } catch (error) {
-      console.error('Gửi email thất bại:', error.message);
+      console.error('Failed to send activation email:', error.message);
     }
 
     return {
-      id: savedUser.id,
+      _id: savedUser._id,
+      username: savedUser.username,
     };
   }
 
   async handleActive(data: CodeAuthDto) {
     const user = await this.userRepository.findOneBy({
-      id: data.id,
-      codeId: data.code
+      _id: data.accountRef,
+      codeId: data.code,
     });
 
     if (!user) {
-      throw new BadRequestException(`Code không chính xác hoặc đã hết hạn `);
+      throw new BadRequestException('Invalid or expired activation code');
     }
 
     const isBeforecheck = dayjs().isBefore(user.codeExpired);
     if (isBeforecheck) {
       await this.userRepository.update(
-        { id: data.id },
-        { isActive: true, codeId: null, codeExpired: null }
+        { _id: data.accountRef },
+        { isActive: true, codeId: null, codeExpired: null },
       );
     } else {
-      throw new BadRequestException(`Code không chính xác hoặc đã hết hạn `);
+      throw new BadRequestException('Invalid or expired activation code');
     }
     return { isBeforecheck };
   }
@@ -242,85 +331,85 @@ export class UsersService {
   async retryActive(email: string) {
     const user = await this.userRepository.findOneBy({ email });
     if (!user) {
-      throw new BadRequestException(`Tài Khoản Không Tồn Tại`);
+      throw new BadRequestException('Account does not exist');
     }
     if (user.isActive) {
-      throw new BadRequestException(`Tài Khoản Đã Được Kích Hoạt`);
+      throw new BadRequestException('Account is already active');
     }
 
-    const codeId = uuidv4();
+    const codeId = createOpaqueCode('activation');
     await this.userRepository.update(
-      { id: user.id },
+      { _id: user._id },
       {
-        codeId: codeId,
+        codeId,
         codeExpired: dayjs().add(5, 'minutes').toDate(),
-      }
+      },
     );
 
     this.mailerService.sendMail({
       to: user.email,
-      subject: 'Kích hoạt tài khoản amit group ',
+      subject: 'Activate your Mini ERP account',
       template: 'register',
       context: {
-        name: user?.name ?? user.email,
+        name: user?.name ?? user.username,
         activationCode: codeId,
       },
     });
 
-    return { id: user.id };
+    return { _id: user._id, username: user.username };
   }
 
   async forgotPassword(email: string) {
     const user = await this.userRepository.findOneBy({ email });
     if (!user) {
-      throw new BadRequestException(`Tài Khoản Không Tồn Tại`);
+      throw new BadRequestException('Account does not exist');
     }
 
-    const codeId = uuidv4();
+    const codeId = createOpaqueCode('password');
     await this.userRepository.update(
-      { id: user.id },
+      { _id: user._id },
       {
-        codeId: codeId,
+        codeId,
         codeExpired: dayjs().add(5, 'minutes').toDate(),
-      }
+      },
     );
 
     this.mailerService.sendMail({
       to: user.email,
-      subject: 'Mã xác nhận đổi mật khẩu Amit Group',
+      subject: 'Mini ERP password reset code',
       template: 'forgot-password',
       context: {
-        name: user?.name ?? user.email,
+        name: user?.name ?? user.username,
         activationCode: codeId,
       },
     });
 
-    return { id: user.id };
+    return { _id: user._id, username: user.username };
   }
 
   async changePassword(data: ChangePasswordAuthDto) {
     const user = await this.userRepository.findOneBy({
-      id: data.id,
-      codeId: data.code
+      _id: data.accountRef,
+      codeId: data.code,
     });
 
     if (!user) {
-      throw new BadRequestException(`Code không chính xác hoặc đã hết hạn`);
+      throw new BadRequestException('Invalid or expired password code');
     }
 
     const isBeforeCheck = dayjs().isBefore(user.codeExpired);
     if (isBeforeCheck) {
       const hashPassword = await hashPasswordHelper(data.password);
       await this.userRepository.update(
-        { id: user.id },
+        { _id: user._id },
         {
           password: hashPassword,
           codeId: null,
-          codeExpired: null
-        }
+          codeExpired: null,
+        },
       );
     } else {
-      throw new BadRequestException(`Code không chính xác hoặc đã hết hạn`);
+      throw new BadRequestException('Invalid or expired password code');
     }
 
     return { isBeforeCheck };

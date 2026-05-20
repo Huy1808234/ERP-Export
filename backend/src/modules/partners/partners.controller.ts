@@ -58,22 +58,22 @@ export class PartnersController {
     return this.partnersService.findAll(query, current, pageSize);
   }
 
-  @Get(':id/history')
+  @Get(':_id/history')
   @Roles('ADMIN', 'MANAGER', 'SALES_EXPORT', 'ACCOUNTANT')
-  getPartnerHistory(@Param('id') id: string) {
-    return this.partnersService.getPartnerHistory(id);
+  getPartnerHistory(@Param('_id') recordId: string) {
+    return this.partnersService.getPartnerHistory(recordId);
   }
 
-  @Get(':id')
+  @Get(':_id')
   @Roles('ADMIN', 'MANAGER', 'SALES_EXPORT', 'PURCHASING', 'ACCOUNTANT')
-  findOne(@Param('id') id: string) {
-    return this.partnersService.findOne(id);
+  findOne(@Param('_id') recordId: string) {
+    return this.partnersService.findOne(recordId);
   }
 
-  @Patch(':id')
+  @Patch(':_id')
   @Roles('ADMIN', 'MANAGER', 'DIRECTOR', 'SALES_EXPORT') 
   update(
-    @Param('id') id: string, 
+    @Param('_id') recordId: string, 
     @Body() updatePartnerDto: UpdatePartnerDto, 
     @Request() req: any
   ) {
@@ -81,7 +81,7 @@ export class PartnersController {
     const userRole = req.user?.role?.name || req.user?.role; 
     
     // Pass role xuống Service để check logic "Cấp hạn mức tín dụng cho khách hàng HIGH RISK"
-    return this.partnersService.update(id, updatePartnerDto, userRole);
+    return this.partnersService.update(recordId, updatePartnerDto, userRole);
   }
 
   @Post('bulk-delete')
@@ -90,9 +90,9 @@ export class PartnersController {
     return this.partnersService.bulkRemove(ids);
   }
 
-  @Delete(':id')
+  @Delete(':_id')
   @Roles('ADMIN', 'DIRECTOR') // Xóa khách hàng là hành động nhạy cảm, chỉ role cao nhất được làm
-  remove(@Param('id') id: string) {
-    return this.partnersService.remove(id);
+  remove(@Param('_id') recordId: string) {
+    return this.partnersService.remove(recordId);
   }
 }

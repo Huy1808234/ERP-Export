@@ -5,9 +5,9 @@ import {
   IsNumber,
   IsOptional,
   IsString,
-  IsUUID,
   Min,
 } from 'class-validator';
+import { IsEntityId } from '@/common/ids/entity-id.validator';
 
 const toOptionalNumber = () =>
   Transform(({ value }) => {
@@ -23,10 +23,10 @@ const trimString = () =>
   });
 
 export class CreateVendorPriceHistoryDto {
-  @IsUUID('4', { message: 'vendorId khong hop le' })
+  @IsEntityId({ message: 'vendorId phai la _id hop le' })
   vendorId: string;
 
-  @IsUUID('4', { message: 'productId khong hop le' })
+  @IsEntityId({ message: 'productId phai la _id hop le' })
   productId: string;
 
   @toOptionalNumber()

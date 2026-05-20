@@ -3,11 +3,12 @@
 import React, { useState, useEffect } from 'react';
 import { Modal, Form, Input, Select, DatePicker, InputNumber, Button, Divider, Space, Row, Col, Typography, App } from 'antd';
 import { PlusOutlined, DeleteOutlined, CalculatorOutlined } from '@ant-design/icons';
-import { sendRequest } from '@/utils/api';
+import { sendRequest } from '@/lib/api-client';
 import { getSession } from 'next-auth/react';
 import { useTranslations } from 'next-intl';
 import { INCOTERMS_KEYS } from '@/constants/o2c';
 import { useMemo } from 'react';
+import { getAccessToken } from '@/lib/auth-token';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -50,7 +51,7 @@ const SalesContractModal: React.FC<Props> = ({ open, onCancel, onSuccess }) => {
   const fetchMasterData = async () => {
     try {
       const currentSession = await getSession();
-      const token = currentSession?.user?.access_token;
+      const token = getAccessToken(currentSession);
       
       const [prodRes, partRes, curRes, piRes] = await Promise.all([
         sendRequest<IBackendRes<any>>({
@@ -113,12 +114,14 @@ const SalesContractModal: React.FC<Props> = ({ open, onCancel, onSuccess }) => {
   }, [watchedCurrency, currencyRates]);
 
   const handlePIChange = (piId: string) => {
-    const selected = proformaInvoices.find(p => p.id === piId);
+    const selected = proformaInvoices.find(p => p._id === piId);
     if (!selected) return;
 
     form.setFieldsValue({
       buyerId: selected.customerId,
       incoterm: selected.incoterm,
+      pol: selected.portOfLoading,
+      pod: selected.portOfDischarge,
       currencyCode: selected.currency,
       exchangeRate: selected.exchangeRate,
       domesticTransportCost: selected.logisticsFee || 0,
@@ -158,7 +161,7 @@ const SalesContractModal: React.FC<Props> = ({ open, onCancel, onSuccess }) => {
         url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/sales-contracts/calculate`,
         method: 'POST',
         body: payload,
-        headers: { Authorization: `Bearer ${currentSession?.user?.access_token}` }
+        headers: { Authorization: `Bearer ${getAccessToken(currentSession)}` }
       });
 
       if (res?.data) {
@@ -200,7 +203,7 @@ const SalesContractModal: React.FC<Props> = ({ open, onCancel, onSuccess }) => {
         url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/sales-contracts`,
         method: 'POST',
         body: payload,
-        headers: { Authorization: `Bearer ${currentSession?.user?.access_token}` }
+        headers: { Authorization: `Bearer ${getAccessToken(currentSession)}` }
       });
 
       if (res?.data) {
@@ -228,18 +231,18 @@ const SalesContractModal: React.FC<Props> = ({ open, onCancel, onSuccess }) => {
       <Form form={form} layout="vertical" onFinish={onFinish} initialValues={{ incoterm: 'FOB', currencyCode: 'USD' }}>
         <Row gutter={16}>
           <Col span={8}>
-            <Form.Item name="proformaInvoiceId" label="Tham chiếu từ PI">
+            <Form.Item name="proformaInvoiceId" label={t('modal.piReference')}>
               <Select 
                 allowClear 
-                placeholder="Chọn PI đã duyệt"
+                placeholder={t('modal.piPlaceholder')}
                 onChange={handlePIChange}
-                options={proformaInvoices.map(p => ({ value: p.id, label: `${p.piNumber} (${p.customer?.name})` }))}
+                options={proformaInvoices.map(p => ({ value: p._id, label: `${p.piNumber} (${p.customer?.name})` }))}
               />
             </Form.Item>
           </Col>
           <Col span={8}>
             <Form.Item name="contractNumber" label={t('modal.contractNumber')} rules={[{ required: true }]}>
-              <Input placeholder="SC-2026-..." className="rounded-lg" />
+              <Input placeholder={t('modal.contractPlaceholder')} className="rounded-lg" />
             </Form.Item>
           </Col>
           <Col span={8}>
@@ -249,7 +252,7 @@ const SalesContractModal: React.FC<Props> = ({ open, onCancel, onSuccess }) => {
                 className="rounded-lg" 
                 showSearch 
                 optionFilterProp="label"
-                options={partners.filter(p => p.partnerType === 'CUSTOMER').map(p => ({ value: p.id, label: p.name }))}
+                options={partners.filter(p => p.partnerType === 'CUSTOMER').map(p => ({ value: p._id, label: p.name }))}
               />
             </Form.Item>
           </Col>
@@ -280,19 +283,31 @@ const SalesContractModal: React.FC<Props> = ({ open, onCancel, onSuccess }) => {
         <Divider titlePlacement="left"><Text className="text-slate-500 uppercase text-xs font-bold">{t('modal.logisticsDivider')}</Text></Divider>
         <Row gutter={16}>
           <Col span={12}>
-            <Form.Item name="logisticsPartnerId" label="Đơn vị vận tải (Forwarder)">
+            <Form.Item name="logisticsPartnerId" label={t('modal.forwarder')}>
               <Select 
-                placeholder="Chọn đơn vị vận chuyển"
+                placeholder={t('modal.forwarderPlaceholder')}
                 allowClear
                 showSearch
                 optionFilterProp="label"
-                options={partners.filter(p => p.partnerType === 'LOGISTICS' || p.partnerType === 'SUPPLIER').map(p => ({ value: p.id, label: p.name }))}
+                options={partners.filter(p => p.partnerType === 'LOGISTICS' || p.partnerType === 'SUPPLIER').map(p => ({ value: p._id, label: p.name }))}
               />
             </Form.Item>
           </Col>
           <Col span={12}>
-            <Form.Item name="bookingNumber" label="Số Booking">
-              <Input placeholder="Nhập số booking nếu có" />
+            <Form.Item name="bookingNumber" label={t('modal.bookingNumber')}>
+              <Input placeholder={t('modal.bookingPlaceholder')} />
+            </Form.Item>
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item name="pol" label={t('modal.pol')}>
+              <Input placeholder={t('modal.polPlaceholder')} />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item name="pod" label={t('modal.pod')}>
+              <Input placeholder={t('modal.podPlaceholder')} />
             </Form.Item>
           </Col>
         </Row>
@@ -351,13 +366,13 @@ const SalesContractModal: React.FC<Props> = ({ open, onCancel, onSuccess }) => {
                 showSearch
                 optionFilterProp="label"
                 options={products.map(p => ({ 
-                  value: p.id, 
+                  value: p._id, 
                   label: p.sku ? `[${p.sku}] ${p.vietnameseName}` : p.vietnameseName 
                 }))}
                 onChange={(val) => {
                   const newItems = [...items];
                   newItems[index].productId = val;
-                  const prod = products.find(p => p.id === val);
+                  const prod = products.find(p => p._id === val);
                   if (prod) {
                     newItems[index].unitPrice = prod.defaultExportPrice || 0;
                   }

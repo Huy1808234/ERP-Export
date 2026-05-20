@@ -6,8 +6,8 @@ import { getMessages } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 
 import '@/app/globals.css';
-import NextAuthWrapper from "@/library/next.auth.wrapper";
-import { ThemeProvider } from "@/library/theme.context";
+import NextAuthWrapper from "@/providers/next-auth-provider";
+import { ThemeProvider } from "@/context/theme.context";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -34,7 +34,7 @@ export default async function RootLayout({
 
   return (
     //  Gán lang động theo locale để trình duyệt hiểu ngôn ngữ đang dùng
-    <html lang={locale} className="" suppressHydrationWarning data-scroll-behavior="smooth">
+    <html lang={locale} suppressHydrationWarning data-scroll-behavior="smooth">
       <body className={inter.className} suppressHydrationWarning>
         <NextIntlClientProvider locale={locale} messages={messages}>
           <AntdRegistry>

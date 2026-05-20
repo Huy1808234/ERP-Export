@@ -1,10 +1,14 @@
-import { IsArray, IsDate, IsEnum, IsNotEmpty, IsOptional, IsString, IsUUID, ValidateNested } from 'class-validator';
+import { IsArray, IsDate, IsEnum, IsNotEmpty, IsOptional, IsString, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { PurchaseRequestStatus, PurchaseRequestPriority } from '../entities/purchase-request.entity';
 
 class PurchaseRequestItemDto {
-  @IsUUID()
+  @IsOptional()
+  @IsString()
+  _id?: string;
+
   @IsNotEmpty()
+  @IsString()
   productId: string;
 
   @IsNotEmpty()
@@ -43,6 +47,11 @@ export class CreatePurchaseRequestDto {
   @IsDate()
   @Type(() => Date)
   requiredDate?: Date;
+
+  @IsOptional()
+  @IsDate()
+  @Type(() => Date)
+  expectedDate?: Date;
 
   @IsOptional()
   @IsString()

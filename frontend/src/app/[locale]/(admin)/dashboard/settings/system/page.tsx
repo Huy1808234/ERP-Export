@@ -1,424 +1,809 @@
-'use client'
+'use client';
 
-import { App, Button, Card, Col, Divider, Form, Input, Row, Space, Tabs, Typography, Spin, Badge } from 'antd';
-import { 
-  SettingOutlined, 
-  BankOutlined, 
-  EnvironmentOutlined, 
-  SaveOutlined, 
-  GlobalOutlined,
-  InfoCircleOutlined,
-  RocketOutlined,
-  UnlockOutlined,
-  CheckCircleFilled,
-  ReloadOutlined
+import {
+  BellOutlined,
+  CheckCircleOutlined,
+  DollarOutlined,
+  LockOutlined,
+  MailOutlined,
+  PercentageOutlined,
+  SafetyCertificateOutlined,
+  SettingOutlined,
+  UserOutlined,
 } from '@ant-design/icons';
-import { useEffect, useState, useCallback } from 'react';
-import { useSession } from 'next-auth/react';
-import { getAllSettings } from '@/utils/settings';
-import { sendRequest } from '@/utils/api';
+import { PageHeader } from '@/components/ui/PageHeader';
+import AdminPageScroll from '@/components/layout/admin.page-scroll';
+import { sendRequest } from '@/lib/api-client';
+import { getAccessToken } from '@/lib/auth-token';
+import { getSetting, updateSetting } from '@/services/settings.service';
+import CurrencyPage from '../currencies/page';
+import {
+  App,
+  Avatar,
+  Button,
+  Card,
+  Col,
+  Form,
+  Input,
+  InputNumber,
+  Row,
+  Select,
+  Space,
+  Steps,
+  Tabs,
+  Tag,
+  Typography,
+  theme,
+} from 'antd';
+import { signOut, useSession } from 'next-auth/react';
+import { useTranslations } from 'next-intl';
+import { useParams } from 'next/navigation';
+import { useEffect, useMemo, useState } from 'react';
+import type { CSSProperties } from 'react';
 
-const { Title, Text } = Typography;
+const { Text, Title, Paragraph } = Typography;
 
-/**
- * PREMIUM DESIGN UPGRADE:
- * - Implementation of Glassmorphism & Depth
- * - Vibrant Gradient Accents
- * - Modern Sidebar Navigation with Micro-animations
- * - Optimized Visual Hierarchy
- */
+type ForgotPasswordResponse = {
+  _id: string;
+  username: string;
+};
 
-interface ISetting {
-  key: string;
-  value: string;
-  description?: string;
+type PasswordFormValues = {
+  email: string;
+  code: string;
+  password: string;
+  confirmPassword: string;
+};
+
+type TaxSettingsFormValues = {
+  defaultPurchaseVatRate: number;
+};
+
+type MatchingSettingsFormValues = {
+  quantityTolerance: number;
+  priceTolerancePercent: number;
+};
+
+const DEFAULT_PURCHASE_VAT_RATE_KEY = 'DEFAULT_PURCHASE_VAT_RATE';
+const THREE_WAY_MATCHING_QTY_TOLERANCE_KEY = 'THREE_WAY_MATCHING_QTY_TOLERANCE';
+const THREE_WAY_MATCHING_PRICE_TOLERANCE_PERCENT_KEY = 'THREE_WAY_MATCHING_PRICE_TOLERANCE_PERCENT';
+
+const sectionStyle: CSSProperties = {
+  padding: '28px 32px',
+};
+
+function normalizedLocale(locale: string | string[] | undefined) {
+  return Array.isArray(locale) ? locale[0] : locale || 'vi';
 }
 
-const SystemSettingsPage = () => {
+function TaxSettingsPanel({ accessToken }: { accessToken?: string }) {
+  const t = useTranslations('SystemSettings');
   const { notification } = App.useApp();
-  const { data: session } = useSession();
-  const [form] = Form.useForm();
-  const [loading, setLoading] = useState(true);
+  const [taxForm] = Form.useForm<TaxSettingsFormValues>();
+  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState('general');
-
-  const fetchSettings = useCallback(async () => {
-    const accessToken = session?.user?.access_token;
-    if (!accessToken) return;
-
-    setLoading(true);
-    try {
-      const data = await getAllSettings(accessToken);
-      const formData: Record<string, string> = {};
-      data.forEach((s: ISetting) => {
-        formData[s.key] = s.value;
-      });
-      form.setFieldsValue(formData);
-    } catch (error) {
-      notification.error({ 
-        title: 'Lỗi hệ thống', 
-        description: 'Không thể tải cấu hình. Vui lòng kiểm tra lại kết nối.' 
-      });
-    } finally {
-      setLoading(false);
-    }
-  }, [session, form, notification]);
 
   useEffect(() => {
-    if (session) fetchSettings();
-  }, [session, fetchSettings]);
-
-  const onFinish = async (values: Record<string, string>) => {
-    const accessToken = session?.user?.access_token;
     if (!accessToken) return;
+
+    let cancelled = false;
+    setLoading(true);
+
+    getSetting(DEFAULT_PURCHASE_VAT_RATE_KEY, accessToken)
+      .then((setting) => {
+        if (cancelled) return;
+
+        const rate = Number(setting?.value ?? 10);
+        taxForm.setFieldsValue({
+          defaultPurchaseVatRate: Number.isFinite(rate) ? rate : 10,
+        });
+      })
+      .catch(() => {
+        if (cancelled) return;
+
+        notification.error({
+          title: t('taxSettings.errorTitle'),
+          description: t('taxSettings.loadErrorDescription'),
+        });
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, notification, t, taxForm]);
+
+  const handleSaveTaxSettings = async (values: TaxSettingsFormValues) => {
+    if (!accessToken) {
+      notification.warning({
+        title: t('taxSettings.errorTitle'),
+        description: t('taxSettings.missingToken'),
+      });
+      return;
+    }
+
+    const rate = Number(values.defaultPurchaseVatRate);
+    if (!Number.isFinite(rate) || rate < 0 || rate > 100) {
+      notification.error({
+        title: t('taxSettings.errorTitle'),
+        description: t('taxSettings.validation'),
+      });
+      return;
+    }
 
     setSaving(true);
     try {
-      const settingsToUpdate = Object.entries(values).map(([key, value]) => ({
-        key,
-        value: value || ''
-      }));
-
-      const res = await sendRequest<IBackendRes<any>>({
-        url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/settings/bulk`,
-        method: 'POST',
-        body: { settings: settingsToUpdate },
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
+      const res = await updateSetting(
+        DEFAULT_PURCHASE_VAT_RATE_KEY,
+        String(rate),
+        accessToken,
+      );
 
       if (res?.data) {
-        notification.success({ 
-          title: 'Cập nhật thành công', 
-          description: 'Hệ thống đã được đồng bộ hóa với cấu hình mới.' 
+        notification.success({
+          title: t('taxSettings.successTitle'),
+          description: t('taxSettings.successDescription', { rate }),
         });
-        fetchSettings();
       } else {
-        throw new Error(res?.message || 'API Error');
+        notification.error({
+          title: t('taxSettings.errorTitle'),
+          description: res?.message || t('taxSettings.saveErrorDescription'),
+        });
       }
-    } catch (error: any) {
-      notification.error({ 
-        title: 'Lỗi lưu trữ', 
-        description: error.message || 'Không thể áp dụng các thay đổi.' 
-      });
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <div style={{ 
-      padding: '32px 48px', 
-      minHeight: 'calc(100vh - 64px)', 
-      background: 'radial-gradient(circle at 10% 20%, rgba(216, 241, 230, 0.46) 0%, rgba(233, 226, 226, 0.28) 90.1%)' 
-    }}>
-      {/* Premium Header Section */}
-      <div style={{ 
-        marginBottom: 40, 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'flex-end',
-        position: 'relative'
-      }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
-            <div style={{ 
-              width: 48, 
-              height: 48, 
-              borderRadius: 14, 
-              background: 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow: '0 8px 16px -4px rgba(99, 102, 241, 0.4)'
-            }}>
-              <SettingOutlined style={{ color: '#fff', fontSize: 24 }} />
-            </div>
-            <Title level={1} style={{ margin: 0, fontWeight: 900, fontSize: 32, letterSpacing: -1.5, background: 'linear-gradient(90deg, #1e293b, #64748b)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-              Cấu Hình Hệ Thống
-            </Title>
-          </div>
-          <Text style={{ fontSize: 16, color: '#64748b', fontWeight: 500 }}>
-            <RocketOutlined style={{ marginRight: 8 }} />
-            Nâng cấp doanh nghiệp của bạn với các tham số vận hành chuẩn mực
-          </Text>
-        </div>
-
-        <Space size="middle">
-          <Button 
-            size="large" 
-            onClick={() => fetchSettings()} 
-            disabled={saving || loading}
-            icon={<ReloadOutlined />}
-            style={{ borderRadius: 12, height: 48, fontWeight: 600, border: '1px solid #e2e8f0', background: '#fff' }}
+    <div style={sectionStyle}>
+      <Row gutter={[32, 32]}>
+        <Col xs={24} lg={7}>
+          <Space orientation="vertical" size={8}>
+            <Title level={4} style={{ margin: 0 }}>{t('taxSettings.title')}</Title>
+            <Paragraph type="secondary" style={{ margin: 0 }}>
+              {t('taxSettings.description')}
+            </Paragraph>
+          </Space>
+        </Col>
+        <Col xs={24} lg={17}>
+          <Form
+            form={taxForm}
+            layout="vertical"
+            requiredMark={false}
+            initialValues={{ defaultPurchaseVatRate: 10 }}
+            onFinish={handleSaveTaxSettings}
+            disabled={loading || !accessToken}
+            style={{ maxWidth: 560 }}
           >
-            Làm mới
-          </Button>
-          <Button 
-            type="primary" 
-            size="large" 
-            icon={<SaveOutlined />} 
-            loading={saving}
-            onClick={() => form.submit()}
-            style={{ 
-              borderRadius: 12, 
-              height: 48, 
-              padding: '0 32px',
-              fontWeight: 700,
-              background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-              border: 'none',
-              boxShadow: '0 10px 20px -5px rgba(16, 185, 129, 0.4)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8
-            }}
-          >
-            Áp Dụng Thay Đổi
-          </Button>
-        </Space>
-      </div>
+            <Form.Item
+              label={t('taxSettings.field')}
+              name="defaultPurchaseVatRate"
+              rules={[
+                { required: true, message: t('taxSettings.validation') },
+                {
+                  validator: (_, value) => {
+                    const rate = Number(value);
+                    if (Number.isFinite(rate) && rate >= 0 && rate <= 100) {
+                      return Promise.resolve();
+                    }
+                    return Promise.reject(new Error(t('taxSettings.validation')));
+                  },
+                },
+              ]}
+            >
+              <InputNumber
+                min={0}
+                max={100}
+                precision={2}
+                suffix="%"
+                style={{ width: 220 }}
+              />
+            </Form.Item>
 
-      <Spin spinning={loading} description="Đang đồng bộ hóa dữ liệu từ đám mây...">
-        <Form form={form} layout="vertical" onFinish={onFinish} requiredMark={false}>
-          <div style={{ display: 'flex', gap: 32 }}>
-            
-            {/* Left Sidebar Navigation */}
-            <div style={{ width: 300, flexShrink: 0 }}>
-              <Card 
-                style={{ 
-                  borderRadius: 24, 
-                  boxShadow: '0 10px 25px rgba(0,0,0,0.03)', 
-                  border: '1px solid rgba(255,255,255,0.7)',
-                  background: 'rgba(255, 255, 255, 0.8)',
-                  backdropFilter: 'blur(20px)',
-                  padding: 8
-                }}
-              >
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {[
-                    { key: 'general', icon: <GlobalOutlined />, label: 'Thông tin chung', color: '#6366f1' },
-                    { key: 'banking', icon: <BankOutlined />, label: 'Tài khoản Ngân hàng', color: '#10b981' },
-                    { key: 'security', icon: <UnlockOutlined />, label: 'Bảo mật & Phân quyền', color: '#f59e0b' },
-                    { key: 'advanced', icon: <SettingOutlined />, label: 'Tùy chọn nâng cao', color: '#64748b' },
-                  ].map(item => (
-                    <div 
-                      key={item.key}
-                      onClick={() => setActiveTab(item.key)}
-                      style={{ 
-                        padding: '16px 20px', 
-                        borderRadius: 16, 
-                        cursor: 'pointer',
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        gap: 14,
-                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                        background: activeTab === item.key ? `linear-gradient(135deg, ${item.color}15 0%, ${item.color}05 100%)` : 'transparent',
-                        color: activeTab === item.key ? item.color : '#64748b',
-                        border: `1px solid ${activeTab === item.key ? `${item.color}30` : 'transparent'}`,
-                        transform: activeTab === item.key ? 'translateX(8px)' : 'none'
-                      }}
-                    >
-                      <div style={{ 
-                        fontSize: 20, 
-                        display: 'flex',
-                        transition: 'all 0.3s',
-                        transform: activeTab === item.key ? 'scale(1.2)' : 'scale(1)'
-                      }}>
-                        {item.icon}
-                      </div>
-                      <span style={{ fontWeight: activeTab === item.key ? 700 : 500, fontSize: 15 }}>{item.label}</span>
-                      {activeTab === item.key && <CheckCircleFilled style={{ marginLeft: 'auto', fontSize: 14 }} />}
-                    </div>
-                  ))}
-                </div>
-              </Card>
+            <Paragraph type="secondary">
+              {loading ? t('taxSettings.loading') : t('taxSettings.help')}
+            </Paragraph>
 
-              <div style={{ marginTop: 24, padding: '0 12px' }}>
-                <Card style={{ borderRadius: 20, background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)', border: 'none' }}>
-                   <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                      <Badge status="processing" color="#10b981" />
-                      <Text style={{ color: '#94a3b8', fontSize: 12 }}>Server Status: Operational</Text>
-                   </div>
-                   <div style={{ marginTop: 8 }}>
-                      <Text style={{ color: '#fff', fontSize: 13, fontWeight: 600 }}>Phiên bản ERP: 2.0.4-Premium</Text>
-                   </div>
-                </Card>
-              </div>
-            </div>
-
-            {/* Right Content Area */}
-            <div style={{ flex: 1 }}>
-              <Card 
-                style={{ 
-                  borderRadius: 32, 
-                  boxShadow: '0 20px 40px rgba(0,0,0,0.04)', 
-                  border: '1px solid rgba(255,255,255,0.7)',
-                  background: 'rgba(255, 255, 255, 0.6)',
-                  backdropFilter: 'blur(30px)',
-                  minHeight: 650,
-                  padding: '16px 24px'
-                }}
-              >
-                {activeTab === 'general' && (
-                  <div style={{ animation: 'fadeIn 0.5s ease-out' }}>
-                    <Title level={3} style={{ marginBottom: 4, fontWeight: 800 }}>Định danh Doanh nghiệp</Title>
-                    <Text type="secondary">Cấu hình thông tin pháp lý được sử dụng cho tất cả chứng từ xuất khẩu.</Text>
-                    <Divider style={{ margin: '24px 0' }} />
-                    
-                    <Row gutter={[32, 32]}>
-                      <Col span={24}>
-                        <Form.Item 
-                          label={<Text strong style={{ fontSize: 15, color: '#334155' }}>Tên công ty (Pháp lý/Tiếng Anh)</Text>} 
-                          name="COMPANY_NAME"
-                          rules={[{ required: true, message: 'Vui lòng không để trống' }]}
-                        >
-                          <Input 
-                            size="large" 
-                            prefix={<GlobalOutlined style={{ color: '#6366f1', marginRight: 8 }} />}
-                            placeholder="e.g. ANTIGRAVITY EXPORT CO., LTD" 
-                            style={{ 
-                              height: 56, 
-                              borderRadius: 16, 
-                              fontSize: 16,
-                              fontWeight: 600,
-                              boxShadow: '0 4px 10px rgba(0,0,0,0.02)',
-                              border: '1px solid #e2e8f0'
-                            }} 
-                          />
-                        </Form.Item>
-                      </Col>
-                      <Col span={24}>
-                        <Form.Item 
-                          label={<Text strong style={{ fontSize: 15, color: '#334155' }}>Địa chỉ trụ sở chính</Text>} 
-                          name="COMPANY_ADDRESS"
-                        >
-                          <Input.TextArea 
-                            rows={4} 
-                            placeholder="Nhập địa chỉ đăng ký kinh doanh đầy đủ..." 
-                            style={{ 
-                              borderRadius: 20, 
-                              fontSize: 15,
-                              padding: '16px 20px',
-                              border: '1px solid #e2e8f0',
-                              boxShadow: '0 4px 10px rgba(0,0,0,0.02)'
-                            }} 
-                          />
-                        </Form.Item>
-                      </Col>
-                    </Row>
-                  </div>
-                )}
-
-                {activeTab === 'banking' && (
-                  <div style={{ animation: 'fadeIn 0.5s ease-out' }}>
-                    <Title level={3} style={{ marginBottom: 4, fontWeight: 800 }}>Tài khoản Thụ hưởng</Title>
-                    <Text type="secondary">Thông tin ngân hàng mặc định cho các giao dịch chuyển khoản quốc tế (T/T, L/C).</Text>
-                    <Divider style={{ margin: '24px 0' }} />
-                    
-                    <div style={{ 
-                      marginBottom: 24, 
-                      padding: '20px 24px', 
-                      background: 'linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%)', 
-                      border: '1px solid #bbf7d0', 
-                      borderRadius: 20,
-                      display: 'flex',
-                      gap: 16
-                    }}>
-                       <div style={{ 
-                          width: 40, height: 40, borderRadius: 12, background: '#10b981', 
-                          display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 
-                       }}>
-                          <InfoCircleOutlined style={{ color: '#fff', fontSize: 20 }} />
-                       </div>
-                       <div>
-                          <Text strong style={{ color: '#065f46', fontSize: 15 }}>Lưu ý chuyên môn:</Text><br />
-                          <Text style={{ color: '#047857' }}>Dữ liệu này sẽ tự động xuất hiện tại chân trang Báo giá & PI. Hãy chia thông tin Bank Name, Account, Swift thành các dòng riêng biệt.</Text>
-                       </div>
-                    </div>
-
-                    <Form.Item 
-                      label={<Text strong style={{ fontSize: 15, color: '#334155' }}>Chi tiết Tài khoản Swift/Bank</Text>} 
-                      name="COMPANY_BANK_INFO"
-                    >
-                      <Input.TextArea 
-                        rows={12} 
-                        style={{ 
-                          borderRadius: 24, 
-                          fontFamily: "'JetBrains Mono', 'Fira Code', monospace", 
-                          fontSize: 14, 
-                          padding: 24,
-                          lineHeight: 1.8,
-                          border: '1px solid #e2e8f0',
-                          boxShadow: '0 4px 15px rgba(0,0,0,0.03)',
-                          background: '#fafafa'
-                        }} 
-                        placeholder="BANK NAME: ...&#10;BENEFICIARY: ...&#10;ACC NO: ...&#10;SWIFT CODE: ..." 
-                      />
-                    </Form.Item>
-                  </div>
-                )}
-
-                {(activeTab === 'security' || activeTab === 'advanced') && (
-                  <div style={{ 
-                    height: '100%', 
-                    display: 'flex', 
-                    flexDirection: 'column', 
-                    alignItems: 'center', 
-                    justifyContent: 'center',
-                    paddingBottom: 100,
-                    animation: 'fadeIn 0.5s ease-out'
-                  }}>
-                    <div style={{ 
-                      width: 120, height: 120, borderRadius: 60, background: '#f1f5f9', 
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 24
-                    }}>
-                      <UnlockOutlined style={{ fontSize: 48, color: '#94a3b8' }} />
-                    </div>
-                    <Title level={3} style={{ color: '#1e293b', marginBottom: 8 }}>Tính năng đang nâng cấp</Title>
-                    <Text style={{ color: '#64748b', fontSize: 16 }}>Phân hệ quản trị nâng cao sẽ khả dụng trong phiên bản Enterprise sắp tới.</Text>
-                  </div>
-                )}
-              </Card>
-            </div>
-          </div>
-        </Form>
-      </Spin>
-
-      <style jsx global>{`
-        @keyframes fadeIn {
-          from { opacity: 0; transform: translateY(10px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        
-        .settings-tabs .ant-tabs-nav {
-          display: none !important;
-        }
-
-        .ant-form-item-label {
-          padding-bottom: 12px !important;
-        }
-
-        .ant-input:focus, .ant-input-focused {
-          border-color: #6366f1 !important;
-          box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1) !important;
-        }
-
-        /* Custom Scrollbar */
-        ::-webkit-scrollbar {
-          width: 8px;
-        }
-        ::-webkit-scrollbar-track {
-          background: #f1f5f9;
-        }
-        ::-webkit-scrollbar-thumb {
-          background: #cbd5e1;
-          border-radius: 10px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-          background: #94a3b8;
-        }
-      `}</style>
+            <Button
+              type="primary"
+              htmlType="submit"
+              icon={<PercentageOutlined />}
+              loading={saving}
+            >
+              {t('taxSettings.save')}
+            </Button>
+          </Form>
+        </Col>
+      </Row>
     </div>
   );
-};
+}
 
-export default SystemSettingsPage;
+function MatchingSettingsPanel({ accessToken }: { accessToken?: string }) {
+  const t = useTranslations('SystemSettings');
+  const { notification } = App.useApp();
+  const [matchingForm] = Form.useForm<MatchingSettingsFormValues>();
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!accessToken) return;
+
+    let cancelled = false;
+    setLoading(true);
+
+    Promise.all([
+      getSetting(THREE_WAY_MATCHING_QTY_TOLERANCE_KEY, accessToken),
+      getSetting(THREE_WAY_MATCHING_PRICE_TOLERANCE_PERCENT_KEY, accessToken),
+    ])
+      .then(([qtySetting, priceSetting]) => {
+        if (cancelled) return;
+
+        const quantityTolerance = Number(qtySetting?.value ?? 0);
+        const priceTolerancePercent = Number(priceSetting?.value ?? 0);
+        matchingForm.setFieldsValue({
+          quantityTolerance: Number.isFinite(quantityTolerance) ? quantityTolerance : 0,
+          priceTolerancePercent: Number.isFinite(priceTolerancePercent) ? priceTolerancePercent : 0,
+        });
+      })
+      .catch(() => {
+        if (cancelled) return;
+
+        notification.error({
+          title: t('matchingSettings.errorTitle'),
+          description: t('matchingSettings.loadErrorDescription'),
+        });
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, matchingForm, notification, t]);
+
+  const handleSaveMatchingSettings = async (values: MatchingSettingsFormValues) => {
+    if (!accessToken) {
+      notification.warning({
+        title: t('matchingSettings.errorTitle'),
+        description: t('matchingSettings.missingToken'),
+      });
+      return;
+    }
+
+    const quantityTolerance = Number(values.quantityTolerance);
+    const priceTolerancePercent = Number(values.priceTolerancePercent);
+
+    if (
+      !Number.isFinite(quantityTolerance)
+      || quantityTolerance < 0
+      || !Number.isFinite(priceTolerancePercent)
+      || priceTolerancePercent < 0
+      || priceTolerancePercent > 100
+    ) {
+      notification.error({
+        title: t('matchingSettings.errorTitle'),
+        description: t('matchingSettings.validation'),
+      });
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const [qtyRes, priceRes] = await Promise.all([
+        updateSetting(
+          THREE_WAY_MATCHING_QTY_TOLERANCE_KEY,
+          String(quantityTolerance),
+          accessToken,
+        ),
+        updateSetting(
+          THREE_WAY_MATCHING_PRICE_TOLERANCE_PERCENT_KEY,
+          String(priceTolerancePercent),
+          accessToken,
+        ),
+      ]);
+
+      if (qtyRes?.data && priceRes?.data) {
+        notification.success({
+          title: t('matchingSettings.successTitle'),
+          description: t('matchingSettings.successDescription', {
+            qty: quantityTolerance,
+            price: priceTolerancePercent,
+          }),
+        });
+      } else {
+        notification.error({
+          title: t('matchingSettings.errorTitle'),
+          description: qtyRes?.message || priceRes?.message || t('matchingSettings.saveErrorDescription'),
+        });
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div style={sectionStyle}>
+      <Row gutter={[32, 32]}>
+        <Col xs={24} lg={7}>
+          <Space orientation="vertical" size={8}>
+            <Title level={4} style={{ margin: 0 }}>{t('matchingSettings.title')}</Title>
+            <Paragraph type="secondary" style={{ margin: 0 }}>
+              {t('matchingSettings.description')}
+            </Paragraph>
+          </Space>
+        </Col>
+        <Col xs={24} lg={17}>
+          <Form
+            form={matchingForm}
+            layout="vertical"
+            requiredMark={false}
+            initialValues={{ quantityTolerance: 0, priceTolerancePercent: 0 }}
+            onFinish={handleSaveMatchingSettings}
+            disabled={loading || !accessToken}
+            style={{ maxWidth: 720 }}
+          >
+            <Row gutter={16}>
+              <Col xs={24} md={10}>
+                <Form.Item
+                  label={t('matchingSettings.quantityTolerance')}
+                  name="quantityTolerance"
+                  rules={[{ required: true, message: t('matchingSettings.validation') }]}
+                >
+                  <InputNumber min={0} precision={2} style={{ width: '100%' }} />
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={10}>
+                <Form.Item
+                  label={t('matchingSettings.priceTolerance')}
+                  name="priceTolerancePercent"
+                  rules={[{ required: true, message: t('matchingSettings.validation') }]}
+                >
+                  <InputNumber min={0} max={100} precision={2} suffix="%" style={{ width: '100%' }} />
+                </Form.Item>
+              </Col>
+            </Row>
+
+            <Paragraph type="secondary">
+              {loading ? t('matchingSettings.loading') : t('matchingSettings.help')}
+            </Paragraph>
+
+            <Button
+              type="primary"
+              htmlType="submit"
+              icon={<SafetyCertificateOutlined />}
+              loading={saving}
+            >
+              {t('matchingSettings.save')}
+            </Button>
+          </Form>
+        </Col>
+      </Row>
+    </div>
+  );
+}
+
+function SecuritySettingsPanel({
+  userEmail,
+  locale,
+}: {
+  userEmail: string;
+  locale: string | string[] | undefined;
+}) {
+  const t = useTranslations('SystemSettings');
+  const { notification } = App.useApp();
+  const [passwordForm] = Form.useForm<PasswordFormValues>();
+  const [resetUserId, setResetUserId] = useState('');
+  const [passwordStep, setPasswordStep] = useState(0);
+  const [sendingCode, setSendingCode] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
+
+  useEffect(() => {
+    passwordForm.setFieldsValue({ email: userEmail });
+  }, [passwordForm, userEmail]);
+
+  const handleSendResetCode = async () => {
+    const email = passwordForm.getFieldValue('email') || userEmail;
+    if (!email) {
+      notification.warning({
+        title: t('security.notifications.missingEmailTitle'),
+        description: t('security.notifications.missingEmailDescription'),
+      });
+      return;
+    }
+
+    setSendingCode(true);
+    try {
+      const res = await sendRequest<IBackendRes<ForgotPasswordResponse>>({
+        url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/auth/forgot-password`,
+        method: 'POST',
+        body: { email },
+      });
+
+      if (res?.data?._id) {
+        setResetUserId(res.data._id);
+        setPasswordStep(1);
+        notification.success({
+          title: t('security.notifications.codeSentTitle'),
+          description: t('security.notifications.codeSentDescription', { email }),
+        });
+      } else {
+        notification.error({
+          title: t('security.notifications.codeErrorTitle'),
+          description: res?.message || t('security.notifications.tryAgain'),
+        });
+      }
+    } finally {
+      setSendingCode(false);
+    }
+  };
+
+  const handleChangePassword = async (values: PasswordFormValues) => {
+    if (!resetUserId) {
+      notification.warning({
+        title: t('security.notifications.needCodeTitle'),
+        description: t('security.notifications.needCodeDescription'),
+      });
+      return;
+    }
+
+    setChangingPassword(true);
+    try {
+      const res = await sendRequest<IBackendRes<{ isBeforeCheck: boolean }>>({
+        url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/auth/change-password`,
+        method: 'POST',
+        body: {
+          accountRef: resetUserId,
+          code: values.code,
+          password: values.password,
+        },
+      });
+
+      if (res?.data) {
+        setPasswordStep(2);
+        passwordForm.resetFields(['code', 'password', 'confirmPassword']);
+        notification.success({
+          title: t('security.notifications.passwordUpdatedTitle'),
+          description: t('security.notifications.passwordUpdatedDescription'),
+        });
+      } else {
+        notification.error({
+          title: t('security.notifications.passwordErrorTitle'),
+          description: res?.message || t('security.notifications.invalidCode'),
+        });
+      }
+    } finally {
+      setChangingPassword(false);
+    }
+  };
+
+  return (
+    <div style={sectionStyle}>
+      <Row gutter={[32, 32]}>
+        <Col xs={24} lg={7}>
+          <Space orientation="vertical" size={8}>
+            <Title level={4} style={{ margin: 0 }}>{t('security.title')}</Title>
+            <Paragraph type="secondary" style={{ margin: 0 }}>
+              {t('security.description')}
+            </Paragraph>
+          </Space>
+        </Col>
+        <Col xs={24} lg={17}>
+          <Steps
+            current={passwordStep}
+            size="small"
+            style={{ marginBottom: 28 }}
+            items={[
+              { title: t('security.steps.sendCode'), icon: <MailOutlined /> },
+              { title: t('security.steps.setPassword'), icon: <LockOutlined /> },
+              { title: t('security.steps.done'), icon: <CheckCircleOutlined /> },
+            ]}
+          />
+
+          <Form
+            form={passwordForm}
+            layout="vertical"
+            onFinish={handleChangePassword}
+            requiredMark={false}
+            style={{ maxWidth: 560 }}
+          >
+            <Form.Item
+              label={t('security.fields.email')}
+              name="email"
+              rules={[{ required: true, type: 'email', message: t('security.validation.email') }]}
+            >
+              <Input
+                prefix={<MailOutlined />}
+                disabled={Boolean(userEmail)}
+                placeholder="name@company.com"
+              />
+            </Form.Item>
+
+            <Button
+              icon={<MailOutlined />}
+              loading={sendingCode}
+              onClick={handleSendResetCode}
+              style={{ marginBottom: 24 }}
+            >
+              {t('security.actions.sendCode')}
+            </Button>
+
+            <Form.Item
+              label={t('security.fields.code')}
+              name="code"
+              rules={[{ required: true, message: t('security.validation.code') }]}
+            >
+              <Input placeholder={t('security.placeholders.code')} />
+            </Form.Item>
+
+            <Form.Item
+              label={t('security.fields.password')}
+              name="password"
+              rules={[
+                { required: true, message: t('security.validation.password') },
+                { min: 6, message: t('security.validation.passwordLength') },
+              ]}
+            >
+              <Input.Password prefix={<LockOutlined />} placeholder={t('security.placeholders.password')} />
+            </Form.Item>
+
+            <Form.Item
+              label={t('security.fields.confirmPassword')}
+              name="confirmPassword"
+              dependencies={['password']}
+              rules={[
+                { required: true, message: t('security.validation.confirmPassword') },
+                ({ getFieldValue }) => ({
+                  validator(_, value) {
+                    if (!value || getFieldValue('password') === value) {
+                      return Promise.resolve();
+                    }
+                    return Promise.reject(new Error(t('security.validation.passwordMismatch')));
+                  },
+                }),
+              ]}
+            >
+              <Input.Password prefix={<LockOutlined />} placeholder={t('security.placeholders.confirmPassword')} />
+            </Form.Item>
+
+            <Space wrap>
+              <Button
+                type="primary"
+                htmlType="submit"
+                icon={<LockOutlined />}
+                loading={changingPassword}
+              >
+                {t('security.actions.updatePassword')}
+              </Button>
+              {passwordStep === 2 && (
+                <Button onClick={() => signOut({ callbackUrl: `/${normalizedLocale(locale)}/auth/login` })}>
+                  {t('security.actions.signInAgain')}
+                </Button>
+              )}
+            </Space>
+          </Form>
+        </Col>
+      </Row>
+    </div>
+  );
+}
+
+function AccountSettingsPanel({
+  userEmail,
+  userName,
+  userRole,
+  userInitial,
+}: {
+  userEmail: string;
+  userName: string;
+  userRole: string;
+  userInitial: string;
+}) {
+  const t = useTranslations('SystemSettings');
+  const { token } = theme.useToken();
+  const [profileForm] = Form.useForm();
+
+  useEffect(() => {
+    profileForm.setFieldsValue({
+      name: userName,
+      email: userEmail,
+      role: userRole,
+      timezone: 'Asia/Saigon',
+    });
+  }, [profileForm, userEmail, userName, userRole]);
+
+  return (
+    <div style={sectionStyle}>
+      <Row gutter={[32, 32]}>
+        <Col xs={24} lg={7}>
+          <Space orientation="vertical" size={8}>
+            <Title level={4} style={{ margin: 0 }}>{t('account.title')}</Title>
+            <Paragraph type="secondary" style={{ margin: 0 }}>
+              {t('account.description')}
+            </Paragraph>
+          </Space>
+        </Col>
+        <Col xs={24} lg={17}>
+          <Space size={18} align="center" style={{ marginBottom: 28 }}>
+            <Avatar
+              size={72}
+              style={{
+                background: `linear-gradient(135deg, ${token.colorPrimary}, #8b5cf6)`,
+                fontSize: 28,
+                fontWeight: 800,
+              }}
+            >
+              {userInitial}
+            </Avatar>
+            <div>
+              <Space align="center" wrap>
+                <Title level={4} style={{ margin: 0 }}>{userName}</Title>
+                <Tag color="blue">{userRole}</Tag>
+              </Space>
+              <Text type="secondary">{userEmail}</Text>
+            </div>
+          </Space>
+
+          <Form form={profileForm} layout="vertical" disabled>
+            <Row gutter={16}>
+              <Col xs={24} md={12}>
+                <Form.Item label={t('account.fields.username')} name="name">
+                  <Input prefix={<UserOutlined />} />
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={12}>
+                <Form.Item label={t('account.fields.email')} name="email">
+                  <Input prefix={<MailOutlined />} />
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={12}>
+                <Form.Item label={t('account.fields.role')} name="role">
+                  <Input prefix={<SafetyCertificateOutlined />} />
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={12}>
+                <Form.Item label={t('account.fields.timezone')} name="timezone">
+                  <Select
+                    options={[
+                      { value: 'Asia/Saigon', label: 'Asia/Saigon' },
+                      { value: 'UTC', label: 'UTC' },
+                    ]}
+                  />
+                </Form.Item>
+              </Col>
+            </Row>
+          </Form>
+        </Col>
+      </Row>
+    </div>
+  );
+}
+
+export default function SystemSettingsPage() {
+  const t = useTranslations('SystemSettings');
+  const { data: session } = useSession();
+  const accessToken = getAccessToken(session);
+  const params = useParams();
+  const locale = params?.locale;
+  const { token } = theme.useToken();
+  const [activeTab, setActiveTab] = useState('account');
+
+  const currentUser = session?.user as any;
+  const userEmail = currentUser?.email || '';
+  const userName = currentUser?.name || userEmail.split('@')[0] || 'admin';
+  const userRole = currentUser?.role?.name || 'ADMIN';
+  const userInitial = (userName || userEmail || 'A').charAt(0).toUpperCase();
+
+  const panelStyle = useMemo<CSSProperties>(() => ({
+    borderRadius: 20,
+    border: `1px solid ${token.colorBorderSecondary}`,
+    background: token.colorBgContainer,
+    boxShadow: token.boxShadowTertiary,
+    overflow: 'hidden',
+  }), [token]);
+
+  const notificationContent = (
+    <div style={sectionStyle}>
+      <Row gutter={[32, 32]}>
+        <Col xs={24} lg={7}>
+          <Space orientation="vertical" size={8}>
+            <Title level={4} style={{ margin: 0 }}>{t('notifications.title')}</Title>
+            <Paragraph type="secondary" style={{ margin: 0 }}>
+              {t('notifications.description')}
+            </Paragraph>
+          </Space>
+        </Col>
+        <Col xs={24} lg={17}>
+          <Space orientation="vertical" size={10}>
+            <Text strong>{t('notifications.enabled')}</Text>
+            <Text type="secondary">{t('notifications.future')}</Text>
+          </Space>
+        </Col>
+      </Row>
+    </div>
+  );
+
+  const currencyContent = (
+    <div style={sectionStyle}>
+      <CurrencyPage embedded />
+    </div>
+  );
+
+  return (
+    <AdminPageScroll>
+      <PageHeader
+        title={t('pageTitle')}
+        icon={<SettingOutlined />}
+        description={t('pageDescription')}
+      />
+
+      <Card variant="borderless" style={panelStyle} styles={{ body: { padding: 0 } }}>
+        <div
+          style={{
+            padding: '22px 32px',
+            borderBottom: `1px solid ${token.colorBorderSecondary}`,
+            background: token.colorBgContainer,
+          }}
+        >
+          <Space orientation="vertical" size={4}>
+            <Text strong style={{ fontSize: 16 }}>{t('cardTitle')}</Text>
+            <Text type="secondary">{t('cardDescription')}</Text>
+          </Space>
+        </div>
+
+        <Tabs
+          activeKey={activeTab}
+          onChange={setActiveTab}
+          items={[
+            {
+              key: 'account',
+              label: <Space><UserOutlined />{t('tabs.account')}</Space>,
+              children: (
+                <AccountSettingsPanel
+                  userEmail={userEmail}
+                  userName={userName}
+                  userRole={userRole}
+                  userInitial={userInitial}
+                />
+              ),
+            },
+            {
+              key: 'security',
+              label: <Space><LockOutlined />{t('tabs.security')}</Space>,
+              children: <SecuritySettingsPanel userEmail={userEmail} locale={locale} />,
+            },
+            {
+              key: 'notifications',
+              label: <Space><BellOutlined />{t('tabs.notifications')}</Space>,
+              children: notificationContent,
+            },
+            {
+              key: 'currencies',
+              label: <Space><DollarOutlined />{t('tabs.currencies')}</Space>,
+              children: currencyContent,
+            },
+            {
+              key: 'tax',
+              label: <Space><PercentageOutlined />{t('tabs.tax')}</Space>,
+              children: <TaxSettingsPanel accessToken={accessToken} />,
+            },
+            {
+              key: 'matching',
+              label: <Space><SafetyCertificateOutlined />{t('tabs.matching')}</Space>,
+              children: <MatchingSettingsPanel accessToken={accessToken} />,
+            },
+          ]}
+          tabBarStyle={{
+            margin: 0,
+            padding: '0 32px',
+            borderBottom: `1px solid ${token.colorBorderSecondary}`,
+          }}
+        />
+      </Card>
+    </AdminPageScroll>
+  );
+}

@@ -25,33 +25,33 @@ export class PurchaseRequestsController {
     return this.purchaseRequestsService.findAll(+currentPage, +limit, qs);
   }
 
-  @Get(':id')
+  @Get(':_id')
   @ResponseMessage('Lấy chi tiết yêu cầu mua hàng thành công')
-  findOne(@Param('id') id: string) {
-    return this.purchaseRequestsService.findOne(id);
+  findOne(@Param('_id') recordId: string) {
+    return this.purchaseRequestsService.findOne(recordId);
   }
 
-  @Patch(':id')
+  @Patch(':_id')
   @ResponseMessage('Cập nhật yêu cầu mua hàng thành công')
-  update(@Param('id') id: string, @Body() updatePurchaseRequestDto: UpdatePurchaseRequestDto) {
-    return this.purchaseRequestsService.update(id, updatePurchaseRequestDto);
+  update(@Param('_id') recordId: string, @Body() updatePurchaseRequestDto: UpdatePurchaseRequestDto) {
+    return this.purchaseRequestsService.update(recordId, updatePurchaseRequestDto);
   }
 
-  @Post(':id/submit')
+  @Post(':_id/submit')
   @ResponseMessage('Gửi yêu cầu mua hàng thành công')
-  submit(@Param('id') id: string) {
-    return this.purchaseRequestsService.submit(id);
+  submit(@Param('_id') recordId: string, @User() user: IUser) {
+    return this.purchaseRequestsService.submit(recordId, user);
   }
 
-  @Post(':id/approve')
+  @Post(':_id/approve')
   @ResponseMessage('Phê duyệt yêu cầu mua hàng thành công')
-  approve(@Param('id') id: string, @User() user: IUser) {
-    return this.purchaseRequestsService.approve(id, user);
+  approve(@Param('_id') recordId: string, @User() user: IUser) {
+    return this.purchaseRequestsService.approve(recordId, user);
   }
 
-  @Delete(':id')
+  @Delete(':_id')
   @ResponseMessage('Xóa yêu cầu mua hàng thành công')
-  remove(@Param('id') id: string) {
-    return this.purchaseRequestsService.remove(id);
+  remove(@Param('_id') recordId: string) {
+    return this.purchaseRequestsService.remove(recordId);
   }
 }

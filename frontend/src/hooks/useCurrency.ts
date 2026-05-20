@@ -11,7 +11,7 @@ import {
 } from '@/constants/currency.config';
 
 /**
- * `useCurrency` — Locale-aware, production-grade currency formatter.
+ * `useCurrency` — locale-aware currency formatter.
  *
  * ## Core principle
  * Numbers are formatted according to the **user's active UI locale**

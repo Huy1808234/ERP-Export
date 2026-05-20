@@ -1,8 +1,9 @@
 import { useState, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
-import { sendRequest } from '@/utils/api';
+import { sendRequest } from '@/lib/api-client';
 import { IPurchaseRequest } from '@/types/purchase-request';
-import { notification } from '@/library/antd.static';
+import { notification } from '@/providers/antd-static';
+import { getAccessToken } from '@/lib/auth-token';
 
 interface FetchParams {
   current: number;
@@ -26,7 +27,7 @@ export const usePurchaseRequests = () => {
 
   const fetchPRs = useCallback(async (params: FetchParams) => {
     setLoading(true);
-    const accessToken = session?.access_token;
+    const accessToken = getAccessToken(session);
 
     try {
       const res = await sendRequest<IBackendRes<IModelPaginate<IPurchaseRequest>>>({
@@ -69,24 +70,5 @@ export const usePurchaseRequests = () => {
     }
   }, [session]);
 
-  const approvePR = useCallback(async (id: string, onSuccess: () => void) => {
-    const accessToken = session?.access_token;
-
-    try {
-      const res = await sendRequest<IBackendRes<IPurchaseRequest>>({
-        url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/purchase-requests/${id}/approve`,
-        method: 'POST',
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-
-      if (res?.data) {
-        notification.success({ title: 'Phê duyệt yêu cầu mua hàng thành công' });
-        onSuccess();
-      }
-    } catch (error) {
-      notification.error({ title: 'Lỗi khi phê duyệt PR' });
-    }
-  }, [session]);
-
-  return { data, meta, loading, fetchPRs, approvePR };
+  return { data, meta, loading, fetchPRs };
 };

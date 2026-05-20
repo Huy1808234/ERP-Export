@@ -33,22 +33,22 @@ export class UsersController {
     return this.usersService.findAll(query, +current, +pageSize);
   }
 
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.usersService.findOne(id);
+  @Get(':user_ref')
+  findOne(@Param('user_ref') user_ref: string) {
+    return this.usersService.findOne(user_ref);
   }
 
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
-    return this.usersService.update(id, updateUserDto);
+  @Patch(':user_ref')
+  update(@Param('user_ref') user_ref: string, @Body() updateUserDto: UpdateUserDto) {
+    return this.usersService.update(user_ref, updateUserDto);
   }
   @Post('bulk-delete')
   bulkRemove(@Body('ids') ids: string[]) {
     return this.usersService.bulkRemove(ids);
   }
 
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.usersService.remove(id);
+  @Delete(':user_ref')
+  remove(@Param('user_ref') user_ref: string) {
+    return this.usersService.remove(user_ref);
   }
 }

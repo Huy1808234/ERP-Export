@@ -1,9 +1,13 @@
-import { IsArray, IsDateString, IsNotEmpty, IsOptional, IsString, IsUUID, ValidateNested, IsNumber, Min } from 'class-validator';
+import { IsArray, IsDateString, IsNotEmpty, IsOptional, IsString, ValidateNested, IsNumber, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 
 class PurchaseOrderItemDto {
-  @IsUUID()
+  @IsOptional()
+  @IsString()
+  _id?: string;
+
   @IsNotEmpty()
+  @IsString()
   productId: string;
 
   @IsNumber()
@@ -24,16 +28,16 @@ class PurchaseOrderItemDto {
 }
 
 export class CreatePurchaseOrderDto {
-  @IsUUID()
   @IsNotEmpty()
+  @IsString()
   vendorId: string;
 
   @IsOptional()
-  @IsUUID()
+  @IsString()
   purchaseRequestId?: string;
 
   @IsOptional()
-  @IsUUID()
+  @IsString()
   proformaInvoiceId?: string;
 
   @IsDateString()

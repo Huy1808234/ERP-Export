@@ -1,8 +1,11 @@
 import InventoryLedgerTable from "@/components/admin/inventory/InventoryLedgerTable";
+import AdminPageScroll from "@/components/layout/admin.page-scroll";
 
 const InventoryLedgerPage = () => {
     return (
-        <InventoryLedgerTable />
+        <AdminPageScroll>
+            <InventoryLedgerTable />
+        </AdminPageScroll>
     )
 }
 

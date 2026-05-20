@@ -1,8 +1,9 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToMany, ManyToOne, JoinColumn, DeleteDateColumn } from 'typeorm';
+import { BeforeInsert, Column, CreateDateColumn, DeleteDateColumn, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryColumn, UpdateDateColumn } from 'typeorm';
 import { Partner } from '@/modules/partners/entities/partner.entity';
 import { User } from '@/modules/users/entities/user.entity';
 import { QuotationItem } from './quotation-item.entity';
 import { ColumnNumericTransformer } from '@/helpers/typeorm.util';
+import { createEntityId } from '@/common/ids/entity-id.util';
 
 export enum QuotationStatus {
   DRAFT = 'DRAFT',
@@ -25,8 +26,15 @@ export enum Incoterm {
 
 @Entity('quotations')
 export class Quotation {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
+  @PrimaryColumn({ type: 'varchar', length: 40, name: '_id' })
+  _id: string;
+
+  @BeforeInsert()
+  assignId() {
+    if (!this._id) {
+      this._id = createEntityId('quote');
+    }
+  }
 
   @Column({ unique: true })
   quotationNumber: string;
@@ -40,6 +48,15 @@ export class Quotation {
 
   @Column({ type: 'enum', enum: QuotationStatus, default: QuotationStatus.DRAFT })
   status: QuotationStatus;
+
+  @Column({ type: 'varchar', length: 40, nullable: true })
+  approvalWorkflowRequestId: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  submittedForApprovalByUsername: string | null;
+
+  @Column({ type: 'timestamp', nullable: true })
+  submittedForApprovalAt: Date | null;
 
   @Column({ type: 'enum', enum: Incoterm, default: Incoterm.FOB })
   incoterm: Incoterm;
@@ -71,6 +88,19 @@ export class Quotation {
   @Column({ type: 'numeric', precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
   logisticsFee: number;
 
+  // Granular Fees matching Sales Contract
+  @Column({ type: 'numeric', precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  domesticTransportCost: number;
+
+  @Column({ type: 'numeric', precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  portCharges: number;
+
+  @Column({ type: 'numeric', precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  seaFreight: number;
+
+  @Column({ type: 'numeric', precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  insuranceCost: number;
+
   @Column({ type: 'varchar', default: 'USD' })
   logisticsFeeCurrency: string;
 
@@ -87,24 +117,36 @@ export class Quotation {
   deliveryTerms: string;
 
   @Column()
-  createdById: string;
+  createdByUsername: string;
 
   @ManyToOne(() => User)
-  @JoinColumn({ name: 'createdById' })
+  @JoinColumn({ name: 'createdByUsername', referencedColumnName: 'username' })
   createdBy: User;
 
-  @Column({ nullable: true })
-  approvedById: string;
+  @Column({ type: 'varchar', nullable: true })
+  approvedByUsername: string | null;
 
-  @ManyToOne(() => User)
-  @JoinColumn({ name: 'approvedById' })
-  approvedBy: User;
+  @ManyToOne(() => User, { nullable: true })
+  @JoinColumn({ name: 'approvedByUsername', referencedColumnName: 'username' })
+  approvedBy: User | null;
 
   @Column({ type: 'timestamp', nullable: true })
-  approvedAt: Date;
+  approvedAt: Date | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  rejectedByUsername: string | null;
+
+  @Column({ type: 'timestamp', nullable: true })
+  rejectedAt: Date | null;
+
+  @Column({ type: 'text', nullable: true })
+  rejectionReason: string | null;
 
   @OneToMany(() => QuotationItem, (item) => item.quotation, { cascade: true })
   items: QuotationItem[];
+
+  @OneToMany('ProformaInvoice', 'quotation')
+  proformaInvoices: any[];
 
   @Column({ type: 'text', nullable: true })
   note: string;

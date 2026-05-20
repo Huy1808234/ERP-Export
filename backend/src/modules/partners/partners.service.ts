@@ -5,20 +5,66 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { Repository, In } from 'typeorm';
+import { Brackets, Repository, SelectQueryBuilder } from 'typeorm';
 import { CreatePartnerDto } from './dto/create-partner.dto';
 import { UpdatePartnerDto } from './dto/update-partner.dto';
-import { BuyerRiskLevel, Partner } from './entities/partner.entity';
+import { BuyerRiskLevel, Partner, PartnerType } from './entities/partner.entity';
 import { Quotation } from '@/modules/quotations/entities/quotation.entity';
 import {
   PIStatus,
   ProformaInvoice,
 } from '@/modules/proforma-invoices/entities/proforma-invoice.entity';
 import { Shipment } from '@/modules/shipments/entities/shipment.entity';
+import { PurchaseOrder } from '@/modules/purchase-orders/entities/purchase-order.entity';
+import { QCClaimStatus, QCResult, QualityCheck } from '@/modules/quality-control/entities/quality-check.entity';
+import { VendorInvoice } from '@/modules/vendor-invoices/entities/vendor-invoice.entity';
+import { AccountPayable, APStatus } from '@/modules/account-payables/entities/account-payable.entity';
 import { CurrenciesService } from '../currencies/currencies.service';
 import { ExchangeRateType } from '../currencies/entities/exchange-rate.entity';
 import { Decimal } from 'decimal.js';
 import * as XLSX from 'xlsx';
+
+type PartnerFilterValue = string | number | boolean | RegExp | null | undefined;
+type PartnerFilter = Record<string, PartnerFilterValue>;
+type PartnerSort = Record<string, number>;
+type PartnerWithSnapshot = Omit<Partner, 'assignId'> & {
+  apBalance: number;
+  availableCredit: number;
+  balanceSortValue: number;
+  creditLimit: number;
+  currentDebt: number;
+  riskLevel: BuyerRiskLevel;
+};
+
+const PARTNER_SEARCH_COLUMNS = [
+  'name',
+  'taxCode',
+  'country',
+  'email',
+  'phone',
+  'contactName',
+] as const;
+
+const PARTNER_TEXT_FILTER_COLUMNS = new Set<string>(PARTNER_SEARCH_COLUMNS);
+
+const PARTNER_REGION_COUNTRY_ALIASES: Record<string, string[]> = {
+  ASEAN: ['ASEAN', 'Việt Nam', 'Vietnam', 'Thailand', 'Singapore', 'Malaysia', 'Indonesia', 'Philippines'],
+  APAC: ['APAC', 'China', 'Japan', 'Korea', 'Australia', 'Asia'],
+  EU: ['EU', 'Europe', 'European', 'Germany', 'France', 'Netherlands'],
+  MIDDLE_EAST: ['Middle East', 'UAE', 'Saudi', 'Qatar'],
+  US: ['US', 'USA', 'United States', 'America', 'American', 'Hoa Kỳ', 'Mỹ'],
+};
+
+const PARTNER_DB_SORT_COLUMNS = new Set([
+  'country',
+  'isActive',
+  'name',
+  'partnerType',
+  'region',
+  'updatedAt',
+]);
+
+const PARTNER_DYNAMIC_SORT_COLUMNS = new Set(['balance', 'debt']);
 
 @Injectable()
 export class PartnersService {
@@ -34,6 +80,18 @@ export class PartnersService {
 
     @InjectRepository(Shipment)
     private shipmentRepository: Repository<Shipment>,
+
+    @InjectRepository(PurchaseOrder)
+    private purchaseOrderRepository: Repository<PurchaseOrder>,
+
+    @InjectRepository(VendorInvoice)
+    private vendorInvoiceRepository: Repository<VendorInvoice>,
+
+    @InjectRepository(AccountPayable)
+    private accountPayableRepository: Repository<AccountPayable>,
+
+    @InjectRepository(QualityCheck)
+    private qualityCheckRepository: Repository<QualityCheck>,
 
     private currenciesService: CurrenciesService,
   ) { }
@@ -118,7 +176,7 @@ export class PartnersService {
    * Tạo Snapshot thông tin tài chính của Buyer
    */
   private async buildBuyerSnapshot(partner: Partner) {
-    const { arBalance, apBalance } = await this.calculateActualBalances(partner.id);
+    const { arBalance, apBalance } = await this.calculateActualBalances(partner._id);
     const currentDebt = await this.getCurrentDebt(partner, arBalance);
 
     // Đối với AP Balance cũng cần quy đổi nếu khác VND
@@ -128,6 +186,8 @@ export class PartnersService {
     const riskLevel = this.classifyBuyerRisk(currentDebt, creditLimit, partner);
 
     return {
+      balanceSortValue:
+        partner.partnerType === PartnerType.CUSTOMER ? arBalance : apBalance,
       currentDebt,
       apBalance: apBalanceConverted,
       creditLimit,
@@ -139,10 +199,161 @@ export class PartnersService {
     };
   }
 
-  private isValidUUID(uuid: string): boolean {
-    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-      uuid,
+  private consumeSearchTerm(filter: PartnerFilter): string | null {
+    const rawSearch = filter.search;
+    delete filter.search;
+
+    if (rawSearch instanceof RegExp) {
+      return rawSearch.source.trim() || null;
+    }
+
+    if (typeof rawSearch === 'string' || typeof rawSearch === 'number') {
+      return String(rawSearch).trim() || null;
+    }
+
+    return null;
+  }
+
+  private consumeRiskLevelFilter(filter: PartnerFilter): BuyerRiskLevel | null {
+    const rawRiskLevel = filter.riskLevel;
+    delete filter.riskLevel;
+
+    if (typeof rawRiskLevel !== 'string') return null;
+
+    return (Object.values(BuyerRiskLevel) as string[]).includes(rawRiskLevel)
+      ? (rawRiskLevel as BuyerRiskLevel)
+      : null;
+  }
+
+  private async buildPartnerRows(partners: Partner[]): Promise<PartnerWithSnapshot[]> {
+    return Promise.all(
+      partners.map(async (item) => {
+        const snapshot = await this.buildBuyerSnapshot(item);
+        return { ...item, ...snapshot };
+      }),
     );
+  }
+
+  private getPrimarySort(sort?: PartnerSort): { field: string; order: 'ASC' | 'DESC' } | null {
+    if (!sort) return null;
+
+    const [field] = Object.keys(sort);
+    if (!field) return null;
+
+    return {
+      field,
+      order: sort[field] === 1 ? 'ASC' : 'DESC',
+    };
+  }
+
+  private sortPartnerRows(
+    rows: PartnerWithSnapshot[],
+    sortConfig: { field: string; order: 'ASC' | 'DESC' } | null,
+  ): PartnerWithSnapshot[] {
+    if (!sortConfig || !PARTNER_DYNAMIC_SORT_COLUMNS.has(sortConfig.field)) {
+      return rows;
+    }
+
+    const direction = sortConfig.order === 'ASC' ? 1 : -1;
+
+    return [...rows].sort((first, second) => {
+      return (first.balanceSortValue - second.balanceSortValue) * direction;
+    });
+  }
+
+  private applySearch(
+    queryBuilder: SelectQueryBuilder<Partner>,
+    searchTerm: string | null,
+  ) {
+    if (!searchTerm) return;
+
+    const compactSearchTerm = searchTerm.replace(/[^0-9A-Za-z]/g, '');
+
+    queryBuilder.andWhere(
+      new Brackets((qb) => {
+        PARTNER_SEARCH_COLUMNS.forEach((column, index) => {
+          const condition = `partner.${column} ILIKE :partnerSearch`;
+          if (index === 0) {
+            qb.where(condition, { partnerSearch: `%${searchTerm}%` });
+            return;
+          }
+
+          qb.orWhere(condition);
+        });
+
+        if (compactSearchTerm) {
+          qb.orWhere(
+            `regexp_replace(COALESCE(partner.taxCode, ''), '[^0-9A-Za-z]', '', 'g') ILIKE :partnerCompactSearch`,
+            { partnerCompactSearch: `%${compactSearchTerm}%` },
+          );
+        }
+      }),
+    );
+  }
+
+  private applyFilters(
+    queryBuilder: SelectQueryBuilder<Partner>,
+    filter: PartnerFilter,
+  ) {
+    Object.keys(filter).forEach((key) => {
+      const value = filter[key];
+      if (value === undefined || value === null || value === '') return;
+
+      if (key === 'region' && typeof value === 'string') {
+        const aliases = PARTNER_REGION_COUNTRY_ALIASES[value] ?? [];
+        queryBuilder.andWhere(
+          new Brackets((qb) => {
+            qb.where('partner.region = :region', { region: value });
+            aliases.forEach((alias, index) => {
+              qb.orWhere(`partner.country ILIKE :regionAlias${index}`, {
+                [`regionAlias${index}`]: `%${alias}%`,
+              });
+            });
+          }),
+        );
+        return;
+      }
+
+      if (value instanceof RegExp) {
+        queryBuilder.andWhere(`partner.${key} ILIKE :${key}`, {
+          [key]: `%${value.source}%`,
+        });
+        return;
+      }
+
+      if (typeof value === 'string' && PARTNER_TEXT_FILTER_COLUMNS.has(key)) {
+        queryBuilder.andWhere(`partner.${key} ILIKE :${key}`, {
+          [key]: `%${value}%`,
+        });
+        return;
+      }
+
+      queryBuilder.andWhere(`partner.${key} = :${key}`, {
+        [key]: value,
+      });
+    });
+  }
+
+  private applySort(
+    queryBuilder: SelectQueryBuilder<Partner>,
+    sort?: PartnerSort,
+  ) {
+    const sortConfig = this.getPrimarySort(sort);
+
+    if (sortConfig?.field === 'partnerType') {
+      queryBuilder.addOrderBy(
+        `CASE partner.partnerType WHEN 'LOGISTICS' THEN 1 WHEN 'CUSTOMER' THEN 2 WHEN 'SUPPLIER' THEN 3 ELSE 4 END`,
+        sortConfig.order,
+      );
+      return;
+    }
+
+    if (sortConfig && PARTNER_DB_SORT_COLUMNS.has(sortConfig.field)) {
+      queryBuilder.addOrderBy(`partner.${sortConfig.field}`, sortConfig.order);
+      return;
+    }
+
+    queryBuilder.orderBy('partner.updatedAt', 'DESC');
   }
 
   async create(createPartnerDto: CreatePartnerDto) {
@@ -177,65 +388,53 @@ export class PartnersService {
     const curr = +current || 1;
     const pSize = +pageSize || 10;
 
-    // ✅ TÁCH BIẾN SEARCH
-    const searchTerm = filter.search;
-    if (filter.search !== undefined) {
-      delete filter.search;
-    }
+    const searchTerm = this.consumeSearchTerm(filter);
+    const riskLevelFilter = this.consumeRiskLevelFilter(filter);
+    const sortConfig = this.getPrimarySort(sort);
+    const shouldSortAfterSnapshot =
+      !!sortConfig && PARTNER_DYNAMIC_SORT_COLUMNS.has(sortConfig.field);
 
     const skip = (curr - 1) * pSize;
 
-    const { current: _c, pageSize: _p, ...filters } = query;
     const queryBuilder = this.partnerRepository.createQueryBuilder('partner');
 
-    // Xử lý filter động
-    Object.keys(filter).forEach((key) => {
-      if (filter[key] instanceof RegExp) {
-        queryBuilder.andWhere(`partner.${key} ILIKE :${key}`, {
-          [key]: `%${filter[key].source}%`,
-        });
-      } else {
-        queryBuilder.andWhere(`partner.${key} = :${key}`, {
-          [key]: filter[key],
-        });
-      }
-    });
+    this.applyFilters(queryBuilder, filter);
+    this.applySearch(queryBuilder, searchTerm);
+    this.applySort(queryBuilder, sort);
 
-    // Xử lý sort
-    if (sort) {
-      Object.keys(sort).forEach((key) => {
-        queryBuilder.addOrderBy(
-          `partner.${key}`,
-          (sort as any)[key] === 1 ? 'ASC' : 'DESC',
-        );
-      });
-    } else {
-      queryBuilder.orderBy('partner.updatedAt', 'DESC');
+    if (riskLevelFilter || shouldSortAfterSnapshot) {
+      const allResultsRaw = await queryBuilder.getMany();
+      const allResults = await this.buildPartnerRows(allResultsRaw);
+      const riskFilteredResults = allResults.filter(
+        (item) => !riskLevelFilter || item.riskLevel === riskLevelFilter,
+      );
+      const sortedResults = this.sortPartnerRows(
+        riskFilteredResults,
+        sortConfig,
+      );
+
+      return {
+        results: sortedResults.slice(skip, skip + pSize),
+        totalPages: Math.ceil(sortedResults.length / pSize),
+        totalItems: sortedResults.length,
+      };
     }
 
-    queryBuilder.skip(skip).take(pageSize);
+    queryBuilder.skip(skip).take(pSize);
 
     const [resultsRaw, totalItems] = await queryBuilder.getManyAndCount();
 
-    const results = await Promise.all(
-      resultsRaw.map(async (item) => {
-        const snapshot = await this.buildBuyerSnapshot(item);
-        return { ...item, ...snapshot };
-      }),
-    );
+    const results = await this.buildPartnerRows(resultsRaw);
 
     return {
       results,
-      totalPages: Math.ceil(totalItems / pageSize),
+      totalPages: Math.ceil(totalItems / pSize),
       totalItems,
     };
   }
 
   async findOne(id: string) {
-    if (!this.isValidUUID(id))
-      throw new BadRequestException(`ID không hợp lệ: ${id}`);
-
-    const partner = await this.partnerRepository.findOneBy({ id }); // Sửa _id -> id
+    const partner = await this.partnerRepository.findOneBy({ _id: id });
     if (!partner) throw new NotFoundException('Không tìm thấy đối tác');
 
     const snapshot = await this.buildBuyerSnapshot(partner);
@@ -243,13 +442,12 @@ export class PartnersService {
   }
 
   async getPartnerHistory(id: string) {
-    if (!this.isValidUUID(id))
-      throw new BadRequestException(`ID không hợp lệ: ${id}`);
-
-    const partner = await this.partnerRepository.findOneBy({ id });
+    const partner = await this.partnerRepository.findOneBy({ _id: id });
     if (!partner) throw new NotFoundException('Không tìm thấy đối tác');
 
-    const [quotations, quotationTotal, piItems, piTotal, shipmentsRaw, shipmentTotal, snapshot] =
+    const isVendorLike = partner.partnerType === 'SUPPLIER' || partner.partnerType === 'LOGISTICS';
+
+    const [quotations, quotationTotal, piItems, piTotal, shipmentsRaw, shipmentTotal, purchaseOrders, poTotal, vendorInvoices, vendorInvoiceTotal, payables, payableTotal, qualityClaims, qualityClaimTotal, snapshot] =
       await Promise.all([
         // Chỉ lấy Quotations cho Customer
         partner.partnerType === 'CUSTOMER' ? 
@@ -281,6 +479,60 @@ export class PartnersService {
         partner.partnerType === 'LOGISTICS' ? 
           this.shipmentRepository.count({ where: { logisticsPartnerId: id } }) : Promise.resolve(0),
 
+        isVendorLike ?
+          this.purchaseOrderRepository.find({
+            where: { vendorId: id },
+            relations: ['items', 'items.product'],
+            order: { updatedAt: 'DESC' },
+            take: 5,
+          }) : Promise.resolve([]),
+        isVendorLike ?
+          this.purchaseOrderRepository.count({ where: { vendorId: id } }) : Promise.resolve(0),
+
+        isVendorLike ?
+          this.vendorInvoiceRepository.find({
+            where: { vendorId: id },
+            relations: ['purchaseOrder'],
+            order: { updatedAt: 'DESC' },
+            take: 5,
+          }) : Promise.resolve([]),
+        isVendorLike ?
+          this.vendorInvoiceRepository.count({ where: { vendorId: id } }) : Promise.resolve(0),
+
+        isVendorLike ?
+          this.accountPayableRepository.find({
+            where: { vendorId: id },
+            order: { dueDate: 'ASC', updatedAt: 'DESC' },
+            take: 10,
+          }) : Promise.resolve([]),
+        isVendorLike ?
+          this.accountPayableRepository.count({ where: { vendorId: id } }) : Promise.resolve(0),
+
+        isVendorLike ?
+          this.qualityCheckRepository
+            .createQueryBuilder('qc')
+            .leftJoinAndSelect('qc.product', 'product')
+            .leftJoinAndSelect('qc.purchaseOrder', 'purchaseOrder')
+            .leftJoinAndSelect('qc.purchaseReturn', 'purchaseReturn')
+            .where('purchaseOrder.vendorId = :id', { id })
+            .andWhere('(qc.result != :passed OR qc.claimStatus != :none OR qc.claimNumber IS NOT NULL)', {
+              passed: QCResult.PASSED,
+              none: QCClaimStatus.NONE,
+            })
+            .orderBy('qc.updatedAt', 'DESC')
+            .take(10)
+            .getMany() : Promise.resolve([]),
+        isVendorLike ?
+          this.qualityCheckRepository
+            .createQueryBuilder('qc')
+            .leftJoin('qc.purchaseOrder', 'purchaseOrder')
+            .where('purchaseOrder.vendorId = :id', { id })
+            .andWhere('(qc.result != :passed OR qc.claimStatus != :none OR qc.claimNumber IS NOT NULL)', {
+              passed: QCResult.PASSED,
+              none: QCClaimStatus.NONE,
+            })
+            .getCount() : Promise.resolve(0),
+
         this.buildBuyerSnapshot(partner),
       ]);
 
@@ -295,6 +547,31 @@ export class PartnersService {
       quotations[0]?.updatedAt,
       piItems[0]?.updatedAt,
       shipmentsRaw[0]?.updatedAt,
+      purchaseOrders[0]?.updatedAt,
+      vendorInvoices[0]?.updatedAt,
+      payables[0]?.updatedAt,
+      qualityClaims[0]?.updatedAt,
+    );
+
+    const payableSummary = payables.reduce(
+      (acc, item) => {
+        const amount = this.toNumber(item.amount);
+        const paid = this.toNumber(item.paidAmount);
+        const remaining = Math.max(amount - paid, 0);
+        acc.totalAmount += amount;
+        acc.paidAmount += paid;
+        acc.remainingAmount += remaining;
+
+        if (item.status !== APStatus.PAID) {
+          acc.openCount += 1;
+        }
+        if (item.dueDate && new Date(item.dueDate).getTime() < Date.now() && item.status !== APStatus.PAID) {
+          acc.overdueCount += 1;
+        }
+
+        return acc;
+      },
+      { totalAmount: 0, paidAmount: 0, remainingAmount: 0, openCount: 0, overdueCount: 0 },
     );
 
     return {
@@ -302,6 +579,19 @@ export class PartnersService {
       quotations: { total: quotationTotal, items: quotations },
       proformaInvoices: { total: piTotal, items: piItems },
       shipments: { total: shipmentTotal, items: shipmentsRaw },
+      purchaseOrders: { total: poTotal, items: purchaseOrders },
+      vendorInvoices: { total: vendorInvoiceTotal, items: vendorInvoices },
+      payables: { total: payableTotal, items: payables, summary: payableSummary },
+      qualityClaims: {
+        total: qualityClaimTotal,
+        items: qualityClaims,
+        summary: {
+          openClaims: qualityClaims.filter((item) => item.claimStatus === QCClaimStatus.OPEN || item.claimStatus === QCClaimStatus.SENT).length,
+          failedChecks: qualityClaims.filter((item) => item.result !== QCResult.PASSED).length,
+          rejectedQuantity: qualityClaims.reduce((sum, item) => sum + this.toNumber(item.rejectedQuantity), 0),
+          quarantineQuantity: qualityClaims.reduce((sum, item) => sum + this.toNumber(item.quarantineQuantity), 0),
+        },
+      },
       lastActivityAt,
     };
   }
@@ -311,10 +601,7 @@ export class PartnersService {
     updatePartnerDto: UpdatePartnerDto,
     requestRole?: string,
   ) {
-    if (!this.isValidUUID(id))
-      throw new BadRequestException(`ID không hợp lệ: ${id}`);
-
-    const existingPartner = await this.partnerRepository.findOneBy({ id });
+    const existingPartner = await this.partnerRepository.findOneBy({ _id: id });
     if (!existingPartner) throw new NotFoundException('Không tìm thấy đối tác');
 
     // Logic kiểm tra TaxCode
@@ -377,11 +664,8 @@ export class PartnersService {
   }
 
   async remove(id: string) {
-    if (!this.isValidUUID(id))
-      throw new BadRequestException(`ID không hợp lệ: ${id}`);
-
     // Soft delete để giữ lại lịch sử giao dịch trong DB
-    const result = await this.partnerRepository.softDelete({ id });
+    const result = await this.partnerRepository.softDelete({ _id: id });
 
     if (result.affected === 0)
       throw new NotFoundException('Không tìm thấy đối tác');
@@ -389,11 +673,6 @@ export class PartnersService {
   }
 
   async bulkRemove(ids: string[]) {
-    // Kiểm tra tất cả ID có hợp lệ không
-    ids.forEach(id => {
-      if (!this.isValidUUID(id)) throw new BadRequestException(`ID không hợp lệ: ${id}`);
-    });
-
     const result = await this.partnerRepository.softDelete(ids);
     return {
       message: `Xoá thành công ${result.affected} đối tác`,
@@ -407,39 +686,32 @@ export class PartnersService {
     ['current', 'pageSize', 'limit', 'skip'].forEach(
       (key) => delete filter[key],
     );
+    const searchTerm = this.consumeSearchTerm(filter);
+    const riskLevelFilter = this.consumeRiskLevelFilter(filter);
+    const sortConfig = this.getPrimarySort(sort);
+    const shouldSortAfterSnapshot =
+      !!sortConfig && PARTNER_DYNAMIC_SORT_COLUMNS.has(sortConfig.field);
 
     const queryBuilder = this.partnerRepository.createQueryBuilder('partner');
 
-    // Xử lý filter động
-    Object.keys(filter).forEach((key) => {
-      if (filter[key] instanceof RegExp) {
-        queryBuilder.andWhere(`partner.${key} ILIKE :${key}`, {
-          [key]: `%${filter[key].source}%`,
-        });
-      } else {
-        queryBuilder.andWhere(`partner.${key} = :${key}`, {
-          [key]: filter[key],
-        });
-      }
-    });
+    this.applyFilters(queryBuilder, filter);
+    this.applySearch(queryBuilder, searchTerm);
+    this.applySort(queryBuilder, sort);
 
-    // Xử lý sort
-    if (sort) {
-      Object.keys(sort).forEach((key) => {
-        queryBuilder.addOrderBy(
-          `partner.${key}`,
-          (sort as any)[key] === 1 ? 'ASC' : 'DESC',
-        );
-      });
-    } else {
-      queryBuilder.orderBy('partner.updatedAt', 'DESC');
-    }
-
-    const results = await queryBuilder.getMany();
+    const resultsRaw = await queryBuilder.getMany();
+    const results =
+      riskLevelFilter || shouldSortAfterSnapshot
+        ? this.sortPartnerRows(
+            (await this.buildPartnerRows(resultsRaw)).filter(
+              (item) => !riskLevelFilter || item.riskLevel === riskLevelFilter,
+            ),
+            sortConfig,
+          )
+        : resultsRaw;
 
     // Map dữ liệu sang format Excel
     const data = results.map((p) => ({
-      'ID': p.id,
+      'ID': p._id,
       'Tên Đối Tác': p.name,
       'Loại Đối Tác': p.partnerType === 'CUSTOMER' ? 'Khách hàng (Buyer)' : (p.partnerType === 'SUPPLIER' ? 'Nhà cung cấp (Vendor)' : 'Đơn vị vận chuyển (Logistics)'),
       'Quốc Gia': p.country || 'Việt Nam',

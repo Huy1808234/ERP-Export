@@ -2,6 +2,8 @@ import { Controller, Get, Post, Body, Patch, Param, Delete, Query } from '@nestj
 import { PurchaseOrdersService } from './purchase-orders.service';
 import { CreatePurchaseOrderDto } from './dto/create-purchase-order.dto';
 import { UpdatePurchaseOrderDto } from './dto/update-purchase-order.dto';
+import { CancelPurchaseOrderDto } from './dto/cancel-purchase-order.dto';
+import { SendPurchaseOrderDto } from './dto/send-purchase-order.dto';
 import { ResponseMessage, User, Roles } from '@/decorator/customize';
 import type { IUser } from '../users/users.interface';
 
@@ -40,33 +42,48 @@ export class PurchaseOrdersController {
     return this.purchaseOrdersService.getStats();
   }
 
-  @Get(':id')
+  @Get(':_id')
   @ResponseMessage('Lấy chi tiết đơn đặt hàng thành công')
-  findOne(@Param('id') id: string) {
-    return this.purchaseOrdersService.findOne(id);
+  findOne(@Param('_id') recordId: string) {
+    return this.purchaseOrdersService.findOne(recordId);
   }
 
-  @Patch(':id')
+  @Patch(':_id')
   @ResponseMessage('Cập nhật đơn đặt hàng thành công')
-  update(@Param('id') id: string, @Body() updatePurchaseOrderDto: UpdatePurchaseOrderDto) {
-    return this.purchaseOrdersService.update(id, updatePurchaseOrderDto);
+  update(@Param('_id') recordId: string, @Body() updatePurchaseOrderDto: UpdatePurchaseOrderDto) {
+    return this.purchaseOrdersService.update(recordId, updatePurchaseOrderDto);
   }
 
-  @Post(':id/send')
+  @Post(':_id/send')
   @ResponseMessage('Gửi đơn đặt hàng cho nhà cung cấp thành công')
-  send(@Param('id') id: string) {
-    return this.purchaseOrdersService.send(id);
+  send(
+    @Param('_id') recordId: string,
+    @Body() body: SendPurchaseOrderDto,
+    @User() user: IUser,
+  ) {
+    return this.purchaseOrdersService.send(recordId, user, body);
   }
 
-  @Get(':id/matching')
+  @Patch(':_id/cancel')
+  @Roles('ADMIN', 'PURCHASING')
+  @ResponseMessage('Huy PO thanh cong')
+  cancel(
+    @Param('_id') recordId: string,
+    @Body() body: CancelPurchaseOrderDto,
+    @User() user: IUser,
+  ) {
+    return this.purchaseOrdersService.cancel(recordId, body, user);
+  }
+
+  @Get(':_id/matching')
   @ResponseMessage('Lấy dữ liệu đối soát 3 chiều thành công')
-  getMatching(@Param('id') id: string) {
-    return this.purchaseOrdersService.getMatchingData(id);
+  getMatching(@Param('_id') recordId: string) {
+    return this.purchaseOrdersService.getMatchingData(recordId);
   }
 
-  @Delete(':id')
+  @Delete(':_id')
   @ResponseMessage('Xóa đơn đặt hàng thành công')
-  remove(@Param('id') id: string) {
-    return this.purchaseOrdersService.softDelete(id);
+  remove(@Param('_id') recordId: string) {
+    return this.purchaseOrdersService.softDelete(recordId);
   }
 }

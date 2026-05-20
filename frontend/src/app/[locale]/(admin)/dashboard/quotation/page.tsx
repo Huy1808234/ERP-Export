@@ -1,10 +1,11 @@
 import QuotationTable from '@/components/admin/quotation/quotation.table';
+import AdminPageScroll from '@/components/layout/admin.page-scroll';
 
 const ManageQuotationPage = () => {
   return (
-    <div style={{ padding: 24 }}>
+    <AdminPageScroll>
       <QuotationTable />
-    </div>
+    </AdminPageScroll>
   );
 };
 

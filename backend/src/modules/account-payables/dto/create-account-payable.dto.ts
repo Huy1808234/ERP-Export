@@ -6,10 +6,10 @@ import {
   IsNumber,
   IsOptional,
   IsString,
-  IsUUID,
   Min,
 } from 'class-validator';
 import { APStatus } from '../entities/account-payable.entity';
+import { IsEntityId } from '@/common/ids/entity-id.validator';
 
 const toOptionalNumber = () =>
   Transform(({ value }) => {
@@ -25,8 +25,12 @@ const trimString = () =>
   });
 
 export class CreateAccountPayableDto {
-  @IsUUID('4', { message: 'vendorId khong hop le' })
+  @IsEntityId({ message: 'vendorId phai la _id hop le' })
   vendorId: string;
+
+  @IsEntityId({ message: 'vendorInvoiceId phai la _id hop le' })
+  @IsOptional()
+  vendorInvoiceId?: string;
 
   @trimString()
   @IsOptional()

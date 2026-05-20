@@ -1,10 +1,11 @@
 import GoodsReceiptTable from "@/components/admin/goods-receipt/goods-receipt.table";
+import AdminPageScroll from "@/components/layout/admin.page-scroll";
 
 const GoodsReceiptPage = () => {
     return (
-        <div>
+        <AdminPageScroll>
             <GoodsReceiptTable />
-        </div>
+        </AdminPageScroll>
     )
 }
 

@@ -1,19 +1,20 @@
-import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+import { BeforeInsert, Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryColumn, UpdateDateColumn } from 'typeorm';
 import { PurchaseRequest } from './purchase-request.entity';
 import { Product } from '@/modules/products/entities/product.entity';
 import { ColumnNumericTransformer } from '@/helpers/typeorm.util';
+import { createEntityId } from '@/common/ids/entity-id.util';
 
 @Entity('purchase_request_items')
 export class PurchaseRequestItem {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
+  @PrimaryColumn({ type: 'varchar', length: 40, name: '_id' })
+  _id: string;
 
-  @Column()
-  purchaseRequestId: string;
+  @Column({ type: 'varchar', length: 40, nullable: true })
+  purchaseRequestId: string | null;
 
-  @ManyToOne(() => PurchaseRequest, (pr) => pr.items, { onDelete: 'CASCADE' })
+  @ManyToOne(() => PurchaseRequest, (pr) => pr.items, { onDelete: 'CASCADE', nullable: true })
   @JoinColumn({ name: 'purchaseRequestId' })
-  purchaseRequest: PurchaseRequest;
+  purchaseRequest: PurchaseRequest | null;
 
   @Column()
   productId: string;
@@ -39,4 +40,11 @@ export class PurchaseRequestItem {
 
   @UpdateDateColumn()
   updatedAt: Date;
+
+  @BeforeInsert()
+  assignId() {
+    if (!this._id) {
+      this._id = createEntityId('pritem');
+    }
+  }
 }

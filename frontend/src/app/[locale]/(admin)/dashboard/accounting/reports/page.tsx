@@ -13,9 +13,12 @@ import {
   BarChartOutlined, BankOutlined
 } from '@ant-design/icons';
 import { PageHeader } from '@/components/ui/PageHeader';
+import AdminPageScroll from '@/components/layout/admin.page-scroll';
 import { useSession } from 'next-auth/react';
-import { sendRequest } from '@/utils/api';
+import { sendRequest } from '@/lib/api-client';
 import dayjs, { Dayjs } from 'dayjs';
+import { getAccessToken } from '@/lib/auth-token';
+import { canReadCostFields } from '@/lib/field-access';
 
 interface ISummaryReport {
   revenue: number;
@@ -48,7 +51,8 @@ const { Text, Title } = Typography;
 
 const AccountingReportsPage = () => {
   const { data: session } = useSession();
-  const accessToken = (session as any)?.user?.access_token;
+  const accessToken = getAccessToken(session);
+  const canViewCost = canReadCostFields(session?.user);
   const { token } = theme.useToken();
 
   const [summary, setSummary] = useState<ISummaryReport | null>(null);
@@ -87,7 +91,7 @@ const AccountingReportsPage = () => {
         })
       ]);
 
-      if (summaryRes?.data) setSummary(summaryRes.data);
+      if (summaryRes?.data) setSummary({ revenue: 0, cogs: 0, expenses: 0, netProfit: 0, ...summaryRes.data });
       if (agingRes?.data) setAging(agingRes.data);
       if (balanceRes?.data) setBalanceSheet(balanceRes.data);
     } finally {
@@ -99,10 +103,10 @@ const AccountingReportsPage = () => {
     fetchData();
   }, [fetchData]);
 
-  if (loading && !summary) return <div style={{ padding: 40, textAlign: 'center' }}><Spin size="large" /></div>;
+  if (loading && !summary) return <AdminPageScroll><div style={{ padding: 40, textAlign: 'center' }}><Spin size="large" /></div></AdminPageScroll>;
 
   return (
-    <div style={{ padding: '24px', backgroundColor: token.colorBgLayout, minHeight: '100vh' }}>
+    <AdminPageScroll>
       <Row justify="space-between" align="bottom" style={{ marginBottom: '24px' }}>
         <Col>
           <PageHeader 
@@ -135,7 +139,7 @@ const AccountingReportsPage = () => {
                   <Col span={16}>
                     <Card variant="borderless" style={{ borderRadius: 16 }}>
                       <Title level={4} style={{ marginBottom: 24 }}>Cấu trúc Doanh thu & Chi phí</Title>
-                      <Row gutter={16}>
+                      <Row gutter={16} style={{ display: canViewCost ? undefined : 'none' }}>
                         <Col span={8}>
                           <Card variant="borderless" style={{ background: token.colorSuccessBg }}>
                             <Statistic 
@@ -173,21 +177,31 @@ const AccountingReportsPage = () => {
                           </Card>
                         </Col>
                       </Row>
+                      {!canViewCost && (
+                        <Card variant="borderless" style={{ background: token.colorInfoBg, marginBottom: 16 }}>
+                          <Text strong>Giá vốn, chi phí và lợi nhuận đang được ẩn theo phân quyền.</Text>
+                        </Card>
+                      )}
 
                       <div style={{ marginTop: 32 }}>
                          <Title level={5}>Báo cáo P&L tóm tắt</Title>
                          <Table 
                            pagination={false} 
+                           rowKey="key"
                            dataSource={[
                              { key: '1', label: 'Doanh thu thuần', amount: summary?.revenue || 0, color: 'inherit' },
-                             { key: '2', label: 'Giá vốn hàng bán (COGS)', amount: -(summary?.cogs || 0), color: token.colorError },
-                             { key: '3', label: 'Lợi nhuận gộp', amount: ((summary?.revenue || 0) - (summary?.cogs || 0)), color: token.colorSuccess, bold: true },
-                             { key: '4', label: 'Chi phí bán hàng & QLDN', amount: -(summary?.expenses || 0), color: token.colorError },
-                             { key: '5', label: 'Lợi nhuận thuần từ HĐKD', amount: summary?.netProfit || 0, color: token.colorPrimary, bold: true },
+                             ...(canViewCost ? [
+                               { key: '2', label: 'Giá vốn hàng bán (COGS)', amount: -(summary?.cogs || 0), color: token.colorError },
+                               { key: '3', label: 'Lợi nhuận gộp', amount: ((summary?.revenue || 0) - (summary?.cogs || 0)), color: token.colorSuccess, bold: true },
+                               { key: '4', label: 'Chi phí bán hàng & QLDN', amount: -(summary?.expenses || 0), color: token.colorError },
+                               { key: '5', label: 'Lợi nhuận thuần từ HĐKD', amount: summary?.netProfit || 0, color: token.colorPrimary, bold: true },
+                             ] : [
+                               { key: 'hidden', label: 'Giá vốn, chi phí và lợi nhuận', amount: undefined, color: token.colorTextSecondary, bold: true },
+                             ]),
                            ]}
                            columns={[
                              { title: 'Khoản mục', dataIndex: 'label', key: 'label', render: (text: string, rec: any) => <Text strong={rec.bold}>{text}</Text> },
-                             { title: 'Số tiền (VND)', dataIndex: 'amount', key: 'amount', align: 'right', render: (val: number, rec: any) => <Text strong={rec.bold} style={{ color: rec.color }}>{val?.toLocaleString()}</Text> },
+                             { title: 'Số tiền (VND)', dataIndex: 'amount', key: 'amount', align: 'right', render: (val: number | undefined, rec: any) => <Text strong={rec.bold} style={{ color: rec.color }}>{val === undefined ? 'Ẩn theo phân quyền' : val?.toLocaleString()}</Text> },
                            ]}
                          />
                       </div>
@@ -287,6 +301,7 @@ const AccountingReportsPage = () => {
                       <Table 
                         size="small"
                         pagination={false}
+                        rowKey={(row: any) => row.accountCode || row.name}
                         dataSource={balanceSheet?.assets}
                         columns={[
                           { title: 'Tài khoản', dataIndex: 'name', key: 'name' },
@@ -303,6 +318,7 @@ const AccountingReportsPage = () => {
                       <Table 
                         size="small"
                         pagination={false}
+                        rowKey={(row: any) => row.accountCode || row.name}
                         dataSource={balanceSheet?.liabilities}
                         columns={[
                           { title: 'Tài khoản', dataIndex: 'name', key: 'name' },
@@ -319,6 +335,7 @@ const AccountingReportsPage = () => {
                       <Table 
                         size="small"
                         pagination={false}
+                        rowKey={(row: any) => row.accountCode || row.name}
                         dataSource={balanceSheet?.equity}
                         columns={[
                           { title: 'Khoản mục', dataIndex: 'name', key: 'name' },
@@ -339,7 +356,7 @@ const AccountingReportsPage = () => {
           }
         ]}
       />
-    </div>
+    </AdminPageScroll>
   );
 };
 

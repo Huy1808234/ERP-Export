@@ -1,8 +1,9 @@
 import { Button, Form, Input, Modal, Select, Switch } from "antd";
-import { notification } from "@/library/antd.static";
+import { notification } from "@/providers/antd-static";
 import { useEffect, useState } from "react";
-import { sendRequest } from "@/utils/api";
+import { sendRequest } from "@/lib/api-client";
 import { getSession } from "next-auth/react";
+import { getAccessToken } from '@/lib/auth-token';
 
 interface IProps {
     isCreateModalOpen: boolean;
@@ -12,7 +13,7 @@ interface IProps {
 }
 
 interface IRole {
-    id: string;
+    _id: string;
     name: string;
     description: string;
 }
@@ -28,7 +29,7 @@ const UserCreateModal = (props: IProps) => {
             const res = await sendRequest<IBackendRes<IRole[]>>({
                 url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/roles`,
                 method: "GET",
-                headers: { Authorization: `Bearer ${currentSession?.user?.access_token}` }
+                headers: { Authorization: `Bearer ${getAccessToken(currentSession)}` }
             });
             if (res?.data) {
                 setRoles(res.data);
@@ -50,7 +51,7 @@ const UserCreateModal = (props: IProps) => {
             url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/users`,
             method: "POST",
             body: { ...values },
-            headers: { Authorization: `Bearer ${currentSession?.user?.access_token}` }
+            headers: { Authorization: `Bearer ${getAccessToken(currentSession)}` }
         })
         if (res?.data) {
             handleCloseCreateModal();
@@ -80,6 +81,14 @@ const UserCreateModal = (props: IProps) => {
                     label="Tên hiển thị"
                     name="name"
                     rules={[{ required: true, message: 'Vui lòng nhập tên hiển thị!' }]}
+                >
+                    <Input />
+                </Form.Item>
+
+                <Form.Item
+                    label="Username"
+                    name="username"
+                    rules={[{ required: true, message: 'Vui long nhap username!' }]}
                 >
                     <Input />
                 </Form.Item>
@@ -116,12 +125,12 @@ const UserCreateModal = (props: IProps) => {
 
                 <Form.Item
                     label="Loại Quyền (Role)"
-                    name="roleId"
+                    name="roleName"
                     rules={[{ required: true, message: 'Vui lòng chọn quyền!' }]}
                 >
                     <Select
                         placeholder="Chọn vai trò người dùng"
-                        options={roles.map(r => ({ value: r.id, label: r.name + (r.description ? ` - ${r.description}` : '') }))}
+                        options={roles.map(r => ({ value: r.name, label: r.name + (r.description ? ` - ${r.description}` : '') }))}
                     />
                 </Form.Item>
                 

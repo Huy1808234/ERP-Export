@@ -1,20 +1,29 @@
-export type POStatus = 'DRAFT' | 'SENT' | 'PARTIAL_RECEIPT' | 'RECEIVED' | 'COMPLETED' | 'CANCELLED';
+export type POStatus =
+  | 'DRAFT'
+  | 'PENDING_APPROVAL'
+  | 'APPROVED'
+  | 'REJECTED'
+  | 'SENT'
+  | 'PARTIAL_RECEIPT'
+  | 'RECEIVED'
+  | 'COMPLETED'
+  | 'CANCELLED';
 
 export interface ISupplier {
-  id: string;
+  _id: string;
   name: string;
   address?: string;
   phone?: string;
 }
 
 export interface IProduct {
-  id: string;
+  _id: string;
   vietnameseName: string;
   sku?: string;
 }
 
 export interface IPOLine {
-  id: string;
+  _id: string;
   productId: string;
   product: IProduct;
   quantity: number;
@@ -26,7 +35,7 @@ export interface IPOLine {
 }
 
 export interface IPurchaseOrder {
-  id: string;
+  _id: string;
   poNumber: string;
   vendorId: string;
   vendor: ISupplier;
@@ -37,6 +46,12 @@ export interface IPurchaseOrder {
   taxAmount: number;
   totalAmount: number;
   status: POStatus;
+  approvalWorkflowRequestId?: string | null;
+  submittedForApprovalByUsername?: string | null;
+  submittedForApprovalAt?: string | null;
+  approvedByUsername?: string | null;
+  approvedAt?: string | null;
+  rejectionReason?: string | null;
   note?: string;
   createdAt: string;
   items?: IPOLine[];

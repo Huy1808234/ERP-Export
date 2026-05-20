@@ -1,9 +1,10 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn } from 'typeorm';
+import { BeforeInsert, Column, CreateDateColumn, Entity, PrimaryColumn } from 'typeorm';
+import { createEntityId } from '@/common/ids/entity-id.util';
 
 @Entity('audit_logs')
 export class AuditLog {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
+  @PrimaryColumn({ type: 'varchar', length: 40, name: '_id' })
+  _id: string;
 
   @Column()
   tableName: string;
@@ -20,9 +21,16 @@ export class AuditLog {
   @Column({ type: 'jsonb', nullable: true })
   newValues: any;
 
-  @Column({ nullable: true })
-  userId: string; // ID của người thực hiện hành động
+  @Column({ type: 'varchar', nullable: true })
+  username: string | null;
 
   @CreateDateColumn()
   createdAt: Date;
+
+  @BeforeInsert()
+  assignId() {
+    if (!this._id) {
+      this._id = createEntityId('audit');
+    }
+  }
 }

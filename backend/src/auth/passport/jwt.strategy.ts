@@ -1,13 +1,19 @@
-import { ExtractJwt, Strategy } from 'passport-jwt';
-import { PassportStrategy } from '@nestjs/passport';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { PassportStrategy } from '@nestjs/passport';
+import { ExtractJwt, Strategy } from 'passport-jwt';
+import type { AuthenticatedUser } from '@/common/types/authenticated-user.type';
+
+type JwtPayload = {
+  username: string;
+  sub?: string;
+  role?: AuthenticatedUser['role'];
+  partnerId?: string | null;
+};
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  constructor(
-    private configService: ConfigService
-  ) {
+  constructor(private configService: ConfigService) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
@@ -15,14 +21,11 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
-  async validate(payload: any) {
-    console.log('>>> Check JWT Payload in Strategy:', payload);
-
-    // Trả về Object này sẽ được NestJS gán vào req.user
-    return { 
-      id: payload.sub,        // Đổi _id thành id cho chuẩn Postgres
-      username: payload.username, 
-      role: payload.role      // Đảm bảo payload.role là string 'ADMIN'
+  async validate(payload: JwtPayload): Promise<AuthenticatedUser> {
+    return {
+      username: payload.username,
+      role: payload.role,
+      partnerId: payload.partnerId,
     };
   }
 }

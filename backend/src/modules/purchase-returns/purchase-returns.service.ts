@@ -27,14 +27,14 @@ export class PurchaseReturnsService {
       const purchaseReturn = this.purchaseReturnRepository.create({
         ...createDto,
         returnNumber,
-        createdById: user.id,
+        createdByUsername: user.username,
       } as Partial<PurchaseReturn>);
 
       const savedReturn = await queryRunner.manager.save(purchaseReturn);
 
       // Stock deduction logic
       for (const item of createDto.items) {
-        const product = await queryRunner.manager.findOne(Product, { where: { id: item.productId } });
+        const product = await queryRunner.manager.findOne(Product, { where: { _id: item.productId } });
         if (!product) throw new BadRequestException(`Product ${item.productId} not found`);
         
         // Deduct stock
@@ -43,7 +43,7 @@ export class PurchaseReturnsService {
 
         const returnItem = queryRunner.manager.create(PurchaseReturnItem, {
           ...item,
-          purchaseReturnId: savedReturn.id,
+          purchaseReturnId: savedReturn._id,
         });
         await queryRunner.manager.save(returnItem);
       }
@@ -58,36 +58,35 @@ export class PurchaseReturnsService {
     }
   }
 
-  async findAll(query: string, current: number, pageSize: number) {
-    const aqp = (await import('api-query-params')).default;
-    const { filter, sort, population } = aqp(query);
-    delete filter.current;
-    delete filter.pageSize;
-
-    const offset = (current - 1) * pageSize;
+  async findAll(query: any = {}, current = 1, pageSize = 10) {
+    const { current: _current, pageSize: _pageSize, populate: _populate, sort, ...filter } = query || {};
+    const offset = (Number(current || 1) - 1) * Number(pageSize || 10);
+    const order = sort === 'returnDate'
+      ? { returnDate: 'ASC' as const }
+      : { createdAt: 'DESC' as const };
 
     const [result, total] = await this.purchaseReturnRepository.findAndCount({
       where: filter,
-      take: pageSize,
+      take: Number(pageSize || 10),
       skip: offset,
-      order: sort as any,
+      order,
       relations: ['items', 'items.product', 'purchaseOrder'],
     });
 
     return {
       meta: {
-        current,
-        pageSize,
-        pages: Math.ceil(total / pageSize),
+        current: Number(current || 1),
+        pageSize: Number(pageSize || 10),
+        pages: Math.ceil(total / Number(pageSize || 10)),
         total,
       },
-      result,
+      results: result,
     };
   }
 
   async findOne(id: string) {
     return this.purchaseReturnRepository.findOne({
-      where: { id },
+      where: { _id: id },
       relations: ['items', 'items.product', 'purchaseOrder'],
     });
   }

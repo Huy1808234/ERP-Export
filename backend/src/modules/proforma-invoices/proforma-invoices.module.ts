@@ -8,6 +8,8 @@ import { QuotationsModule } from '../quotations/quotations.module';
 import { ProductsModule } from '../products/products.module';
 import { CurrenciesModule } from '../currencies/currencies.module';
 import { AccountingModule } from '../accounting/accounting.module';
+import { ApprovalMatrixModule } from '../approval-matrix/approval-matrix.module';
+import { ProformaInvoiceApprovalListener } from './proforma-invoice-approval.listener';
 
 @Module({
   imports: [
@@ -16,9 +18,10 @@ import { AccountingModule } from '../accounting/accounting.module';
     ProductsModule,
     CurrenciesModule,
     AccountingModule,
+    ApprovalMatrixModule,
   ],
   controllers: [ProformaInvoicesController],
-  providers: [ProformaInvoicesService],
+  providers: [ProformaInvoicesService, ProformaInvoiceApprovalListener],
   exports: [ProformaInvoicesService],
 })
 export class ProformaInvoicesModule {}

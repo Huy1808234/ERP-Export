@@ -1,7 +1,7 @@
 'use client'
 import { GlobalOutlined } from '@ant-design/icons';
 import { Layout, Space, Typography, theme } from 'antd';
-import { useTheme } from '@/library/theme.context';
+import { useTheme } from '@/context/theme.context';
 
 const { Text } = Typography;
 
@@ -15,8 +15,9 @@ const AdminFooter = () => {
             style={{
                 textAlign: 'center',
                 background: isDark ? token.colorBgLayout : '#fafafa',
-                borderTop: `1px solid ${token.colorBorderSecondary}`,
+                borderTop: isDark ? 'none' : `1px solid ${token.colorBorderSecondary}`,
                 padding: '12px 24px',
+                flexShrink: 0,
                 transition: 'all 0.3s ease',
             }}
         >
