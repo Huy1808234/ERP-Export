@@ -1,4 +1,13 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  Query,
+} from '@nestjs/common';
 import { ShipmentsService } from './shipments.service';
 import { CreateShipmentDto } from './dto/create-shipment.dto';
 import { UpdateShipmentDto } from './dto/update-shipment.dto';
@@ -13,7 +22,10 @@ export class ShipmentsController {
   @Post()
   @Roles('ADMIN', 'MANAGER', 'LOGISTICS', 'SALES_EXPORT')
   @ResponseMessage('Create shipment successfully')
-  create(@Body() createShipmentDto: CreateShipmentDto, @User() user: UserEntity) {
+  create(
+    @Body() createShipmentDto: CreateShipmentDto,
+    @User() user: UserEntity,
+  ) {
     return this.shipmentsService.create(createShipmentDto, user);
   }
 
@@ -41,7 +53,10 @@ export class ShipmentsController {
   @Patch(':_id')
   @Roles('ADMIN', 'MANAGER', 'LOGISTICS')
   @ResponseMessage('Update shipment successfully')
-  update(@Param('_id') recordId: string, @Body() updateShipmentDto: UpdateShipmentDto) {
+  update(
+    @Param('_id') recordId: string,
+    @Body() updateShipmentDto: UpdateShipmentDto,
+  ) {
     return this.shipmentsService.update(recordId, updateShipmentDto);
   }
 
@@ -54,7 +69,10 @@ export class ShipmentsController {
   @Patch(':_id/status')
   @Roles('ADMIN', 'MANAGER', 'LOGISTICS')
   @ResponseMessage('Update shipment status')
-  updateStatus(@Param('_id') recordId: string, @Body('status') status: ShipmentStatus) {
+  updateStatus(
+    @Param('_id') recordId: string,
+    @Body('status') status: ShipmentStatus,
+  ) {
     return this.shipmentsService.updateStatus(recordId, status);
   }
 

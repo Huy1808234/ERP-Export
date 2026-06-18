@@ -1,5 +1,17 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
-import { ResponseMessage, User, RequirePermissions } from '@/decorator/customize';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
+import {
+  ResponseMessage,
+  User,
+  RequirePermissions,
+} from '@/decorator/customize';
 import { maskCostFields } from '@/common/field-access.util';
 import { CommercialInvoicesService } from './commercial-invoices.service';
 import {
@@ -8,7 +20,9 @@ import {
   IssueCommercialInvoiceDto,
 } from './dto/create-commercial-invoice.dto';
 
-type PermissionLike = string | { name?: unknown; code?: unknown; apiPath?: unknown };
+type PermissionLike =
+  | string
+  | { name?: unknown; code?: unknown; apiPath?: unknown };
 
 type CommercialInvoiceRequestUser = {
   username?: string;
@@ -19,7 +33,9 @@ type CommercialInvoiceRequestUser = {
 
 @Controller('commercial-invoices')
 export class CommercialInvoicesController {
-  constructor(private readonly commercialInvoicesService: CommercialInvoicesService) {}
+  constructor(
+    private readonly commercialInvoicesService: CommercialInvoicesService,
+  ) {}
 
   private readonly commercialInvoicePriceFields = [
     'exchangeRate',
@@ -45,7 +61,10 @@ export class CommercialInvoicesController {
   @Get(':_id')
   @RequirePermissions('read:export_document')
   @ResponseMessage('Fetch commercial invoice detail')
-  async findOne(@Param('_id') recordId: string, @User() user: CommercialInvoiceRequestUser) {
+  async findOne(
+    @Param('_id') recordId: string,
+    @User() user: CommercialInvoiceRequestUser,
+  ) {
     const result = await this.commercialInvoicesService.findOne(recordId);
     return maskCostFields(result, user, this.commercialInvoicePriceFields);
   }
@@ -58,7 +77,11 @@ export class CommercialInvoicesController {
     @Body() dto: CreateCommercialInvoiceFromShipmentDto,
     @User() user: CommercialInvoiceRequestUser,
   ) {
-    const result = await this.commercialInvoicesService.createFromShipment(shipment_id, dto, user);
+    const result = await this.commercialInvoicesService.createFromShipment(
+      shipment_id,
+      dto,
+      user,
+    );
     return maskCostFields(result, user, this.commercialInvoicePriceFields);
   }
 
@@ -70,7 +93,11 @@ export class CommercialInvoicesController {
     @Body() dto: IssueCommercialInvoiceDto,
     @User() user: CommercialInvoiceRequestUser,
   ) {
-    const result = await this.commercialInvoicesService.issue(recordId, dto, user);
+    const result = await this.commercialInvoicesService.issue(
+      recordId,
+      dto,
+      user,
+    );
     return maskCostFields(result, user, this.commercialInvoicePriceFields);
   }
 
@@ -82,7 +109,11 @@ export class CommercialInvoicesController {
     @Body() dto: CancelCommercialInvoiceDto,
     @User() user: CommercialInvoiceRequestUser,
   ) {
-    const result = await this.commercialInvoicesService.cancel(recordId, dto, user);
+    const result = await this.commercialInvoicesService.cancel(
+      recordId,
+      dto,
+      user,
+    );
     return maskCostFields(result, user, this.commercialInvoicePriceFields);
   }
 }

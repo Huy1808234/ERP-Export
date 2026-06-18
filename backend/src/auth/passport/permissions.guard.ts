@@ -5,39 +5,49 @@ import {
   Injectable,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import { normalizeRoleName as normalizeRoleAlias } from '@/common/auth/role-catalog';
 import { IS_PUBLIC_KEY, PERMISSIONS_KEY } from '@/decorator/customize';
 import type { AuthenticatedUser } from '@/common/types/authenticated-user.type';
+import { RolesService } from '@/modules/roles/roles.service';
 
 type RequestWithUser = {
   user?: AuthenticatedUser;
 };
 
-function normalizeRoleName(user?: AuthenticatedUser): string {
+function normalizeUserRoleName(user?: AuthenticatedUser): string {
   const role = user?.role;
-  const roleName = typeof role === 'string' ? role : role?.name || user?.roleName;
+  const roleName =
+    typeof role === 'string' ? role : role?.name || user?.roleName;
 
-  return roleName?.toUpperCase() || '';
+  return normalizeRoleAlias(roleName);
 }
 
-function getPermissionNames(user: AuthenticatedUser): Set<string> {
+function getRoleRef(user: AuthenticatedUser): string {
   const role = user.role;
-  const rolePermissions =
-    role && typeof role === 'object' && Array.isArray(role.permissions)
-      ? role.permissions
-      : [];
+  if (typeof role === 'string') return role;
+  return role?._id || role?.name || user.roleName || '';
+}
 
-  return new Set(
-    rolePermissions
-      .map((permission) => permission.name)
-      .filter((name): name is string => Boolean(name)),
+function hasRequiredPermissions(
+  userPermissions: Set<string>,
+  requiredPermissions: string[],
+): boolean {
+  return requiredPermissions.every(
+    (permission) =>
+      userPermissions.has(permission) ||
+      userPermissions.has('read:all') ||
+      userPermissions.has('manage:all'),
   );
 }
 
 @Injectable()
 export class PermissionsGuard implements CanActivate {
-  constructor(private reflector: Reflector) {}
+  constructor(
+    private reflector: Reflector,
+    private rolesService: RolesService,
+  ) {}
 
-  canActivate(context: ExecutionContext): boolean {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
       context.getHandler(),
       context.getClass(),
@@ -47,10 +57,10 @@ export class PermissionsGuard implements CanActivate {
       return true;
     }
 
-    const requiredPermissions = this.reflector.getAllAndOverride<string[]>(PERMISSIONS_KEY, [
-      context.getHandler(),
-      context.getClass(),
-    ]);
+    const requiredPermissions = this.reflector.getAllAndOverride<string[]>(
+      PERMISSIONS_KEY,
+      [context.getHandler(), context.getClass()],
+    );
 
     if (!requiredPermissions || requiredPermissions.length === 0) {
       return true;
@@ -58,27 +68,30 @@ export class PermissionsGuard implements CanActivate {
 
     const request = context.switchToHttp().getRequest<RequestWithUser>();
     const user = request.user;
-    
+
     if (!user || !user.role) {
-        throw new ForbiddenException('Bạn không có quyền truy cập tài nguyên này');
+      throw new ForbiddenException(
+        'Ban khong co quyen truy cap tai nguyen nay',
+      );
     }
 
-    // Admin has all permissions
-    const userRole = normalizeRoleName(user);
-    if (userRole === 'ADMIN' || userRole === 'SUPER ADMIN') {
-        return true;
+    if (normalizeUserRoleName(user) === 'ADMIN') {
+      return true;
     }
 
-    const userPermissions = getPermissionNames(user);
-    
-    const hasPermission = requiredPermissions.every(permission => 
-        userPermissions.has(permission) ||
-        userPermissions.has('read:all') ||
-        userPermissions.has('manage:all')
+    const permissionSnapshot =
+      await this.rolesService.getAuthPermissionSnapshot(getRoleRef(user));
+    user.permissionScopes = permissionSnapshot.permissionScopes;
+
+    const hasPermission = hasRequiredPermissions(
+      new Set(permissionSnapshot.permissionNames),
+      requiredPermissions,
     );
 
     if (!hasPermission) {
-      throw new ForbiddenException('Bạn không có quyền thực hiện hành động này');
+      throw new ForbiddenException(
+        'Ban khong co quyen thuc hien hanh dong nay',
+      );
     }
 
     return true;

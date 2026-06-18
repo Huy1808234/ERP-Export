@@ -17,7 +17,7 @@ export default async function LoginPage({ params, searchParams }: LoginPageProps
     const [{ locale }, query] = await Promise.all([params, searchParams]);
     const session = await auth();
 
-    if (session) {
+    if (session && session.error !== 'RefreshAccessTokenError') {
         redirect(getPostLoginRedirectPath({
             callbackUrl: getFirstSearchParam(query.callbackUrl),
             locale,

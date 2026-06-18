@@ -1,7 +1,28 @@
-import { IsArray, IsDateString, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, ValidateNested } from 'class-validator';
-import { Type } from 'class-transformer';
+import {
+  IsArray,
+  IsDateString,
+  IsEnum,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsString,
+  ValidateNested,
+} from 'class-validator';
+import { Transform, Type } from 'class-transformer';
 import { Incoterm } from '@/modules/quotations/entities/quotation.entity';
 import { IsEntityId } from '@/common/ids/entity-id.validator';
+
+const optionalText = ({
+  value,
+}: {
+  value: unknown;
+}): string | null | undefined => {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  if (typeof value !== 'string') return value as string;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+};
 
 class PIItemDto {
   @IsEntityId()
@@ -44,11 +65,23 @@ export class CreateProformaInvoiceDto {
 
   @IsString()
   @IsOptional()
-  portOfLoading?: string;
+  @Transform(optionalText)
+  portOfLoading?: string | null;
+
+  @IsEntityId()
+  @IsOptional()
+  @Transform(optionalText)
+  portOfLoading_port_id?: string | null;
 
   @IsString()
   @IsOptional()
-  portOfDischarge?: string;
+  @Transform(optionalText)
+  portOfDischarge?: string | null;
+
+  @IsEntityId()
+  @IsOptional()
+  @Transform(optionalText)
+  portOfDischarge_port_id?: string | null;
 
   @IsDateString()
   @IsNotEmpty()
@@ -135,11 +168,23 @@ export class ConvertQuotationToPiDto {
 
   @IsString()
   @IsOptional()
-  portOfLoading?: string;
+  @Transform(optionalText)
+  portOfLoading?: string | null;
+
+  @IsEntityId()
+  @IsOptional()
+  @Transform(optionalText)
+  portOfLoading_port_id?: string | null;
 
   @IsString()
   @IsOptional()
-  portOfDischarge?: string;
+  @Transform(optionalText)
+  portOfDischarge?: string | null;
+
+  @IsEntityId()
+  @IsOptional()
+  @Transform(optionalText)
+  portOfDischarge_port_id?: string | null;
 
   @IsDateString()
   @IsOptional()

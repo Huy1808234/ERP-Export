@@ -1,4 +1,11 @@
-import { IsDateString, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator';
+import {
+  IsDateString,
+  IsEnum,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 import { IsEntityId } from '@/common/ids/entity-id.validator';
 import { PortalReceiptType } from '../entities/portal-payment-receipt.entity';
 

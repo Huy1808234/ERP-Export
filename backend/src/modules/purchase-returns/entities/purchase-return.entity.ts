@@ -1,7 +1,18 @@
-import { BeforeInsert, Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryColumn, UpdateDateColumn } from 'typeorm';
+import {
+  BeforeInsert,
+  Column,
+  CreateDateColumn,
+  Entity,
+  JoinColumn,
+  ManyToOne,
+  OneToMany,
+  PrimaryColumn,
+  UpdateDateColumn,
+} from 'typeorm';
 import { PurchaseOrder } from '../../purchase-orders/entities/purchase-order.entity';
 import { Product } from '../../products/entities/product.entity';
 import { createEntityId } from '@/common/ids/entity-id.util';
+import { ColumnNumericTransformer } from '@/helpers/typeorm.util';
 
 export enum PurchaseReturnStatus {
   DRAFT = 'DRAFT',
@@ -10,6 +21,7 @@ export enum PurchaseReturnStatus {
   CREDITED = 'CREDITED',
   REPLACED = 'REPLACED',
   CLOSED = 'CLOSED',
+  CANCELLED = 'CANCELLED',
 }
 
 @Entity()
@@ -65,12 +77,14 @@ export class PurchaseReturn {
   returnDate: Date;
 
   @Column({ type: 'text', nullable: true })
-  reason: string;
+  reason: string | null;
 
   @Column()
   createdByUsername: string;
 
-  @OneToMany(() => PurchaseReturnItem, (item) => item.purchaseReturn, { cascade: true })
+  @OneToMany(() => PurchaseReturnItem, (item) => item.purchaseReturn, {
+    cascade: true,
+  })
   items: PurchaseReturnItem[];
 
   @CreateDateColumn()
@@ -106,7 +120,12 @@ export class PurchaseReturnItem {
   @JoinColumn({ name: 'productId' })
   product: Product;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2 })
+  @Column({
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    transformer: new ColumnNumericTransformer(),
+  })
   quantity: number;
 
   @Column({ type: 'varchar', nullable: true })

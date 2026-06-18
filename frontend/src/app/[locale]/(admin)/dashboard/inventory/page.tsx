@@ -1,10 +1,10 @@
 'use client';
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { 
   Table, Tag, Space, Button, Input, Card, Badge, 
   Typography, Row, Col, Statistic, Drawer, 
-  Timeline, theme, Tooltip, Empty, Avatar
+  Timeline, theme, Tooltip, Empty, Avatar, Select, DatePicker
 } from 'antd';
 import { 
   SearchOutlined, ReloadOutlined, 
@@ -28,6 +28,7 @@ import { useTranslations } from 'next-intl';
 import { getAccessToken } from '@/lib/auth-token';
 import { formatVietnamDate, formatVietnamTime } from '@/utils/date-time';
 import type { ColumnsType, TableProps } from 'antd/es/table';
+import type { Dayjs } from 'dayjs';
 
 interface IInventoryItem {
   _id: string;
@@ -59,6 +60,25 @@ interface IInventoryLedger {
   createdAt: string;
 }
 
+interface InventoryListResponse {
+  results: IInventoryItem[];
+  meta: {
+    total: number;
+  };
+  summary: IInventorySummary;
+}
+
+interface InventoryLedgerResponse {
+  results: IInventoryLedger[];
+  total?: number;
+}
+
+interface TransactionLabelConfig {
+  color: string;
+  label: string;
+  icon: React.ReactNode;
+}
+
 type InventorySortOrder = 'ascend' | 'descend';
 type InventorySortField =
   | 'vietnameseName'
@@ -67,6 +87,7 @@ type InventorySortField =
   | 'availableStock'
   | 'updatedAt';
 type InventoryTableSorter = Parameters<NonNullable<TableProps<IInventoryItem>['onChange']>>[2];
+type LedgerDateRange = [Dayjs, Dayjs] | null;
 
 interface InventorySortConfig {
   field: InventorySortField;
@@ -76,6 +97,36 @@ interface InventorySortConfig {
 const DEFAULT_INVENTORY_SORT: InventorySortConfig = {
   field: 'availableStock',
   order: 'ascend',
+};
+
+const LEDGER_INITIAL_VISIBLE_COUNT = 20;
+const LEDGER_VISIBLE_STEP = 20;
+const LEDGER_DRAWER_DEFAULT_SIZE = 860;
+const LEDGER_DRAWER_MIN_SIZE = 620;
+const LEDGER_DRAWER_MAX_SIZE = 1120;
+const LEDGER_TRANSACTION_TYPES = [
+  'GOODS_RECEIPT',
+  'SALES_DISPATCH',
+  'ADJUSTMENT',
+  'RETURN',
+  'REJECTION',
+  'RESERVE',
+  'RELEASE',
+] as const;
+
+const getLedgerDrawerMaxSize = (): number => {
+  if (typeof window === 'undefined') {
+    return LEDGER_DRAWER_MAX_SIZE;
+  }
+
+  return Math.max(360, Math.min(LEDGER_DRAWER_MAX_SIZE, window.innerWidth - 16));
+};
+
+const clampLedgerDrawerSize = (size: number): number => {
+  const maxSize = getLedgerDrawerMaxSize();
+  const minSize = Math.min(LEDGER_DRAWER_MIN_SIZE, maxSize);
+
+  return Math.max(minSize, Math.min(size, maxSize));
 };
 
 const getInventorySortParam = (sortConfig: InventorySortConfig): string => {
@@ -124,6 +175,7 @@ const getInventorySortOrder = (
 ): InventorySortOrder | null => (sortConfig.field === field ? sortConfig.order : null);
 
 const { Text } = Typography;
+const { RangePicker } = DatePicker;
 
 const InventoryPage = () => {
   const { data: session } = useSession();
@@ -147,13 +199,98 @@ const InventoryPage = () => {
   const [selectedProduct, setSelectedProduct] = useState<IInventoryItem | null>(null);
   const [ledgerData, setLedgerData] = useState<IInventoryLedger[]>([]);
   const [ledgerLoading, setLedgerLoading] = useState(false);
+  const [ledgerSearchText, setLedgerSearchText] = useState('');
+  const [ledgerTransactionType, setLedgerTransactionType] = useState<string | undefined>();
+  const [ledgerDateRange, setLedgerDateRange] = useState<LedgerDateRange>(null);
+  const [ledgerVisibleCount, setLedgerVisibleCount] = useState(LEDGER_INITIAL_VISIBLE_COUNT);
+  const [ledgerDrawerSize, setLedgerDrawerSize] = useState(LEDGER_DRAWER_DEFAULT_SIZE);
+
+  const handleLedgerDrawerResize = useCallback((nextSize: number) => {
+    setLedgerDrawerSize(clampLedgerDrawerSize(nextSize));
+  }, []);
+
+  const getTransactionLabel = useCallback((type: string): TransactionLabelConfig => {
+    const config: Record<string, TransactionLabelConfig> = {
+      GOODS_RECEIPT: { color: 'green', label: t('transactionTypes.GOODS_RECEIPT'), icon: <InboxOutlined /> },
+      SALES_DISPATCH: { color: 'blue', label: t('transactionTypes.SALES_DISPATCH'), icon: <ExportOutlined /> },
+      ADJUSTMENT: { color: 'orange', label: t('transactionTypes.ADJUSTMENT'), icon: <DeploymentUnitOutlined /> },
+      RETURN: { color: 'purple', label: t('transactionTypes.RETURN'), icon: <ReloadOutlined /> },
+      REJECTION: { color: 'red', label: t('transactionTypes.REJECTION'), icon: <StopOutlined /> },
+      RESERVE: { color: 'geekblue', label: t('transactionTypes.RESERVE'), icon: <StopOutlined /> },
+      RELEASE: { color: 'cyan', label: t('transactionTypes.RELEASE'), icon: <ReloadOutlined /> },
+    };
+
+    return config[type] || { color: 'default', label: type, icon: <QuestionCircleOutlined /> };
+  }, [t]);
+
+  const ledgerTransactionOptions = useMemo(
+    () => LEDGER_TRANSACTION_TYPES.map((type) => ({
+      value: type,
+      label: getTransactionLabel(type).label,
+    })),
+    [getTransactionLabel],
+  );
+
+  const filteredLedgerData = useMemo(() => {
+    const normalizedSearch = ledgerSearchText.trim().toLowerCase();
+
+    return ledgerData.filter((item) => {
+      if (ledgerTransactionType && item.transactionType !== ledgerTransactionType) {
+        return false;
+      }
+
+      if (ledgerDateRange) {
+        const createdAt = new Date(item.createdAt).getTime();
+        const startAt = ledgerDateRange[0].startOf('day').valueOf();
+        const endAt = ledgerDateRange[1].endOf('day').valueOf();
+
+        if (!Number.isFinite(createdAt) || createdAt < startAt || createdAt > endAt) {
+          return false;
+        }
+      }
+
+      if (!normalizedSearch) {
+        return true;
+      }
+
+      return [
+        item.referenceNumber,
+        item.referenceId,
+        item.lotNumber,
+        item.notes,
+        item.createdBy,
+        item.transactionType,
+      ].some((value) => String(value ?? '').toLowerCase().includes(normalizedSearch));
+    });
+  }, [ledgerData, ledgerDateRange, ledgerSearchText, ledgerTransactionType]);
+
+  const visibleLedgerData = useMemo(
+    () => filteredLedgerData.slice(0, ledgerVisibleCount),
+    [filteredLedgerData, ledgerVisibleCount],
+  );
+
+  const hasMoreLedgerRows = visibleLedgerData.length < filteredLedgerData.length;
+
+  useEffect(() => {
+    setLedgerVisibleCount(LEDGER_INITIAL_VISIBLE_COUNT);
+  }, [ledgerDateRange, ledgerSearchText, ledgerTransactionType, ledgerData.length]);
+
+  useEffect(() => {
+    const handleWindowResize = () => {
+      setLedgerDrawerSize((currentSize) => clampLedgerDrawerSize(currentSize));
+    };
+
+    handleWindowResize();
+    window.addEventListener('resize', handleWindowResize);
+    return () => window.removeEventListener('resize', handleWindowResize);
+  }, []);
 
   // --- Logic Fetch ---
   const fetchInventory = useCallback(async () => {
     if (!accessToken) return;
     setLoading(true);
     try {
-      const res = await sendRequest<IBackendRes<any>>({
+      const res = await sendRequest<IBackendRes<InventoryListResponse>>({
         url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/inventory`,
         method: 'GET',
         queryParams: {
@@ -166,9 +303,10 @@ const InventoryPage = () => {
       });
 
       if (res?.data) {
-        setData(res.data.results);
-        setMeta(prev => ({ ...prev, total: res.data.meta.total }));
-        setSummary(res.data.summary);
+        const inventoryResponse = res.data;
+        setData(inventoryResponse.results);
+        setMeta(prev => ({ ...prev, total: inventoryResponse.meta.total }));
+        setSummary(inventoryResponse.summary);
       }
     } finally {
       setLoading(false);
@@ -180,17 +318,24 @@ const InventoryPage = () => {
   }, [fetchInventory]);
 
   const fetchLedger = async (product: IInventoryItem) => {
+    if (!accessToken) return;
+
     setSelectedProduct(product);
     setLedgerOpen(true);
     setLedgerLoading(true);
+    setLedgerData([]);
+    setLedgerSearchText('');
+    setLedgerTransactionType(undefined);
+    setLedgerDateRange(null);
+    setLedgerVisibleCount(LEDGER_INITIAL_VISIBLE_COUNT);
     try {
-      const res = await sendRequest<IBackendRes<any>>({
+      const res = await sendRequest<IBackendRes<InventoryLedgerResponse>>({
         url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/inventory/ledger`,
         method: 'GET',
         queryParams: { productId: product._id },
         headers: { Authorization: `Bearer ${accessToken}` },
       });
-      if (res?.data) setLedgerData(res.data.results);
+      if (res?.data) setLedgerData(res.data.results ?? []);
     } finally {
       setLedgerLoading(false);
     }
@@ -274,16 +419,165 @@ const InventoryPage = () => {
     },
   ];
 
-  const getTransactionLabel = (type: string) => {
-    const config: any = {
-      GOODS_RECEIPT: { color: 'green', label: t('transactionTypes.GOODS_RECEIPT'), icon: <InboxOutlined /> },
-      SALES_DISPATCH: { color: 'blue', label: t('transactionTypes.SALES_DISPATCH'), icon: <ExportOutlined /> },
-      ADJUSTMENT: { color: 'orange', label: t('transactionTypes.ADJUSTMENT'), icon: <DeploymentUnitOutlined /> },
-      RETURN: { color: 'purple', label: t('transactionTypes.RETURN'), icon: <ReloadOutlined /> },
-      REJECTION: { color: 'red', label: t('transactionTypes.REJECTION'), icon: <StopOutlined /> },
+  const ledgerTimelineItems = useMemo(() => visibleLedgerData.map((item) => {
+    const config = getTransactionLabel(item.transactionType);
+    const uom = selectedProduct?.unitOfMeasure || t('drawer.defaultUnit');
+
+    return {
+      key: item._id || `${item.transactionType}-${item.referenceId || item.referenceNumber || 'ref'}-${item.createdAt}`,
+      title: (
+        <div style={{ paddingRight: 12, textAlign: 'right' }}>
+          <div style={{ fontWeight: 600, fontSize: 13 }}>{formatVietnamTime(item.createdAt)}</div>
+          <div style={{ fontSize: 11, color: token.colorTextDescription }}>{formatVietnamDate(item.createdAt)}</div>
+        </div>
+      ),
+      color: config.color,
+      content: (
+        <Card
+          size="small"
+          hoverable
+          style={{
+            borderRadius: 16,
+            marginBottom: 16,
+            border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.03)'}`,
+            background: isDark ? 'rgba(30, 41, 59, 0.4)' : '#ffffff',
+            backdropFilter: 'blur(10px)',
+            boxShadow: isDark ? '0 8px 32px rgba(0,0,0,0.2)' : '0 4px 20px rgba(0,0,0,0.03)',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'stretch', gap: 16, flexWrap: 'wrap' }}>
+            <div style={{ flex: '1 1 240px', minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                <div
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 10,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    background: `${config.color}15`,
+                    color: config.color,
+                  }}
+                >
+                  {config.icon}
+                </div>
+                <Text strong style={{ fontSize: 15, letterSpacing: 0 }}>{config.label}</Text>
+              </div>
+
+              <Space wrap size={[8, 8]}>
+                <Tooltip title={t('drawer.referenceTooltip')}>
+                  <Tag
+                    color="processing"
+                    variant="filled"
+                    style={{
+                      borderRadius: 6,
+                      fontWeight: 600,
+                      padding: '2px 10px',
+                      maxWidth: 220,
+                      whiteSpace: 'normal',
+                      wordBreak: 'break-all',
+                    }}
+                  >
+                    #{item.referenceNumber || item.referenceId?.slice(0, 8)}
+                  </Tag>
+                </Tooltip>
+
+                {item.lotNumber && (
+                  <Tag icon={<BarcodeOutlined />} color="magenta" variant="filled" style={{ borderRadius: 6 }}>
+                    {t('drawer.lot', { lot: item.lotNumber })}
+                  </Tag>
+                )}
+
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '2px 8px',
+                    background: isDark ? '#334155' : '#f8fafc',
+                    borderRadius: 6,
+                    border: `1px solid ${isDark ? '#475569' : '#f1f5f9'}`,
+                  }}
+                >
+                  <Avatar size={16} style={{ backgroundColor: token.colorPrimary, fontSize: 10 }}>
+                    {String(item.createdBy || 'S').charAt(0).toUpperCase()}
+                  </Avatar>
+                  <Text type="secondary" style={{ fontSize: 11, fontWeight: 500 }}>
+                    {item.createdBy || t('drawer.systemUser')}
+                  </Text>
+                </div>
+              </Space>
+
+              {item.notes && (
+                <div
+                  style={{
+                    fontSize: 12,
+                    marginTop: 10,
+                    padding: '8px 12px',
+                    background: isDark ? 'rgba(15, 23, 42, 0.5)' : '#f9fafb',
+                    borderRadius: 8,
+                    borderLeft: `3px solid ${config.color}`,
+                    color: isDark ? '#94a3b8' : '#64748b',
+                    wordBreak: 'break-word',
+                  }}
+                >
+                  {item.notes}
+                </div>
+              )}
+            </div>
+
+            <div
+              style={{
+                textAlign: 'right',
+                paddingLeft: 20,
+                borderLeft: `1px dashed ${isDark ? '#475569' : '#e2e8f0'}`,
+                marginLeft: 'auto',
+                minWidth: 104,
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 22,
+                  fontWeight: 800,
+                  fontFamily: 'Space Mono, monospace',
+                  color: item.quantityChange > 0 ? '#10b981' : '#ef4444',
+                  lineHeight: 1.2,
+                }}
+              >
+                {item.quantityChange > 0 ? '+' : ''}{formatNumber(item.quantityChange)}
+              </div>
+              <div style={{ fontSize: 11, color: token.colorTextDescription, marginTop: 4, fontWeight: 500 }}>
+                {uom.toUpperCase()}
+              </div>
+              <div
+                style={{
+                  fontSize: 12,
+                  color: isDark ? '#94a3b8' : '#64748b',
+                  marginTop: 8,
+                  padding: '2px 8px',
+                  background: isDark ? '#1e293b' : '#f1f5f9',
+                  borderRadius: 4,
+                  display: 'inline-block',
+                }}
+              >
+                {t('drawer.balance')}: <Text strong style={{ color: isDark ? '#e2e8f0' : '#1e293b' }}>{formatNumber(item.balanceAfter)}</Text>
+              </div>
+            </div>
+          </div>
+        </Card>
+      ),
     };
-    return config[type] || { color: 'default', label: type, icon: <QuestionCircleOutlined /> };
-  };
+  }), [
+    formatNumber,
+    getTransactionLabel,
+    isDark,
+    selectedProduct?.unitOfMeasure,
+    t,
+    token.colorPrimary,
+    token.colorTextDescription,
+    visibleLedgerData,
+  ]);
 
   return (
     <AdminPageScroll>
@@ -402,133 +696,102 @@ const InventoryPage = () => {
           </div>
         }
         placement="right"
-        size={600}
+        size={ledgerDrawerSize}
+        defaultSize={LEDGER_DRAWER_DEFAULT_SIZE}
+        maxSize={LEDGER_DRAWER_MAX_SIZE}
+        resizable={{
+          onResize: handleLedgerDrawerResize,
+          onResizeEnd: () => {
+            setLedgerDrawerSize((currentSize) => clampLedgerDrawerSize(currentSize));
+          },
+        }}
         onClose={() => setLedgerOpen(false)}
         open={ledgerOpen}
-        styles={{ body: { padding: 24, background: isDark ? '#141414' : '#fafafa' } }}
+        styles={{
+          body: { padding: 24, background: isDark ? '#141414' : '#fafafa' },
+          dragger: { width: 10, background: 'transparent' },
+        }}
       >
         {ledgerLoading ? (
           <div style={{ textAlign: 'center', padding: 40 }}>{t('drawer.loading')}</div>
         ) : ledgerData.length > 0 ? (
-          <Timeline
-            mode="start"
-            items={ledgerData.map(item => {
-              const config = getTransactionLabel(item.transactionType);
-              const uom = selectedProduct?.unitOfMeasure || t('drawer.defaultUnit');
-              
-              return {
-                key: item._id || `${item.transactionType}-${item.referenceId || item.referenceNumber || 'ref'}-${item.createdAt}`,
-                title: (
-                  <div style={{ paddingRight: 12, textAlign: 'right' }}>
-                    <div style={{ fontWeight: 600, fontSize: 13 }}>{formatVietnamTime(item.createdAt)}</div>
-                    <div style={{ fontSize: 11, color: token.colorTextDescription }}>{formatVietnamDate(item.createdAt)}</div>
-                  </div>
-                ),
-                color: config.color,
-                content: (
-                  <Card 
-                    size="small" 
-                    hoverable
-                    style={{ 
-                      borderRadius: 16, 
-                      marginBottom: 16, 
-                      border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.03)'}`,
-                      background: isDark ? 'rgba(30, 41, 59, 0.4)' : '#ffffff',
-                      backdropFilter: 'blur(10px)',
-                      boxShadow: isDark ? '0 8px 32px rgba(0,0,0,0.2)' : '0 4px 20px rgba(0,0,0,0.03)'
+          <Space orientation="vertical" size={16} style={{ width: '100%' }}>
+            <div
+              style={{
+                position: 'sticky',
+                top: -24,
+                zIndex: 2,
+                margin: '-24px -24px 0',
+                padding: '16px 24px',
+                background: isDark ? '#141414' : '#fafafa',
+                borderBottom: `1px solid ${isDark ? '#262626' : '#f0f0f0'}`,
+              }}
+            >
+              <div style={{ display: 'grid', gap: 8 }}>
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'minmax(180px, 1fr) minmax(160px, 190px) minmax(220px, 250px)',
+                    gap: 8,
+                    alignItems: 'center',
+                  }}
+                >
+                  <Input
+                    allowClear
+                    prefix={<SearchOutlined />}
+                    placeholder={t('drawer.filters.searchPlaceholder')}
+                    value={ledgerSearchText}
+                    onChange={(event) => setLedgerSearchText(event.target.value)}
+                    style={{ width: '100%' }}
+                  />
+                  <Select
+                    allowClear
+                    placeholder={t('drawer.filters.transactionTypePlaceholder')}
+                    options={ledgerTransactionOptions}
+                    value={ledgerTransactionType}
+                    onChange={(value) => setLedgerTransactionType(value)}
+                    style={{ width: '100%' }}
+                  />
+                  <RangePicker
+                    allowClear
+                    format="DD/MM/YYYY"
+                    placeholder={[
+                      t('drawer.filters.startDatePlaceholder'),
+                      t('drawer.filters.endDatePlaceholder'),
+                    ]}
+                    value={ledgerDateRange}
+                    onChange={(dates) => {
+                      setLedgerDateRange(dates && dates[0] && dates[1] ? [dates[0], dates[1]] : null);
                     }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div style={{ flex: 1, minWidth: 0, paddingRight: 16 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                          <div style={{ 
-                            width: 32, height: 32, borderRadius: 10, 
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            background: `${config.color}15`, color: config.color
-                          }}>
-                            {config.icon}
-                          </div>
-                          <Text strong style={{ fontSize: 15, letterSpacing: '-0.3px' }}>{config.label}</Text>
-                        </div>
-                        
-                        <Space wrap size={[8, 8]}>
-                          <Tooltip title={t('drawer.referenceTooltip')}>
-                            <Tag color="processing" variant="filled" style={{ borderRadius: 6, fontWeight: 600, padding: '2px 10px' }}>
-                              #{item.referenceNumber || item.referenceId?.slice(0, 8)}
-                            </Tag>
-                          </Tooltip>
-                          
-                          {item.lotNumber && (
-                            <Tag icon={<BarcodeOutlined />} color="magenta" variant="filled" style={{ borderRadius: 6 }}>
-                              {t('drawer.lot', { lot: item.lotNumber })}
-                            </Tag>
-                          )}
-                          
-                          <div style={{ 
-                            display: 'flex', alignItems: 'center', gap: 6, 
-                            padding: '2px 8px', background: isDark ? '#334155' : '#f8fafc', 
-                            borderRadius: 6, border: `1px solid ${isDark ? '#475569' : '#f1f5f9'}`
-                          }}>
-                            <Avatar size={16} style={{ backgroundColor: token.colorPrimary, fontSize: 10 }}>
-                              {String(item.createdBy || 'S').charAt(0).toUpperCase()}
-                            </Avatar>
-                            <Text type="secondary" style={{ fontSize: 11, fontWeight: 500 }}>
-                              {item.createdBy || t('drawer.systemUser')}
-                            </Text>
-                          </div>
-                        </Space>
+                    style={{ width: '100%' }}
+                  />
+                </div>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  {t('drawer.showing', { count: visibleLedgerData.length, total: filteredLedgerData.length })}
+                </Text>
+              </div>
+            </div>
 
-                        {item.notes && (
-                          <div style={{ 
-                            fontSize: 12, 
-                            marginTop: 10, 
-                            padding: '8px 12px', 
-                            background: isDark ? 'rgba(15, 23, 42, 0.5)' : '#f9fafb', 
-                            borderRadius: 8,
-                            borderLeft: `3px solid ${config.color}`,
-                            color: isDark ? '#94a3b8' : '#64748b'
-                          }}>
-                            {item.notes}
-                          </div>
-                        )}
-                      </div>
-
-                      <div style={{ 
-                        textAlign: 'right', 
-                        paddingLeft: 20, 
-                        borderLeft: `1px dashed ${isDark ? '#475569' : '#e2e8f0'}`,
-                        minWidth: 120
-                      }}>
-                        <div style={{ 
-                          fontSize: 22, 
-                          fontWeight: 800, 
-                          fontFamily: 'Space Mono, monospace',
-                          color: item.quantityChange > 0 ? '#10b981' : '#ef4444',
-                          lineHeight: 1.2
-                        }}>
-                          {item.quantityChange > 0 ? '+' : ''}{formatNumber(item.quantityChange)}
-                        </div>
-                        <div style={{ fontSize: 11, color: token.colorTextDescription, marginTop: 4, fontWeight: 500 }}>
-                          {uom.toUpperCase()}
-                        </div>
-                        <div style={{ 
-                          fontSize: 12, 
-                          color: isDark ? '#94a3b8' : '#64748b', 
-                          marginTop: 8,
-                          padding: '2px 8px',
-                          background: isDark ? '#1e293b' : '#f1f5f9',
-                          borderRadius: 4,
-                          display: 'inline-block'
-                        }}>
-                          {t('drawer.balance')}: <Text strong style={{ color: isDark ? '#e2e8f0' : '#1e293b' }}>{formatNumber(item.balanceAfter)}</Text>
-                        </div>
-                      </div>
-                    </div>
-                  </Card>
-                )
-              };
-            })}
-          />
+            {filteredLedgerData.length > 0 ? (
+              <>
+                <Timeline
+                  mode="start"
+                  items={ledgerTimelineItems}
+                />
+                {hasMoreLedgerRows ? (
+                  <div style={{ textAlign: 'center', paddingBottom: 8 }}>
+                    <Button
+                      onClick={() => setLedgerVisibleCount((value) => value + LEDGER_VISIBLE_STEP)}
+                    >
+                      {t('drawer.loadMore')}
+                    </Button>
+                  </div>
+                ) : null}
+              </>
+            ) : (
+              <Empty description={t('drawer.noFilterResults')} />
+            )}
+          </Space>
         ) : (
           <Empty description={t('drawer.empty')} />
         )}

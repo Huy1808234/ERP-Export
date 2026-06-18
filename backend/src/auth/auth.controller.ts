@@ -23,7 +23,7 @@ export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly mailerService: MailerService,
-  ) { }
+  ) {}
 
   @Post('login')
   @Public()
@@ -64,13 +64,13 @@ export class AuthController {
 
   @Post('retry-active')
   @Public()
-  retryActive(@Body("email") email: string) {
+  retryActive(@Body('email') email: string) {
     return this.authService.retryActive(email);
   }
 
   @Post('forgot-password')
   @Public()
-  forgotPassword(@Body("email") email: string) {
+  forgotPassword(@Body('email') email: string) {
     return this.authService.forgotPassword(email);
   }
 

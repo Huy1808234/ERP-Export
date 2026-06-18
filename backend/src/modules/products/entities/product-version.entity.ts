@@ -9,7 +9,10 @@ import {
   PrimaryColumn,
 } from 'typeorm';
 import { Product } from './product.entity';
-import { ProductChangeRequest, ProductChangedField } from './product-change-request.entity';
+import {
+  ProductChangeRequest,
+  ProductChangedField,
+} from './product-change-request.entity';
 import { createEntityId } from '@/common/ids/entity-id.util';
 
 @Entity('product_versions')
@@ -35,7 +38,10 @@ export class ProductVersion {
   @Column({ type: 'varchar', length: 40, nullable: true })
   changeRequestId: string | null;
 
-  @ManyToOne(() => ProductChangeRequest, { nullable: true, onDelete: 'SET NULL' })
+  @ManyToOne(() => ProductChangeRequest, {
+    nullable: true,
+    onDelete: 'SET NULL',
+  })
   @JoinColumn({ name: 'changeRequestId' })
   changeRequest: ProductChangeRequest | null;
 

@@ -1,4 +1,14 @@
-import { BeforeInsert, Column, CreateDateColumn, DeleteDateColumn, Entity, JoinColumn, ManyToOne, PrimaryColumn, UpdateDateColumn } from 'typeorm';
+import {
+  BeforeInsert,
+  Column,
+  CreateDateColumn,
+  DeleteDateColumn,
+  Entity,
+  JoinColumn,
+  ManyToOne,
+  PrimaryColumn,
+  UpdateDateColumn,
+} from 'typeorm';
 import { SalesContract } from '@/modules/sales-contracts/entities/sales-contract.entity';
 import { User } from '@/modules/users/entities/user.entity';
 import { ColumnNumericTransformer } from '@/helpers/typeorm.util';
@@ -11,13 +21,13 @@ export enum LCStatus {
   ACCEPTED = 'ACCEPTED',
   PAID = 'PAID',
   EXPIRED = 'EXPIRED',
-  CANCELLED = 'CANCELLED'
+  CANCELLED = 'CANCELLED',
 }
 
 export enum LCType {
   AT_SIGHT = 'AT_SIGHT',
   DEFERRED = 'DEFERRED',
-  USANCE = 'USANCE'
+  USANCE = 'USANCE',
 }
 
 @Entity('letters_of_credit')
@@ -54,7 +64,12 @@ export class LetterOfCredit {
   @Column({ nullable: true })
   advisingBank: string;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    transformer: new ColumnNumericTransformer(),
+  })
   amount: number;
 
   @Column({ default: 'USD' })
@@ -86,6 +101,9 @@ export class LetterOfCredit {
 
   @Column({ type: 'text', nullable: true })
   handlingInstructions: string; // Cách thức xử lý sai sót
+
+  @Column({ nullable: true })
+  attachmentUrl: string;
 
   @Column()
   createdByUsername: string;

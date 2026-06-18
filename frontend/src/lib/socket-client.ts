@@ -4,15 +4,26 @@ let socket: Socket | null = null;
 
 export const getSocket = () => {
     if (!socket) {
-        const url = `${process.env.NEXT_PUBLIC_BACKEND_URL}`;
-        
+        const url = process.env.NEXT_PUBLIC_BACKEND_URL;
+        if (!url) {
+            if (process.env.NODE_ENV !== "production") {
+                console.warn("[Socket] NEXT_PUBLIC_BACKEND_URL is not configured.");
+            }
+            return null;
+        }
+
         socket = io(url, {
             withCredentials: true,
-            transports: ['websocket', 'polling']
+            transports: ["websocket", "polling"],
+            reconnection: true,
+            reconnectionAttempts: 5,
+            reconnectionDelay: 1000,
         });
 
         socket.on("connect_error", (err) => {
-            console.error("❌ WebSocket Connection Error:", err.message);
+            if (process.env.NODE_ENV !== "production") {
+                console.warn(`[Socket] Connection unavailable: ${err.message}`);
+            }
         });
     }
     return socket;

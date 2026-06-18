@@ -1,13 +1,15 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Alert,
   App,
   Badge,
   Button,
   Card,
   Col,
   Input,
+  InputNumber,
   Row,
   Segmented,
   Space,
@@ -19,16 +21,17 @@ import {
 import type { ColumnsType } from 'antd/es/table';
 import {
   AuditOutlined,
-  CheckCircleOutlined,
   FileSearchOutlined,
   PlusOutlined,
   ReloadOutlined,
+  SaveOutlined,
   SearchOutlined,
   SendOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useSession } from 'next-auth/react';
 import { useTranslations } from 'next-intl';
+import { useSearchParams } from 'next/navigation';
 import AdminPageScroll from '@/components/layout/admin.page-scroll';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { sendRequest } from '@/lib/api-client';
@@ -72,6 +75,11 @@ interface IInventoryCount {
   items?: IInventoryCountItem[];
 }
 
+interface IInventoryCountDraftLine {
+  countedQuantity: number;
+  note?: string | null;
+}
+
 interface IValuationLine {
   productId: string;
   sku: string;
@@ -92,6 +100,13 @@ interface IValuationReport {
   lines: IValuationLine[];
 }
 
+interface IValuationComparison {
+  fifoTotalValue: number;
+  avgTotalValue: number;
+  difference: number;
+  isSame: boolean;
+}
+
 const statusConfig: Record<CountStatus, { badge: 'default' | 'processing' | 'success' | 'warning' }> = {
   DRAFT: { badge: 'default' },
   SUBMITTED: { badge: 'processing' },
@@ -99,27 +114,77 @@ const statusConfig: Record<CountStatus, { badge: 'default' | 'processing' | 'suc
   CANCELLED: { badge: 'warning' },
 };
 
+const buildDraftLines = (records: IInventoryCount[]) => records.reduce<Record<string, Record<string, IInventoryCountDraftLine>>>((acc, record) => {
+  acc[record._id] = (record.items ?? []).reduce<Record<string, IInventoryCountDraftLine>>((lineAcc, item) => {
+    lineAcc[item.productId] = {
+      countedQuantity: Number(item.countedQuantity || 0),
+      note: item.note ?? null,
+    };
+    return lineAcc;
+  }, {});
+  return acc;
+}, {});
+
+const getVarianceTagColor = (value: number) => {
+  if (value === 0) return 'green';
+  return value < 0 ? 'red' : 'orange';
+};
+
 const InventoryCountsPage = () => {
   const t = useTranslations('InventoryCounts');
   const { data: session } = useSession();
+  const searchParams = useSearchParams();
+  const valuationSectionRef = useRef<HTMLDivElement>(null);
   const accessToken = getAccessToken(session);
   const canViewCost = canReadCostFields(session?.user);
-  const currentUsername = session?.user?.username || session?.user?.name || '';
   const currentRoleName = String(
     typeof (session?.user as any)?.role === 'string'
       ? (session?.user as any)?.role
       : session?.user?.role?.name || '',
   ).toUpperCase();
   const canCreateOrSubmitCount = ['ADMIN', 'WAREHOUSE'].includes(currentRoleName);
-  const canApproveCount = ['ADMIN', 'SUPER ADMIN', 'MANAGER', 'ACCOUNTANT', 'CHIEF_ACCOUNTANT'].includes(currentRoleName);
   const { message } = App.useApp();
 
   const [counts, setCounts] = useState<IInventoryCount[]>([]);
   const [valuation, setValuation] = useState<IValuationReport | null>(null);
+  const [valuationComparison, setValuationComparison] = useState<IValuationComparison | null>(null);
   const [method, setMethod] = useState<ValuationMethod>('FIFO');
   const [loadingCounts, setLoadingCounts] = useState(false);
   const [loadingValuation, setLoadingValuation] = useState(false);
   const [search, setSearch] = useState('');
+  const [countDrafts, setCountDrafts] = useState<Record<string, Record<string, IInventoryCountDraftLine>>>({});
+  const [savingCountId, setSavingCountId] = useState<string | null>(null);
+
+  const getDraftItem = useCallback((countId: string, item: IInventoryCountItem): IInventoryCountItem => {
+    const draftLine = countDrafts[countId]?.[item.productId];
+    const countedQuantity = Number(draftLine?.countedQuantity ?? item.countedQuantity ?? 0);
+    const varianceQuantity = countedQuantity - Number(item.systemQuantity || 0);
+
+    return {
+      ...item,
+      countedQuantity,
+      varianceQuantity,
+      varianceValue: varianceQuantity * Number(item.unitCost || 0),
+      note: draftLine?.note ?? item.note ?? null,
+    };
+  }, [countDrafts]);
+
+  const getCountPayload = useCallback((record: IInventoryCount) => (record.items ?? []).map((item) => {
+    const draftItem = getDraftItem(record._id, item);
+    return {
+      productId: draftItem.productId,
+      countedQuantity: Number(draftItem.countedQuantity || 0),
+      note: draftItem.note || undefined,
+    };
+  }), [getDraftItem]);
+
+  const applyUpdatedCount = useCallback((updatedCount: IInventoryCount) => {
+    setCounts((prev) => prev.map((record) => (record._id === updatedCount._id ? updatedCount : record)));
+    setCountDrafts((prev) => ({
+      ...prev,
+      ...buildDraftLines([updatedCount]),
+    }));
+  }, []);
 
   const fetchCounts = useCallback(async () => {
     if (!accessToken) return;
@@ -131,7 +196,9 @@ const InventoryCountsPage = () => {
         queryParams: { pageSize: 20 },
         headers: { Authorization: `Bearer ${accessToken}` },
       });
-      setCounts(res?.data?.results ?? []);
+      const results = res?.data?.results ?? [];
+      setCounts(results);
+      setCountDrafts(buildDraftLines(results));
     } finally {
       setLoadingCounts(false);
     }
@@ -141,13 +208,35 @@ const InventoryCountsPage = () => {
     if (!accessToken) return;
     setLoadingValuation(true);
     try {
-      const res = await sendRequest<IBackendRes<IValuationReport>>({
-        url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/inventory/valuation`,
-        method: 'GET',
-        queryParams: { method },
-        headers: { Authorization: `Bearer ${accessToken}` },
+      const [fifoRes, avgRes] = await Promise.all([
+        sendRequest<IBackendRes<IValuationReport>>({
+          url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/inventory/valuation`,
+          method: 'GET',
+          queryParams: { method: 'FIFO' },
+          headers: { Authorization: `Bearer ${accessToken}` },
+        }),
+        sendRequest<IBackendRes<IValuationReport>>({
+          url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/inventory/valuation`,
+          method: 'GET',
+          queryParams: { method: 'AVG' },
+          headers: { Authorization: `Bearer ${accessToken}` },
+        }),
+      ]);
+
+      const fifoReport = fifoRes?.data ?? null;
+      const avgReport = avgRes?.data ?? null;
+      const selectedReport = method === 'FIFO' ? fifoReport : avgReport;
+      const fifoTotalValue = Number(fifoReport?.totalValue || 0);
+      const avgTotalValue = Number(avgReport?.totalValue || 0);
+      const difference = Math.abs(fifoTotalValue - avgTotalValue);
+
+      setValuation(selectedReport);
+      setValuationComparison({
+        fifoTotalValue,
+        avgTotalValue,
+        difference,
+        isSame: difference < 1,
       });
-      setValuation(res?.data ?? null);
     } finally {
       setLoadingValuation(false);
     }
@@ -160,6 +249,21 @@ const InventoryCountsPage = () => {
   useEffect(() => {
     fetchValuation();
   }, [fetchValuation]);
+
+  useEffect(() => {
+    const section = searchParams.get('section') || searchParams.get('tab');
+    const methodParam = searchParams.get('method')?.toUpperCase();
+
+    if (methodParam === 'FIFO' || methodParam === 'AVG') {
+      setMethod(methodParam);
+    }
+
+    if (section === 'valuation') {
+      window.setTimeout(() => {
+        valuationSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 80);
+    }
+  }, [searchParams]);
 
   const filteredCounts = useMemo(() => {
     const keyword = search.trim().toLowerCase();
@@ -189,38 +293,78 @@ const InventoryCountsPage = () => {
     }
   };
 
+  const updateDraftCountedQuantity = (countId: string, productId: string, value: number | null) => {
+    const countedQuantity = Number(value ?? 0);
+
+    setCountDrafts((prev) => ({
+      ...prev,
+      [countId]: {
+        ...(prev[countId] ?? {}),
+        [productId]: {
+          ...(prev[countId]?.[productId] ?? {}),
+          countedQuantity,
+        },
+      },
+    }));
+
+    setCounts((prev) => prev.map((record) => {
+      if (record._id !== countId) return record;
+
+      return {
+        ...record,
+        items: (record.items ?? []).map((item) => {
+          if (item.productId !== productId) return item;
+
+          const varianceQuantity = countedQuantity - Number(item.systemQuantity || 0);
+          return {
+            ...item,
+            countedQuantity,
+            varianceQuantity,
+            varianceValue: varianceQuantity * Number(item.unitCost || 0),
+          };
+        }),
+      };
+    }));
+  };
+
+  const saveDraftCount = async (record: IInventoryCount) => {
+    if (!accessToken || !canCreateOrSubmitCount || record.status !== 'DRAFT') return;
+
+    setSavingCountId(record._id);
+    try {
+      const res = await sendRequest<IBackendRes<IInventoryCount>>({
+        url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/inventory/counts/${record._id}/items`,
+        method: 'PATCH',
+        body: { items: getCountPayload(record) },
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+
+      if (res?.data) {
+        applyUpdatedCount(res.data);
+        message.success(t('messages.saveSuccess'));
+      } else {
+        message.error(res?.message || t('messages.saveError'));
+      }
+    } finally {
+      setSavingCountId(null);
+    }
+  };
+
   const submitCount = async (record: IInventoryCount) => {
     if (!accessToken || !canCreateOrSubmitCount) return;
     const res = await sendRequest<IBackendRes<IInventoryCount>>({
       url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/inventory/counts/${record._id}/submit`,
       method: 'PATCH',
-      body: {},
+      body: { items: getCountPayload(record) },
       headers: { Authorization: `Bearer ${accessToken}` },
     });
 
     if (res?.data) {
+      applyUpdatedCount(res.data);
       message.success(t('messages.submitSuccess'));
       fetchCounts();
     } else {
       message.error(res?.message || t('messages.submitError'));
-    }
-  };
-
-  const approveCount = async (record: IInventoryCount) => {
-    if (!accessToken) return;
-    const res = await sendRequest<IBackendRes<IInventoryCount>>({
-      url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/inventory/counts/${record._id}/approve`,
-      method: 'PATCH',
-      body: { approvalNote: `Approved from admin at ${dayjs().format('YYYY-MM-DD HH:mm')}` },
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-
-    if (res?.data) {
-      message.success(t('messages.approveSuccess'));
-      fetchCounts();
-      fetchValuation();
-    } else {
-      message.error(res?.message || t('messages.approveError'));
     }
   };
 
@@ -258,9 +402,9 @@ const InventoryCountsPage = () => {
         const varianceValue = (record.items ?? []).reduce((sum, item) => sum + Number(item.varianceValue || 0), 0);
         return (
           <Space orientation="vertical" size={0} align="end">
-            <Tag color={varianceQty === 0 ? 'green' : 'orange'}>{formatCurrency(varianceQty, 2)}</Tag>
+            <Tag color={getVarianceTagColor(varianceQty)}>{formatCurrency(varianceQty, 2)}</Tag>
             <Text type="secondary" style={{ fontSize: 12 }}>
-              {canViewCost ? formatVND(Math.abs(varianceValue)) : t('hiddenByPermission')}
+              {canViewCost ? formatVND(varianceValue) : t('hiddenByPermission')}
             </Text>
           </Space>
         );
@@ -291,29 +435,20 @@ const InventoryCountsPage = () => {
           >
             {t('actions.submit')}
           </Button>
-          <Button
-            type="primary"
-            ghost
-            icon={<CheckCircleOutlined />}
-            disabled={
-              record.status !== 'SUBMITTED'
-              || !canApproveCount
-              || (
-                record.submittedByUsername === currentUsername
-                && currentRoleName !== 'ADMIN'
-                && currentRoleName !== 'SUPER ADMIN'
-              )
-            }
-            onClick={() => approveCount(record)}
-          >
-            {t('actions.approve')}
-          </Button>
+          {record.status === 'SUBMITTED' && (
+            <Button href="/dashboard/approvals" icon={<FileSearchOutlined />}>
+              {t('actions.openApproval')}
+            </Button>
+          )}
         </Space>
       ),
     },
   ];
 
-  const itemColumns: ColumnsType<IInventoryCountItem> = [
+  const getItemColumns = (count: IInventoryCount): ColumnsType<IInventoryCountItem> => {
+    const canEditDraft = count.status === 'DRAFT' && canCreateOrSubmitCount;
+
+    return [
     {
       title: t('itemTable.product'),
       key: 'product',
@@ -325,19 +460,35 @@ const InventoryCountsPage = () => {
       ),
     },
     { title: t('itemTable.systemQuantity'), dataIndex: 'systemQuantity', key: 'systemQuantity', align: 'right', render: (value: number) => formatCurrency(value, 2) },
-    { title: t('itemTable.countedQuantity'), dataIndex: 'countedQuantity', key: 'countedQuantity', align: 'right', render: (value: number) => formatCurrency(value, 2) },
+    {
+      title: t('itemTable.countedQuantity'),
+      dataIndex: 'countedQuantity',
+      key: 'countedQuantity',
+      align: 'right',
+      render: (value: number, record) => canEditDraft ? (
+        <InputNumber<number>
+          min={0}
+          precision={2}
+          value={Number(value || 0)}
+          controls={false}
+          onChange={(nextValue) => updateDraftCountedQuantity(count._id, record.productId, nextValue)}
+          style={{ width: 128 }}
+        />
+      ) : formatCurrency(value, 2),
+    },
     {
       title: t('itemTable.varianceQuantity'),
       dataIndex: 'varianceQuantity',
       key: 'varianceQuantity',
       align: 'right',
-      render: (value: number) => <Tag color={Number(value) === 0 ? 'green' : 'orange'}>{formatCurrency(value, 2)}</Tag>,
+      render: (value: number) => <Tag color={getVarianceTagColor(Number(value || 0))}>{formatCurrency(value, 2)}</Tag>,
     },
     ...(canViewCost ? [
       { title: t('itemTable.unitCost'), dataIndex: 'unitCost', key: 'unitCost', align: 'right' as const, render: (value: number) => formatVND(value || 0) },
-      { title: t('itemTable.varianceValue'), dataIndex: 'varianceValue', key: 'varianceValue', align: 'right' as const, render: (value: number) => formatVND(Math.abs(value || 0)) },
+      { title: t('itemTable.varianceValue'), dataIndex: 'varianceValue', key: 'varianceValue', align: 'right' as const, render: (value: number) => formatVND(value || 0) },
     ] : []),
-  ];
+    ];
+  };
 
   const valuationColumns: ColumnsType<IValuationLine> = [
     {
@@ -419,42 +570,103 @@ const InventoryCountsPage = () => {
           dataSource={filteredCounts}
           loading={loadingCounts}
           expandable={{
-            expandedRowRender: (record) => (
-              <Table<IInventoryCountItem>
-                rowKey="_id"
-                columns={itemColumns}
-                dataSource={record.items ?? []}
-                pagination={false}
-                size="small"
-              />
-            ),
+            expandedRowRender: (record) => {
+              const canEditDraft = record.status === 'DRAFT' && canCreateOrSubmitCount;
+              const draftItems = (record.items ?? []).map((item) => getDraftItem(record._id, item));
+
+              return (
+                <Space orientation="vertical" size={12} style={{ width: '100%' }}>
+                  {canEditDraft && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
+                      <Text type="secondary">{t('draftEntryHint')}</Text>
+                      <Button
+                        size="small"
+                        icon={<SaveOutlined />}
+                        loading={savingCountId === record._id}
+                        onClick={() => saveDraftCount(record)}
+                      >
+                        {t('actions.saveDraft')}
+                      </Button>
+                    </div>
+                  )}
+                  <Table<IInventoryCountItem>
+                    rowKey="_id"
+                    columns={getItemColumns(record)}
+                    dataSource={draftItems}
+                    pagination={false}
+                    size="small"
+                  />
+                </Space>
+              );
+            },
           }}
           pagination={{ pageSize: 10, showSizeChanger: true }}
         />
       </Card>
 
-      <Card
-        variant="borderless"
-        title={t('sections.valuation')}
-        extra={(
-          <Segmented
-            value={method}
-            options={[
-              { label: 'FIFO', value: 'FIFO' },
-              { label: 'AVG', value: 'AVG' },
-            ]}
-            onChange={(value) => setMethod(value as ValuationMethod)}
+      <div ref={valuationSectionRef}>
+        <Card
+          variant="borderless"
+          title={(
+            <Space orientation="horizontal" wrap>
+              <span>{t('sections.valuation')}</span>
+              <Tag color={method === 'FIFO' ? 'blue' : 'purple'}>
+                {t('valuation.methodInUse', { method: valuation?.method || method })}
+              </Tag>
+            </Space>
+          )}
+          extra={(
+            <Segmented
+              value={method}
+              options={[
+                { label: 'FIFO', value: 'FIFO' },
+                { label: 'AVG', value: 'AVG' },
+              ]}
+              onChange={(value) => setMethod(value as ValuationMethod)}
+            />
+          )}
+        >
+          <Space orientation="vertical" size={12} style={{ width: '100%', marginBottom: 16 }}>
+            <Alert
+              type="info"
+              showIcon
+              title={t(`valuation.${method}.title`)}
+              description={t(`valuation.${method}.description`)}
+            />
+            {valuationComparison && canViewCost ? (
+              <Alert
+                type={valuationComparison.isSame ? 'warning' : 'success'}
+                showIcon
+                title={
+                  valuationComparison.isSame
+                    ? t('valuation.sameResultTitle')
+                    : t('valuation.differentResultTitle', { difference: formatVND(valuationComparison.difference) })
+                }
+                description={
+                  valuationComparison.isSame
+                    ? t('valuation.sameResultDescription')
+                    : t('valuation.differentResultDescription', {
+                        fifo: formatVND(valuationComparison.fifoTotalValue),
+                        avg: formatVND(valuationComparison.avgTotalValue),
+                      })
+                }
+              />
+            ) : null}
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              {t('valuation.generatedAt', {
+                time: valuation?.generatedAt ? dayjs(valuation.generatedAt).format('DD/MM/YYYY HH:mm:ss') : '-',
+              })}
+            </Text>
+          </Space>
+          <Table<IValuationLine>
+            rowKey="productId"
+            columns={valuationColumns}
+            dataSource={valuation?.lines ?? []}
+            loading={loadingValuation}
+            pagination={{ pageSize: 10, showSizeChanger: true }}
           />
-        )}
-      >
-        <Table<IValuationLine>
-          rowKey="productId"
-          columns={valuationColumns}
-          dataSource={valuation?.lines ?? []}
-          loading={loadingValuation}
-          pagination={{ pageSize: 10, showSizeChanger: true }}
-        />
-      </Card>
+        </Card>
+      </div>
     </AdminPageScroll>
   );
 };

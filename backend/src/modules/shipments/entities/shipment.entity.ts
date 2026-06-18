@@ -1,9 +1,21 @@
-import { BeforeInsert, Column, CreateDateColumn, DeleteDateColumn, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryColumn, UpdateDateColumn } from 'typeorm';
+import {
+  BeforeInsert,
+  Column,
+  CreateDateColumn,
+  DeleteDateColumn,
+  Entity,
+  JoinColumn,
+  ManyToOne,
+  OneToMany,
+  PrimaryColumn,
+  UpdateDateColumn,
+} from 'typeorm';
 import { SalesContract } from '@/modules/sales-contracts/entities/sales-contract.entity';
 import { User } from '@/modules/users/entities/user.entity';
 import { Container } from './container.entity';
 import { ColumnNumericTransformer } from '@/helpers/typeorm.util';
 import { createEntityId } from '@/common/ids/entity-id.util';
+import { Port } from '@/modules/ports/entities/port.entity';
 
 export enum ShipmentStatus {
   BOOKED = 'BOOKED',
@@ -11,7 +23,7 @@ export enum ShipmentStatus {
   CUSTOMS_CLEARED = 'CUSTOMS_CLEARED',
   ON_BOARD = 'ON_BOARD',
   ARRIVED = 'ARRIVED',
-  CLOSED = 'CLOSED'
+  CLOSED = 'CLOSED',
 }
 
 @Entity('shipments')
@@ -36,7 +48,11 @@ export class Shipment {
   @JoinColumn({ name: 'salesContractId' })
   salesContract: SalesContract;
 
-  @Column({ type: 'enum', enum: ShipmentStatus, default: ShipmentStatus.BOOKED })
+  @Column({
+    type: 'enum',
+    enum: ShipmentStatus,
+    default: ShipmentStatus.BOOKED,
+  })
   status: ShipmentStatus;
 
   @Column({ default: false })
@@ -57,11 +73,25 @@ export class Shipment {
   @Column({ nullable: true })
   voyageNumber: string;
 
-  @Column({ nullable: true })
-  pol: string; // Port of Loading
+  @Column({ type: 'varchar', nullable: true })
+  pol: string | null; // Port of Loading
 
-  @Column({ nullable: true })
-  pod: string; // Port of Discharge
+  @Column({ type: 'varchar', length: 40, nullable: true })
+  pol_port_id: string | null;
+
+  @ManyToOne(() => Port, { nullable: true })
+  @JoinColumn({ name: 'pol_port_id' })
+  polPort: Port | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  pod: string | null; // Port of Discharge
+
+  @Column({ type: 'varchar', length: 40, nullable: true })
+  pod_port_id: string | null;
+
+  @ManyToOne(() => Port, { nullable: true })
+  @JoinColumn({ name: 'pod_port_id' })
+  podPort: Port | null;
 
   @Column({ type: 'timestamp', nullable: true })
   etd: Date; // Estimated Time of Departure
@@ -75,29 +105,61 @@ export class Shipment {
   @Column({ type: 'jsonb', nullable: true })
   documentChecklist: Record<string, 'PENDING' | 'DONE' | 'NA'>;
 
-  @OneToMany(() => Container, (container) => container.shipment, { cascade: true })
+  @OneToMany(() => Container, (container) => container.shipment, {
+    cascade: true,
+  })
   containers: Container[];
 
   // Logistics Costs (Mục 9 PRD)
-  @Column({ type: 'numeric', precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   freightCost: number; // Cước biển/hàng không
 
   @Column({ type: 'varchar', default: 'USD' })
   freightCurrency: string;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   insuranceCost: number; // Phí bảo hiểm hàng hóa
 
   @Column({ type: 'varchar', default: 'USD' })
   insuranceCurrency: string;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   customsFeeVnd: number; // Phí khai báo hải quan
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   truckingCostVnd: number; // Phí vận chuyển nội địa (trucking)
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   localChargesVnd: number; // Phụ phí: THC, BAF, CAF, EBS...
 
   @Column({ nullable: true })

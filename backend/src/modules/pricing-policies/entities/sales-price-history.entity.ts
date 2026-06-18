@@ -11,7 +11,10 @@ import {
 import { createEntityId } from '@/common/ids/entity-id.util';
 import { ColumnNumericTransformer } from '@/helpers/typeorm.util';
 import { Product } from '@/modules/products/entities/product.entity';
-import { Partner, BuyerRegion } from '@/modules/partners/entities/partner.entity';
+import {
+  Partner,
+  BuyerRegion,
+} from '@/modules/partners/entities/partner.entity';
 import { Incoterm } from '@/modules/quotations/entities/quotation.entity';
 import { PricingPolicy } from './pricing-policy.entity';
 
@@ -23,7 +26,11 @@ export enum SalesPriceSourceType {
 }
 
 @Entity('sales_price_history')
-@Index('idx_sales_price_history_buyer_product', ['buyerId', 'productId', 'occurredAt'])
+@Index('idx_sales_price_history_buyer_product', [
+  'buyerId',
+  'productId',
+  'occurredAt',
+])
 export class SalesPriceHistory {
   @PrimaryColumn({ type: 'varchar', length: 40, name: '_id' })
   _id: string;
@@ -83,13 +90,29 @@ export class SalesPriceHistory {
   @Column({ type: 'varchar', default: 'USD' })
   currency: string;
 
-  @Column({ type: 'numeric', precision: 12, scale: 2, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 12,
+    scale: 2,
+    transformer: new ColumnNumericTransformer(),
+  })
   quantity: number;
 
-  @Column({ type: 'numeric', precision: 15, scale: 4, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 4,
+    transformer: new ColumnNumericTransformer(),
+  })
   unitPrice: number;
 
-  @Column({ type: 'numeric', precision: 15, scale: 6, default: 1, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 6,
+    default: 1,
+    transformer: new ColumnNumericTransformer(),
+  })
   exchangeRate: number;
 
   @Column()

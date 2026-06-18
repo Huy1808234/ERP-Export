@@ -17,10 +17,10 @@ import { TradeFinanceModule } from '../trade-finance/trade-finance.module';
 @Module({
   imports: [
     TypeOrmModule.forFeature([
-      ProformaInvoice, 
+      ProformaInvoice,
       SalesContract,
-      PurchaseOrder, 
-      Partner, 
+      PurchaseOrder,
+      Partner,
       Shipment,
       Product,
       LetterOfCredit,

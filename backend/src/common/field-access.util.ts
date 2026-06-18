@@ -88,6 +88,7 @@ const COST_PRIVILEGED_ROLES = new Set([
 const COST_PRIVILEGED_PERMISSIONS = new Set([
   'read:cost_price',
   'read:cost_fields',
+  'create:cost_fields',
   'write:cost_fields',
   'update:cost_fields',
   'manage:cost_fields',
@@ -171,7 +172,7 @@ function normalizeAccessKey(value: unknown): string {
 function getRoleName(user?: CostAccessUser | null): string {
   const role = typeof user?.role === 'string' ? user.role : user?.role?.name;
   return normalizeRoleName(
-    normalizeAccessKey(role) || normalizeAccessKey(user?.roleName)
+    normalizeAccessKey(role) || normalizeAccessKey(user?.roleName),
   );
 }
 
@@ -187,7 +188,9 @@ function getPermissionKey(permission: PermissionLike): string {
 
 function getPermissions(user?: CostAccessUser | null): PermissionLike[] {
   const rolePermissions =
-    user?.role && typeof user.role === 'object' && Array.isArray(user.role.permissions)
+    user?.role &&
+    typeof user.role === 'object' &&
+    Array.isArray(user.role.permissions)
       ? user.role.permissions
       : [];
   const userPermissions = Array.isArray(user?.permissions)
@@ -211,7 +214,9 @@ export function canReadBankFields(user?: CostAccessUser | null): boolean {
   return hasAnyPermission(user, BANK_PRIVILEGED_PERMISSIONS);
 }
 
-export function canReadTradeFinanceFields(user?: CostAccessUser | null): boolean {
+export function canReadTradeFinanceFields(
+  user?: CostAccessUser | null,
+): boolean {
   const roleName = getRoleName(user);
   if (TRADE_FINANCE_PRIVILEGED_ROLES.has(roleName)) return true;
 

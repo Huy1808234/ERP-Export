@@ -39,11 +39,15 @@ export class FilesService {
 
   async createUploadedFile(input: CreateFileAssetInput): Promise<FileAsset> {
     const auditTrail = [
-      this.createAuditEvent(FileAssetAuditAction.UPLOADED, input.uploadedByUsername || 'system', {
-        fileName: input.file.originalname,
-        url: input.url,
-        note: `Uploaded to ${input.folder}`,
-      }),
+      this.createAuditEvent(
+        FileAssetAuditAction.UPLOADED,
+        input.uploadedByUsername || 'system',
+        {
+          fileName: input.file.originalname,
+          url: input.url,
+          note: `Uploaded to ${input.folder}`,
+        },
+      ),
     ];
 
     const asset = this.fileAssetRepository.create({
@@ -62,12 +66,17 @@ export class FilesService {
   }
 
   async findOne(recordId: string): Promise<FileAsset> {
-    const asset = await this.fileAssetRepository.findOne({ where: { _id: recordId } });
+    const asset = await this.fileAssetRepository.findOne({
+      where: { _id: recordId },
+    });
     if (!asset) throw new NotFoundException('File asset not found');
     return asset;
   }
 
-  async linkToDocument(recordId: string, input: LinkFileAssetInput): Promise<FileAsset> {
+  async linkToDocument(
+    recordId: string,
+    input: LinkFileAssetInput,
+  ): Promise<FileAsset> {
     const asset = await this.findOne(recordId);
     asset.linkedModule = input.linkedModule;
     asset.linkedDocumentType = input.linkedDocumentType;
@@ -90,7 +99,9 @@ export class FilesService {
   private createAuditEvent(
     action: FileAssetAuditAction,
     username: string,
-    extra: Partial<Omit<FileAssetAuditEvent, 'action' | 'username' | 'at'>> = {},
+    extra: Partial<
+      Omit<FileAssetAuditEvent, 'action' | 'username' | 'at'>
+    > = {},
   ): FileAssetAuditEvent {
     return {
       action,

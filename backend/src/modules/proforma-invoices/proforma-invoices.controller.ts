@@ -1,10 +1,23 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  Query,
+} from '@nestjs/common';
 import { ProformaInvoicesService } from './proforma-invoices.service';
-import { CreateProformaInvoiceDto, ConvertQuotationToPiDto } from './dto/create-proforma-invoice.dto';
+import {
+  CreateProformaInvoiceDto,
+  ConvertQuotationToPiDto,
+} from './dto/create-proforma-invoice.dto';
 import { UpdateProformaInvoiceDto } from './dto/update-proforma-invoice.dto';
 import { ResponseMessage, User } from '@/decorator/customize';
 import { User as UserEntity } from '@/modules/users/entities/user.entity';
 import { PIStatus } from './entities/proforma-invoice.entity';
+import type { QueryParams } from '@/common/types/authenticated-user.type';
 
 @Controller('proforma-invoices')
 export class ProformaInvoicesController {
@@ -12,19 +25,25 @@ export class ProformaInvoicesController {
 
   @Post()
   @ResponseMessage('Create proforma invoice successfully')
-  create(@Body() createPiDto: CreateProformaInvoiceDto, @User() user: UserEntity) {
+  create(
+    @Body() createPiDto: CreateProformaInvoiceDto,
+    @User() user: UserEntity,
+  ) {
     return this.piService.create(createPiDto, user);
   }
 
   @Post('from-quotation')
   @ResponseMessage('Convert quotation to PI successfully')
-  convert(@Body() convertDto: ConvertQuotationToPiDto, @User() user: UserEntity) {
+  convert(
+    @Body() convertDto: ConvertQuotationToPiDto,
+    @User() user: UserEntity,
+  ) {
     return this.piService.createFromQuotation(convertDto, user);
   }
 
   @Get()
   @ResponseMessage('Fetch all PIs with pagination')
-  findAll(@Query() query: string) {
+  findAll(@Query() query: QueryParams) {
     return this.piService.findAll(query);
   }
 
@@ -36,7 +55,10 @@ export class ProformaInvoicesController {
 
   @Patch(':_id')
   @ResponseMessage('Update PI successfully')
-  update(@Param('_id') recordId: string, @Body() updatePiDto: UpdateProformaInvoiceDto) {
+  update(
+    @Param('_id') recordId: string,
+    @Body() updatePiDto: UpdateProformaInvoiceDto,
+  ) {
     return this.piService.update(recordId, updatePiDto);
   }
 

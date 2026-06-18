@@ -1,4 +1,11 @@
-import { BeforeInsert, Column, Entity, PrimaryColumn, ManyToOne, JoinColumn } from 'typeorm';
+import {
+  BeforeInsert,
+  Column,
+  Entity,
+  PrimaryColumn,
+  ManyToOne,
+  JoinColumn,
+} from 'typeorm';
 import { VendorInvoice } from './vendor-invoice.entity';
 import { Product } from '@/modules/products/entities/product.entity';
 import { GoodsReceiptItem } from '@/modules/goods-receipts/entities/goods-receipt-item.entity';
@@ -21,7 +28,10 @@ export class VendorInvoiceItem {
   @Column({ type: 'varchar', length: 40, nullable: true })
   vendorInvoiceId: string | null;
 
-  @ManyToOne(() => VendorInvoice, (invoice) => invoice.items, { onDelete: 'CASCADE', nullable: true })
+  @ManyToOne(() => VendorInvoice, (invoice) => invoice.items, {
+    onDelete: 'CASCADE',
+    nullable: true,
+  })
   @JoinColumn({ name: 'vendorInvoiceId' })
   vendorInvoice: VendorInvoice | null;
 
@@ -46,13 +56,28 @@ export class VendorInvoiceItem {
   @JoinColumn({ name: 'productId' })
   product: Product;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    transformer: new ColumnNumericTransformer(),
+  })
   quantity: number;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    transformer: new ColumnNumericTransformer(),
+  })
   unitPrice: number;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    transformer: new ColumnNumericTransformer(),
+  })
   amount: number;
 
   @Column({ type: 'text', nullable: true })

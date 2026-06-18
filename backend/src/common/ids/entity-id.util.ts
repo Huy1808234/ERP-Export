@@ -33,7 +33,8 @@ export const createEntityId = (prefix: string): string => {
   return `_${normalizedPrefix}_${formatDateKey()}_${createRandomBase36()}`;
 };
 
-export const createOpaqueCode = (prefix = '_code'): string => createEntityId(prefix);
+export const createOpaqueCode = (prefix = '_code'): string =>
+  createEntityId(prefix);
 
 export const normalizeUsername = (value: string): string =>
   value

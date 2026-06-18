@@ -62,7 +62,9 @@ export abstract class BaseService<T extends ObjectLiteral> {
     };
     const entity = await this.repository.findOne(options);
     if (!entity) {
-      throw new NotFoundException(`${this.repository.metadata.name} with reference ${entityRef} not found`);
+      throw new NotFoundException(
+        `${this.repository.metadata.name} with reference ${entityRef} not found`,
+      );
     }
     return entity;
   }

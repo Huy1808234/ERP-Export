@@ -12,12 +12,17 @@ import { AccountPayable } from '../account-payables/entities/account-payable.ent
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([VendorInvoice, VendorInvoiceItem, PurchaseOrder, AccountPayable]),
+    TypeOrmModule.forFeature([
+      VendorInvoice,
+      VendorInvoiceItem,
+      PurchaseOrder,
+      AccountPayable,
+    ]),
     PurchaseOrdersModule,
-    AccountingModule
+    AccountingModule,
   ],
   controllers: [VendorInvoicesController],
   providers: [VendorInvoicesService],
-  exports: [VendorInvoicesService]
+  exports: [VendorInvoicesService],
 })
 export class VendorInvoicesModule {}

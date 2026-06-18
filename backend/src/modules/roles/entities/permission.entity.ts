@@ -4,10 +4,12 @@ import {
   CreateDateColumn,
   Entity,
   Index,
+  OneToMany,
   PrimaryColumn,
   UpdateDateColumn,
 } from 'typeorm';
 import { createEntityId } from '@/common/ids/entity-id.util';
+import { RolePermissionAssignment } from './role-permission-assignment.entity';
 
 @Entity('permissions')
 export class Permission {
@@ -26,6 +28,12 @@ export class Permission {
 
   @Column()
   module: string; // e.g. "PRODUCTS"
+
+  @OneToMany(
+    () => RolePermissionAssignment,
+    (assignment) => assignment.permission,
+  )
+  roleAssignments: RolePermissionAssignment[];
 
   @CreateDateColumn()
   createdAt: Date;

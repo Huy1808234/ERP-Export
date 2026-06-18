@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import { Table, Tag, Card, Button, Space, Typography, Tooltip, Badge, Popconfirm, App, Skeleton, Select, Row, Col, Drawer, Form, Input, Divider, theme, Statistic, Modal } from 'antd';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Table, Tag, Card, Button, Space, Typography, Tooltip, Badge, Popconfirm, App, Skeleton, Select, Row, Col, Drawer, Form, Input, Divider, theme, Statistic, Modal, Upload, AutoComplete } from 'antd';
 import {
   CheckCircleOutlined,
   SendOutlined,
@@ -11,12 +11,12 @@ import {
   FilePdfOutlined,
   PlusOutlined,
   SearchOutlined,
-  FilterOutlined, FileProtectOutlined, ReloadOutlined, TruckOutlined, CloseCircleOutlined
+  FilterOutlined, FileProtectOutlined, ReloadOutlined, TruckOutlined, CloseCircleOutlined, UploadOutlined
 } from '@ant-design/icons';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getSession, useSession } from 'next-auth/react';
-import { sendRequest } from '@/lib/api-client';
+import { sendRequest, sendRequestFile } from '@/lib/api-client';
 import { useCurrency } from '@/hooks/useCurrency';
 import { GLOBAL_EXCHANGE_RATE } from '@/constants/currency.config';
 import SalesContractDetailModal from './sales-contract.detail';
@@ -25,9 +25,11 @@ import dayjs from 'dayjs';
 import SalesContractModal from './sales-contract.modal';
 import ShipmentFromPIModal from '../shipment/shipment.from-pi';
 import { useTranslations } from 'next-intl';
+import { useSearchParams } from 'next/navigation';
 import { getAccessToken } from '@/lib/auth-token';
 
-const { Title, Text } = Typography;
+
+const { Text } = Typography;
 
 type SalesContractActionResponse = {
   invitation?: {
@@ -36,6 +38,79 @@ type SalesContractActionResponse = {
     signerEmailMasked?: string | null;
   };
   deliveryStatus?: string;
+};
+
+type SignatureInvitationStatus = 'CREATED' | 'SENT' | 'OPENED' | 'OTP_VERIFIED' | 'SIGNED' | 'REVOKED' | 'EXPIRED';
+
+type SalesContractInvitation = {
+  _id?: string;
+  signerType?: 'BUYER' | 'INTERNAL' | string | null;
+  status?: SignatureInvitationStatus | string | null;
+  createdAt?: string | null;
+};
+
+type SalesContractRecord = {
+  _id: string;
+  signatureInvitations?: SalesContractInvitation[];
+};
+
+type SalesContractListResponse = {
+  results: Array<Record<string, unknown>>;
+  meta: {
+    current: number;
+    pageSize: number;
+    total: number;
+  };
+};
+
+type SalesContractAdvancedFilters = {
+  buyerId?: string;
+  incoterm?: string;
+  paymentTerms?: string;
+};
+
+type SalesContractQueryParams = {
+  current: number;
+  pageSize: number;
+  contractNumber?: string;
+  status?: string;
+  buyerId?: string;
+  incoterm?: string;
+  paymentTerms?: string;
+};
+
+type FetchSalesContractsOptions = {
+  silent?: boolean;
+};
+
+type PartnerOption = {
+  _id: string;
+  name?: string;
+};
+
+type PartnerListResponse = {
+  results: PartnerOption[];
+};
+
+type SignatureFormValues = {
+  signerName: string;
+  signerTitle?: string;
+  signerEmail?: string;
+  consentText: string;
+};
+
+const ACTIVE_SIGNATURE_INVITATION_STATUSES: SignatureInvitationStatus[] = [
+  'CREATED',
+  'SENT',
+  'OPENED',
+  'OTP_VERIFIED',
+];
+
+const getActiveBuyerInvitation = (record: SalesContractRecord): SalesContractInvitation | null => {
+  const invitations = record.signatureInvitations || [];
+  return invitations
+    .filter((item) => item.signerType === 'BUYER' && ACTIVE_SIGNATURE_INVITATION_STATUSES.includes(item.status as SignatureInvitationStatus))
+    .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())[0] || null;
 };
 
 
@@ -65,15 +140,42 @@ const SalesContractTable = () => {
   const [searchText, setSearchText] = useState('');
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
-  const [partners, setPartners] = useState<any[]>([]);
-  const [advancedFilters, setAdvancedFilters] = useState<any>({
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const id = searchParams.get('id');
+    if (id && !selectedRecord) {
+      const fetchSingle = async () => {
+        try {
+          const res = await sendRequest<IBackendRes<any>>({
+            url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/sales-contracts/${id}`,
+            method: 'GET',
+            headers: { Authorization: `Bearer ${getAccessToken(null)}` }, // Note: session might be needed, but getting from localStorage via getAccessToken is enough on client side.
+          });
+          if (res?.data) {
+            setSelectedRecord(res.data);
+            setIsDetailOpen(true);
+          }
+        } catch (error) {
+          console.error('Failed to fetch sales contract details', error);
+        }
+      };
+      fetchSingle();
+    }
+  }, [searchParams]);
+
+  const [partners, setPartners] = useState<PartnerOption[]>([]);
+  const [advancedFilters, setAdvancedFilters] = useState<SalesContractAdvancedFilters>({
     buyerId: undefined,
     incoterm: undefined,
     paymentTerms: undefined,
   });
   const [filterForm] = Form.useForm();
   const [signatureForm] = Form.useForm();
+  const [uploadFiles, setUploadFiles] = useState<any[]>([]);
+  const [uploading, setUploading] = useState(false);
   const debouncedSearch = useDebounce(searchText, 500);
+  const lastAutoRefreshAtRef = useRef(0);
 
   const { data: session } = useSession();
   const { message, notification } = App.useApp();
@@ -86,10 +188,20 @@ const SalesContractTable = () => {
     (session?.user?.role as any)?.permissions?.some((p: any) => p.name === 'write:sales_contract' || p.name === 'read:all');
 
 
-  const fetchData = async (current = 1, pageSize = 10, search = debouncedSearch) => {
-    setLoading(true);
+  const fetchData = useCallback(async (
+    current = 1,
+    pageSize = 10,
+    search = debouncedSearch,
+    options: FetchSalesContractsOptions = {},
+  ) => {
+    if (!session) {
+      setLoading(false);
+      return;
+    }
+
+    if (!options.silent) setLoading(true);
     try {
-      const queryParams: any = { current, pageSize };
+      const queryParams: SalesContractQueryParams = { current, pageSize };
       if (search) queryParams.contractNumber = `/${search}/i`;
       if (statusFilter) queryParams.status = statusFilter;
       
@@ -98,7 +210,7 @@ const SalesContractTable = () => {
       if (advancedFilters.incoterm) queryParams.incoterm = advancedFilters.incoterm;
       if (advancedFilters.paymentTerms) queryParams.paymentTerms = `/${advancedFilters.paymentTerms}/i`;
 
-      const res = await sendRequest<IBackendRes<any>>({
+      const res = await sendRequest<IBackendRes<SalesContractListResponse>>({
         url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/sales-contracts`,
         method: 'GET',
         queryParams,
@@ -109,20 +221,46 @@ const SalesContractTable = () => {
         setData(res.data.results);
         setMeta(res.data.meta);
       }
-    } catch (error) {
+    } catch {
       message.error(t('messages.fetchError'));
     } finally {
-      setLoading(false);
+      if (!options.silent) setLoading(false);
     }
-  };
+  }, [advancedFilters, debouncedSearch, message, session, statusFilter, t]);
+
+  const refreshCurrentPage = useCallback((options: FetchSalesContractsOptions = {}) => {
+    void fetchData(meta.current, meta.pageSize, debouncedSearch, options);
+  }, [debouncedSearch, fetchData, meta.current, meta.pageSize]);
 
   useEffect(() => {
-    fetchData(1, meta.pageSize, debouncedSearch);
-  }, [debouncedSearch, statusFilter, advancedFilters]);
+    void fetchData(1, meta.pageSize, debouncedSearch);
+  }, [debouncedSearch, fetchData, meta.pageSize]);
+
+  useEffect(() => {
+    if (!session) return;
+
+    const refreshWhenVisible = () => {
+      if (document.visibilityState !== 'visible') return;
+
+      const now = Date.now();
+      if (now - lastAutoRefreshAtRef.current < 1000) return;
+
+      lastAutoRefreshAtRef.current = now;
+      refreshCurrentPage({ silent: true });
+    };
+
+    window.addEventListener('focus', refreshWhenVisible);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+
+    return () => {
+      window.removeEventListener('focus', refreshWhenVisible);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+    };
+  }, [refreshCurrentPage, session]);
 
   useEffect(() => {
     const fetchPartners = async () => {
-      const res = await sendRequest<IBackendRes<any>>({
+      const res = await sendRequest<IBackendRes<PartnerListResponse>>({
         url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/partners`,
         method: 'GET',
         queryParams: { current: 1, pageSize: 100 },
@@ -133,7 +271,7 @@ const SalesContractTable = () => {
     if (session) fetchPartners();
   }, [session]);
 
-  const handleApplyFilters = (values: any) => {
+  const handleApplyFilters = (values: SalesContractAdvancedFilters) => {
     setAdvancedFilters(values);
     setIsFilterOpen(false);
   };
@@ -147,11 +285,14 @@ const SalesContractTable = () => {
 
   const activeFilterCount = Object.values(advancedFilters).filter(v => v !== undefined && v !== '').length;
 
-  const handleAction = async (id: string, action: 'submit-approval' | 'send-signature' | 'confirm' | 'ship') => {
+  const handleAction = async (id: string, action: 'submit-approval' | 'send-signature' | 'resend-signature' | 'confirm' | 'ship') => {
     try {
       const session = await getSession();
+      const actionUrl = action === 'resend-signature'
+        ? `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/sales-contracts/${id}/signature-invitations/resend`
+        : `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/sales-contracts/${id}/${action}`;
       const res = await sendRequest<IBackendRes<SalesContractActionResponse>>({
-        url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/sales-contracts/${id}/${action}`,
+        url: actionUrl,
         method: 'PATCH',
         headers: { Authorization: `Bearer ${getAccessToken(session)}` }
       });
@@ -160,10 +301,11 @@ const SalesContractTable = () => {
         const successKey: Record<string, string> = {
           'submit-approval': t('messages.submitApprovalSuccess'),
           'send-signature': t('messages.sendSignatureSuccess'),
+          'resend-signature': t('messages.resendSignatureSuccess'),
           confirm: t('messages.confirmSuccess'),
           ship: t('messages.shipSuccess'),
         };
-        if (action === 'send-signature' && res.data.invitation?.signingUrl) {
+        if ((action === 'send-signature' || action === 'resend-signature') && res.data.invitation?.signingUrl) {
           const signingUrl = res.data.invitation.signingUrl;
           let copied = false;
           try {
@@ -174,10 +316,10 @@ const SalesContractTable = () => {
           }
 
           notification.success({
-            message: successKey[action],
+            title: successKey[action],
             description: copied
-              ? `Portal link copied. Delivery: ${res.data.deliveryStatus || 'SENT'}`
-              : `Portal link: ${signingUrl}`,
+              ? t('messages.portalLinkCopied', { delivery: res.data.deliveryStatus || 'SENT' })
+              : t('messages.portalLinkFallback', { url: signingUrl }),
             duration: 6,
           });
         } else {
@@ -187,30 +329,88 @@ const SalesContractTable = () => {
       } else {
         message.error(res?.message || t('messages.actionFailed'));
       }
-    } catch (error) {
+    } catch {
+      message.error(t('messages.actionFailed'));
+    }
+  };
+
+  const handleRevokeSignature = async (record: SalesContractRecord) => {
+    const invitation = getActiveBuyerInvitation(record);
+    if (!invitation?._id) {
+      message.warning(t('messages.noActiveSignatureInvitation'));
+      return;
+    }
+
+    try {
+      const session = await getSession();
+      const res = await sendRequest<IBackendRes<SalesContractRecord>>({
+        url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/sales-contracts/${record._id}/signature-invitations/${invitation._id}/revoke`,
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${getAccessToken(session)}` },
+        body: { reason: 'Revoked from sales contract dashboard' },
+      });
+
+      if (res?.data) {
+        message.success(t('messages.revokeSignatureSuccess'));
+        fetchData(meta.current, meta.pageSize);
+      } else {
+        message.error(res?.message || t('messages.actionFailed'));
+      }
+    } catch {
       message.error(t('messages.actionFailed'));
     }
   };
 
   const openSignatureModal = (record: any, signerType: 'BUYER' | 'INTERNAL') => {
     setSignatureTarget({ record, signerType });
+    setIsSignatureModalOpen(true);
+  };
+
+  useEffect(() => {
+    if (!isSignatureModalOpen || !signatureTarget) return;
+
+    const { record, signerType } = signatureTarget;
     signatureForm.setFieldsValue({
       signerName: signerType === 'BUYER'
         ? record.buyer?.contactName || record.buyer?.name
         : session?.user?.name || session?.user?.username,
-      signerTitle: signerType === 'BUYER' ? 'Authorized Representative' : 'Authorized Signatory',
-      signerEmail: signerType === 'BUYER' ? record.buyer?.email : undefined,
+      signerTitle: signerType === 'BUYER' ? 'Authorized Representative' : (session?.user as any)?.roleName || 'Authorized Signatory',
+      signerEmail: signerType === 'BUYER' ? record.buyer?.email : session?.user?.email,
       consentText: t('signature.defaultConsent'),
     });
-    setIsSignatureModalOpen(true);
-  };
+  }, [isSignatureModalOpen, signatureTarget, signatureForm, session?.user?.name, session?.user?.username, t]);
 
-  const handleSignatureSubmit = async (values: any) => {
+  const handleSignatureSubmit = async (values: SignatureFormValues & { password?: string }) => {
     if (!signatureTarget) return;
+    setUploading(true);
 
     try {
       const currentSession = await getSession();
-      const res = await sendRequest<IBackendRes<any>>({
+      let signatureImageFileId = null;
+
+      // Handle file upload first if a file is selected
+      if (uploadFiles.length > 0 && uploadFiles[0].originFileObj) {
+        const formData = new FormData();
+        formData.append('fileUpload', uploadFiles[0].originFileObj);
+        formData.append('folderType', 'documents');
+
+        const uploadRes = await sendRequestFile<IBackendRes<any>>({
+          url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/files/upload`,
+          method: 'POST',
+          headers: { Authorization: `Bearer ${getAccessToken(currentSession)}` },
+          body: formData,
+        });
+
+        if (uploadRes?.data?._id) {
+          signatureImageFileId = uploadRes.data._id;
+        } else {
+          message.error('Lỗi khi tải lên chữ ký hình ảnh.');
+          setUploading(false);
+          return;
+        }
+      }
+
+      const res = await sendRequest<IBackendRes<SalesContractRecord>>({
         url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/sales-contracts/${signatureTarget.record._id}/signatures`,
         method: 'POST',
         headers: { Authorization: `Bearer ${getAccessToken(currentSession)}` },
@@ -220,6 +420,8 @@ const SalesContractTable = () => {
           signerTitle: values.signerTitle,
           signerEmail: values.signerEmail,
           consentText: values.consentText,
+          signatureImageFileId: signatureImageFileId,
+          password: values.password,
         },
       });
 
@@ -232,12 +434,15 @@ const SalesContractTable = () => {
         setIsSignatureModalOpen(false);
         setSignatureTarget(null);
         signatureForm.resetFields();
+        setUploadFiles([]);
         fetchData(meta.current, meta.pageSize);
       } else {
         message.error(res?.message || t('messages.actionFailed'));
       }
-    } catch (error) {
+    } catch {
       message.error(t('messages.actionFailed'));
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -350,14 +555,29 @@ const SalesContractTable = () => {
           )}
 
           {record.status === 'PENDING_BUYER_SIGNATURE' && canWrite && (
-            <Button
-              type="primary"
-              className="bg-gradient-to-r from-purple-600 to-pink-600 border-none h-10 px-6 rounded-xl font-bold shadow-lg shadow-purple-500/25"
-              icon={<FileProtectOutlined />}
-              onClick={() => openSignatureModal(record, 'BUYER')}
-            >
-              {t('actions.buyerSign')}
-            </Button>
+            <>
+              <Button
+                className="h-10 px-5 rounded-xl font-bold border-purple-200 text-purple-600 hover:border-purple-400 hover:text-purple-700"
+                icon={<ReloadOutlined />}
+                onClick={() => handleAction(record._id, 'resend-signature')}
+              >
+                {t('actions.resendSignature')}
+              </Button>
+              <Popconfirm
+                title={t('messages.revokeSignatureTitle')}
+                onConfirm={() => handleRevokeSignature(record)}
+                okText={t('messages.confirmOk')}
+                cancelText={t('messages.cancel')}
+              >
+                <Button
+                  danger
+                  className="h-10 px-5 rounded-xl font-bold"
+                  icon={<CloseCircleOutlined />}
+                >
+                  {t('actions.revokeSignature')}
+                </Button>
+              </Popconfirm>
+            </>
           )}
 
           {record.status === 'BUYER_SIGNED' && canWrite && (
@@ -634,6 +854,7 @@ const SalesContractTable = () => {
         onOk={() => signatureForm.submit()}
         okText={signatureTarget?.signerType === 'BUYER' ? t('signature.buyerOk') : t('signature.internalOk')}
         cancelText={t('messages.cancel')}
+        confirmLoading={uploading}
         destroyOnHidden
       >
         <Form
@@ -647,25 +868,80 @@ const SalesContractTable = () => {
             name="signerName"
             rules={[{ required: true, message: t('signature.signerRequired') }]}
           >
-            <Input />
+            <Input disabled={signatureTarget?.signerType === 'INTERNAL'} className={signatureTarget?.signerType === 'INTERNAL' ? 'bg-slate-50' : ''} />
           </Form.Item>
           <Form.Item label={t('signature.signerTitle')} name="signerTitle">
-            <Input />
+            <AutoComplete
+              options={[
+                { value: 'Giám đốc (Director)' },
+                { value: 'Phó Giám đốc (Vice Director)' },
+                { value: 'Trưởng phòng Kinh doanh (Sales Manager)' },
+                { value: 'Kế toán trưởng (Chief Accountant)' },
+                { value: 'Người đại diện theo ủy quyền (Authorized Signatory)' }
+              ]}
+              placeholder="Nhập hoặc chọn chức danh..."
+              filterOption={(inputValue, option) =>
+                option!.value.toUpperCase().indexOf(inputValue.toUpperCase()) !== -1
+              }
+            />
           </Form.Item>
           <Form.Item
             label={t('signature.signerEmail')}
             name="signerEmail"
             rules={[{ type: 'email', message: t('signature.emailInvalid') }]}
           >
-            <Input />
+            <Input disabled={signatureTarget?.signerType === 'INTERNAL'} className={signatureTarget?.signerType === 'INTERNAL' ? 'bg-slate-50' : ''} />
           </Form.Item>
+
+          {/* Document Preview Block */}
+          <div className="mb-4 mt-2 p-4 rounded-xl border border-slate-200 bg-slate-50">
+            <div className="flex items-center space-x-2 mb-2 text-slate-600">
+              <FilePdfOutlined className="text-red-500" />
+              <span className="font-bold text-sm">Contract Preview</span>
+            </div>
+            <div className="bg-white p-3 rounded-lg border border-slate-100 h-32 overflow-y-auto text-xs text-slate-500 font-mono shadow-inner leading-relaxed">
+              <p className="font-bold text-slate-700 mb-2">SALES CONTRACT #{signatureTarget?.record?.contractNumber}</p>
+              <p>Buyer: {signatureTarget?.record?.buyer?.name}</p>
+              <p>Total Value: {signatureTarget?.record?.totalAmount} {signatureTarget?.record?.currencyCode}</p>
+              <p>Incoterm: {signatureTarget?.record?.incoterm}</p>
+              <p className="mt-2 italic">-- Please scroll to review full contract terms --</p>
+              <br/><br/><br/><br/><br/>
+              <p>End of document.</p>
+            </div>
+          </div>
+
           <Form.Item
             label={t('signature.consent')}
             name="consentText"
             rules={[{ required: true, message: t('signature.consentRequired') }]}
           >
-            <Input.TextArea rows={4} />
+            <Input.TextArea rows={3} />
           </Form.Item>
+
+          {signatureTarget?.signerType === 'INTERNAL' && (
+            <>
+              <Form.Item
+                label="Mật khẩu xác thực (2FA)"
+                name="password"
+                rules={[{ required: true, message: 'Vui lòng nhập mật khẩu để xác thực chữ ký' }]}
+                extra={<span className="text-xs text-slate-400">Bước bảo mật: Nhập mật khẩu đăng nhập của bạn để chốt hợp đồng.</span>}
+              >
+                <Input.Password placeholder="Nhập mật khẩu của bạn..." size="large" />
+              </Form.Item>
+
+              <Form.Item label="Ảnh chữ ký điện tử / Con dấu (Không bắt buộc)">
+                <Upload
+                  beforeUpload={() => false}
+                  fileList={uploadFiles}
+                  onChange={(info: any) => setUploadFiles(info.fileList)}
+                  maxCount={1}
+                  listType="picture"
+                >
+                  <Button icon={<UploadOutlined />}>Chọn file ảnh chữ ký (PNG/JPG)</Button>
+                </Upload>
+              </Form.Item>
+            </>
+          )}
         </Form>
       </Modal>
 

@@ -14,6 +14,15 @@ export class InventoryAdjustmentApprovalListener {
 
   @OnEvent(APPROVAL_WORKFLOW_APPROVED_EVENT)
   async handleApproved(payload: ApprovalWorkflowDecisionEvent) {
+    if (payload.documentType === ApprovalDocumentType.INVENTORY_COUNT) {
+      await this.inventoryService.approveInventoryCountFromWorkflow(
+        payload.documentId,
+        payload.actorUsername,
+        payload.reason,
+      );
+      return;
+    }
+
     if (payload.documentType !== ApprovalDocumentType.INVENTORY_ADJUSTMENT)
       return;
 
@@ -25,6 +34,15 @@ export class InventoryAdjustmentApprovalListener {
 
   @OnEvent(APPROVAL_WORKFLOW_REJECTED_EVENT)
   async handleRejected(payload: ApprovalWorkflowDecisionEvent) {
+    if (payload.documentType === ApprovalDocumentType.INVENTORY_COUNT) {
+      await this.inventoryService.rejectInventoryCountFromWorkflow(
+        payload.documentId,
+        payload.actorUsername,
+        payload.reason,
+      );
+      return;
+    }
+
     if (payload.documentType !== ApprovalDocumentType.INVENTORY_ADJUSTMENT)
       return;
 

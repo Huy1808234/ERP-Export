@@ -41,7 +41,12 @@ export class VendorPriceHistory {
   @JoinColumn({ name: 'productId' })
   product: Product;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    transformer: new ColumnNumericTransformer(),
+  })
   price: number;
 
   @Column({ type: 'varchar', default: 'VND' })

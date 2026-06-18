@@ -17,7 +17,8 @@ import {
     Select,
     Row,
     Col,
-    Popconfirm
+    Popconfirm,
+    theme
 } from 'antd';
 import { 
     MailOutlined, 
@@ -53,6 +54,7 @@ const InquiryPage = () => {
     const accessToken = getAccessToken(session);
     const router = useRouter();
     const { message, notification } = App.useApp();
+    const { token } = theme.useToken();
     const t = useTranslations('Inquiry');
 
     const [loading, setLoading] = useState(false);
@@ -68,6 +70,32 @@ const InquiryPage = () => {
     const [drawerOpen, setDrawerOpen] = useState(false);
     const [filterStatus, setFilterStatus] = useState<string | null>(null);
     const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+
+    const detailCardStyle: React.CSSProperties = {
+        background: token.colorBgContainer,
+        border: `1px solid ${token.colorBorderSecondary}`,
+    };
+
+    const productIconStyle: React.CSSProperties = {
+        width: 60,
+        height: 60,
+        borderRadius: 8,
+        background: token.colorBgElevated,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        border: `1px solid ${token.colorBorderSecondary}`,
+        flexShrink: 0,
+    };
+
+    const noteBoxStyle: React.CSSProperties = {
+        marginTop: 16,
+        padding: 12,
+        background: token.colorBgElevated,
+        borderRadius: 8,
+        borderLeft: `4px solid ${token.colorPrimary}`,
+        color: token.colorText,
+    };
 
     const fetchData = useCallback(async (page = current, size = pageSize, status = filterStatus, q = search) => {
         if (!accessToken) return;
@@ -421,6 +449,14 @@ const InquiryPage = () => {
                 size="large"
                 onClose={() => setDrawerOpen(false)}
                 open={drawerOpen}
+                styles={{
+                    body: { background: token.colorBgLayout },
+                    header: {
+                        background: token.colorBgContainer,
+                        borderBottom: `1px solid ${token.colorBorderSecondary}`,
+                    },
+                    section: { background: token.colorBgLayout },
+                }}
                 extra={
                     <Space>
                         {selectedInquiry?.status === 'PENDING' && (
@@ -433,7 +469,7 @@ const InquiryPage = () => {
             >
                 {selectedInquiry && (
                     <Space orientation="vertical" size={24} style={{ width: '100%' }}>
-                        <Card size="small" title={t('drawer.customerInfo')} variant="borderless" style={{ background: '#f8fafc' }}>
+                        <Card size="small" title={t('drawer.customerInfo')} style={detailCardStyle}>
                             <Descriptions column={1}>
                                 <Descriptions.Item label={t('drawer.name')}>{selectedInquiry.customerName}</Descriptions.Item>
                                 <Descriptions.Item label={t('drawer.email')}>{selectedInquiry.customerEmail}</Descriptions.Item>
@@ -442,9 +478,9 @@ const InquiryPage = () => {
                             </Descriptions>
                         </Card>
 
-                        <Card size="small" title={t('drawer.requestedProduct')} variant="borderless" style={{ background: '#f8fafc' }}>
+                        <Card size="small" title={t('drawer.requestedProduct')} style={detailCardStyle}>
                             <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
-                                <div style={{ width: 60, height: 60, borderRadius: 8, background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #e2e8f0' }}>
+                                <div style={productIconStyle}>
                                     <ShoppingOutlined style={{ fontSize: 24, color: '#8b5cf6' }} />
                                 </div>
                                 <div>
@@ -452,7 +488,7 @@ const InquiryPage = () => {
                                     <Text type="secondary">{t('drawer.quantity')}: <Text strong>{Number(selectedInquiry.quantity).toLocaleString()}</Text></Text>
                                 </div>
                             </div>
-                            <div style={{ marginTop: 16, padding: '12px', background: '#fff', borderRadius: 8, borderLeft: '4px solid #3b82f6' }}>
+                            <div style={noteBoxStyle}>
                                 <Text italic>{selectedInquiry.note || t('drawer.noNote')}</Text>
                             </div>
                         </Card>

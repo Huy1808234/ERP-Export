@@ -16,7 +16,6 @@ import type { IUser } from '../users/users.interface';
 import { ApprovalMatrixService } from '../approval-matrix/approval-matrix.service';
 import { ApprovalDocumentType } from '../approval-matrix/entities/approval-rule.entity';
 
-
 @Injectable()
 export class PurchaseRequestsService {
   constructor(
@@ -26,7 +25,7 @@ export class PurchaseRequestsService {
     private prItemRepository: Repository<PurchaseRequestItem>,
     private dataSource: DataSource,
     private approvalMatrixService: ApprovalMatrixService,
-  ) { }
+  ) {}
 
   private calculateTotalAmount(pr: PurchaseRequest) {
     return (pr.items || []).reduce(
@@ -90,34 +89,46 @@ export class PurchaseRequestsService {
     delete filter.current;
     delete filter.pageSize;
 
-    const page = Number.isFinite(currentPage) && currentPage > 0 ? currentPage : 1;
+    const page =
+      Number.isFinite(currentPage) && currentPage > 0 ? currentPage : 1;
     const defaultLimit = Number.isFinite(limit) && limit > 0 ? limit : 10;
     const offset = (page - 1) * defaultLimit;
 
-    const queryBuilder = this.prRepository.createQueryBuilder('pr')
+    const queryBuilder = this.prRepository
+      .createQueryBuilder('pr')
       .leftJoinAndSelect('pr.items', 'items')
       .leftJoinAndSelect('items.product', 'product')
       .leftJoinAndSelect('pr.createdBy', 'createdBy')
       .leftJoinAndSelect('pr.approvedBy', 'approvedBy')
-      .addSelect(subQuery => {
+      .addSelect((subQuery) => {
         return subQuery
-          .select('SUM(CAST(pri.quantity AS NUMERIC) * CAST(pri.estimatedPrice AS NUMERIC))', 'total')
+          .select(
+            'SUM(CAST(pri.quantity AS NUMERIC) * CAST(pri.estimatedPrice AS NUMERIC))',
+            'total',
+          )
           .from(PurchaseRequestItem, 'pri')
           .where('pri.purchaseRequestId = pr._id');
       }, 'totalAmount')
       .where(filter)
       .andWhere('pr.deletedAt IS NULL')
-      .orderBy(sort ? Object.keys(sort)[0] : 'pr.createdAt', sort ? (Object.values(sort)[0] as any).toUpperCase() : 'DESC')
+      .orderBy(
+        sort ? Object.keys(sort)[0] : 'pr.createdAt',
+        sort ? (Object.values(sort)[0] as any).toUpperCase() : 'DESC',
+      )
       .take(defaultLimit)
       .skip(offset);
 
     const [result, total] = await queryBuilder.getManyAndCount();
 
-    // TypeORM getMany doesn't automatically include the virtual totalAmount column in the entity, 
+    // TypeORM getMany doesn't automatically include the virtual totalAmount column in the entity,
     // so we map it from the raw results if needed, or stick to the previous robust map for now.
-    const resultsWithTotal = result.map(pr => {
-      const totalAmount = pr.items?.reduce((sum, item) => 
-        sum + (Number(item.quantity || 0) * Number(item.estimatedPrice || 0)), 0) || 0;
+    const resultsWithTotal = result.map((pr) => {
+      const totalAmount =
+        pr.items?.reduce(
+          (sum, item) =>
+            sum + Number(item.quantity || 0) * Number(item.estimatedPrice || 0),
+          0,
+        ) || 0;
       return { ...pr, totalAmount };
     });
 
@@ -141,7 +152,10 @@ export class PurchaseRequestsService {
     return pr;
   }
 
-  async update(purchaseRequestRef: string, updatePurchaseRequestDto: UpdatePurchaseRequestDto) {
+  async update(
+    purchaseRequestRef: string,
+    updatePurchaseRequestDto: UpdatePurchaseRequestDto,
+  ) {
     const pr = await this.findOne(purchaseRequestRef);
     if (
       pr.status !== PurchaseRequestStatus.DRAFT &&
@@ -156,10 +170,14 @@ export class PurchaseRequestsService {
 
     const existingIds = pr.items?.map((item) => item._id) || [];
     const incomingItems = items || [];
-    const incomingIds = incomingItems.map((item) => item._id).filter((itemRef) => itemRef);
+    const incomingIds = incomingItems
+      .map((item) => item._id)
+      .filter((itemRef) => itemRef);
 
     // 1. Delete removed items
-    const idsToDelete = existingIds.filter((itemRef) => !incomingIds.includes(itemRef));
+    const idsToDelete = existingIds.filter(
+      (itemRef) => !incomingIds.includes(itemRef),
+    );
     if (idsToDelete.length > 0) {
       await this.prItemRepository.delete(idsToDelete);
     }
@@ -167,9 +185,15 @@ export class PurchaseRequestsService {
     // 2. Insert or update items
     for (const item of incomingItems) {
       if (item._id) {
-        await this.prItemRepository.update(item._id, { ...item, purchaseRequestId: pr._id });
+        await this.prItemRepository.update(item._id, {
+          ...item,
+          purchaseRequestId: pr._id,
+        });
       } else {
-        await this.prItemRepository.insert({ ...item, purchaseRequestId: pr._id });
+        await this.prItemRepository.insert({
+          ...item,
+          purchaseRequestId: pr._id,
+        });
       }
     }
 

@@ -1,10 +1,21 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { QualityControlService } from './quality-control.service';
 import { User as UserEntity } from '@/modules/users/entities/user.entity';
 import { User as CurrentUser } from '@/decorator/customize';
 import { CreateQualityCheckDto } from './dto/create-quality-check.dto';
 import { CloseQualityExceptionDto } from './dto/close-quality-exception.dto';
-import { ResolveQualityExceptionDto, SendQualityClaimDto } from './dto/quality-claim-action.dto';
+import {
+  ResolveQualityExceptionDto,
+  SendQualityClaimDto,
+} from './dto/quality-claim-action.dto';
 
 @Controller('quality-control')
 export class QualityControlController {
@@ -18,6 +29,11 @@ export class QualityControlController {
   @Get('exceptions/dashboard')
   getExceptionDashboard() {
     return this.qcService.getExceptionDashboard();
+  }
+
+  @Get('exceptions/candidates')
+  findExceptionCandidates() {
+    return this.qcService.findExceptionCandidates();
   }
 
   @Get('exceptions')

@@ -27,6 +27,6 @@ import { PurchaseOrderApprovalListener } from './purchase-order-approval.listene
   ],
   controllers: [PurchaseOrdersController],
   providers: [PurchaseOrdersService, PurchaseOrderApprovalListener],
-  exports: [PurchaseOrdersService]
+  exports: [PurchaseOrdersService],
 })
 export class PurchaseOrdersModule {}

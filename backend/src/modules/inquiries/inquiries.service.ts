@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { Inquiry, InquiryStatus } from './entities/inquiry.entity';
@@ -19,12 +24,14 @@ export class InquiriesService {
 
   async create(data: any) {
     this.logger.log(`Creating new inquiry for customer: ${data.customerName}`);
-    
+
     // Fetch product snapshot
     let productSnapshotName: string | null = null;
     let productSnapshotCode: string | null = null;
     if (data.productId) {
-      const product = await this.productRepo.findOne({ where: { _id: data.productId } });
+      const product = await this.productRepo.findOne({
+        where: { _id: data.productId },
+      });
       if (product) {
         productSnapshotName = product.vietnameseName || product.englishName;
         productSnapshotCode = product.sku;
@@ -37,9 +44,13 @@ export class InquiriesService {
       productSnapshotCode,
       status: InquiryStatus.PENDING,
     });
-    
-    const savedInquiry = await this.inquiryRepo.save(inquiry) as any as Inquiry;
-    this.logger.log(`Inquiry saved with ID: ${savedInquiry._id}. Emitting notification event...`);
+
+    const savedInquiry = (await this.inquiryRepo.save(
+      inquiry,
+    )) as any as Inquiry;
+    this.logger.log(
+      `Inquiry saved with ID: ${savedInquiry._id}. Emitting notification event...`,
+    );
 
     // Senior Approach: Decouple notification logic using Event Emitter
     this.eventEmitter.emit('notification.new_inquiry', {
@@ -58,7 +69,8 @@ export class InquiriesService {
     const skip = (Number(current) - 1) * Number(pageSize);
     const take = Number(pageSize);
 
-    const queryBuilder = this.inquiryRepo.createQueryBuilder('inquiry')
+    const queryBuilder = this.inquiryRepo
+      .createQueryBuilder('inquiry')
       .leftJoinAndSelect('inquiry.product', 'product')
       .orderBy('inquiry.createdAt', 'DESC')
       .skip(skip)
@@ -71,7 +83,7 @@ export class InquiriesService {
     if (search) {
       queryBuilder.andWhere(
         '(LOWER(inquiry.customerName) LIKE LOWER(:search) OR LOWER(inquiry.customerEmail) LIKE LOWER(:search))',
-        { search: `%${search}%` }
+        { search: `%${search}%` },
       );
     }
 
@@ -82,7 +94,7 @@ export class InquiriesService {
       total,
       current: Number(current),
       pageSize: Number(pageSize),
-      totalPages: Math.ceil(total / Number(pageSize))
+      totalPages: Math.ceil(total / Number(pageSize)),
     };
   }
 
@@ -103,7 +115,9 @@ export class InquiriesService {
     }
 
     const result = await this.inquiryRepo.softDelete({ _id: id });
-    this.eventEmitter.emit('notification.unread_count', { count: await this.countUnread() });
+    this.eventEmitter.emit('notification.unread_count', {
+      count: await this.countUnread(),
+    });
     return { id, affected: result.affected ?? 0 };
   }
 
@@ -116,13 +130,19 @@ export class InquiriesService {
       throw new BadRequestException('No inquiry ids were provided');
     }
 
-    const existingCount = await this.inquiryRepo.count({ where: { _id: In(normalizedIds) } });
+    const existingCount = await this.inquiryRepo.count({
+      where: { _id: In(normalizedIds) },
+    });
     if (!existingCount) {
       throw new NotFoundException('No matching inquiries were found');
     }
 
-    const result = await this.inquiryRepo.softDelete({ _id: In(normalizedIds) });
-    this.eventEmitter.emit('notification.unread_count', { count: await this.countUnread() });
+    const result = await this.inquiryRepo.softDelete({
+      _id: In(normalizedIds),
+    });
+    this.eventEmitter.emit('notification.unread_count', {
+      count: await this.countUnread(),
+    });
     return { requested: normalizedIds.length, deleted: result.affected ?? 0 };
   }
 
@@ -139,7 +159,10 @@ export class InquiriesService {
   }
 
   async markAllAsRead() {
-    const result = await this.inquiryRepo.update({ isRead: false }, { isRead: true });
+    const result = await this.inquiryRepo.update(
+      { isRead: false },
+      { isRead: true },
+    );
     this.eventEmitter.emit('notification.unread_count', { count: 0 });
     return result;
   }

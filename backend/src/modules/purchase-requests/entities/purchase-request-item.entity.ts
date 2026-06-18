@@ -1,4 +1,13 @@
-import { BeforeInsert, Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryColumn, UpdateDateColumn } from 'typeorm';
+import {
+  BeforeInsert,
+  Column,
+  CreateDateColumn,
+  Entity,
+  JoinColumn,
+  ManyToOne,
+  PrimaryColumn,
+  UpdateDateColumn,
+} from 'typeorm';
 import { PurchaseRequest } from './purchase-request.entity';
 import { Product } from '@/modules/products/entities/product.entity';
 import { ColumnNumericTransformer } from '@/helpers/typeorm.util';
@@ -12,7 +21,10 @@ export class PurchaseRequestItem {
   @Column({ type: 'varchar', length: 40, nullable: true })
   purchaseRequestId: string | null;
 
-  @ManyToOne(() => PurchaseRequest, (pr) => pr.items, { onDelete: 'CASCADE', nullable: true })
+  @ManyToOne(() => PurchaseRequest, (pr) => pr.items, {
+    onDelete: 'CASCADE',
+    nullable: true,
+  })
   @JoinColumn({ name: 'purchaseRequestId' })
   purchaseRequest: PurchaseRequest | null;
 
@@ -23,10 +35,21 @@ export class PurchaseRequestItem {
   @JoinColumn({ name: 'productId' })
   product: Product;
 
-  @Column({ type: 'numeric', precision: 12, scale: 2, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 12,
+    scale: 2,
+    transformer: new ColumnNumericTransformer(),
+  })
   quantity: number;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, nullable: true, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    nullable: true,
+    transformer: new ColumnNumericTransformer(),
+  })
   estimatedPrice: number | null;
 
   @Column({ type: 'varchar', nullable: true })

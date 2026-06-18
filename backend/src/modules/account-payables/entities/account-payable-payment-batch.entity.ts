@@ -42,19 +42,40 @@ export class AccountPayablePaymentBatch {
   @Column({ type: 'varchar' })
   batchNumber: string;
 
-  @Column({ type: 'enum', enum: APPaymentBatchStatus, default: APPaymentBatchStatus.DRAFT })
+  @Column({
+    type: 'enum',
+    enum: APPaymentBatchStatus,
+    default: APPaymentBatchStatus.DRAFT,
+  })
   status: APPaymentBatchStatus;
 
   @Column({ type: 'varchar', default: 'VND' })
   currency: string;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    transformer: new ColumnNumericTransformer(),
+  })
   totalAmount: number;
 
-  @Column({ type: 'numeric', precision: 15, scale: 6, default: 1, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 6,
+    default: 1,
+    transformer: new ColumnNumericTransformer(),
+  })
   exchangeRate: number;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   totalAmountVnd: number;
 
   @Column({ type: 'date', nullable: true })
@@ -123,7 +144,9 @@ export class AccountPayablePaymentBatch {
   @Column({ type: 'text', nullable: true })
   note: string | null;
 
-  @OneToMany(() => AccountPayablePaymentBatchItem, (item) => item.batch, { cascade: true })
+  @OneToMany(() => AccountPayablePaymentBatchItem, (item) => item.batch, {
+    cascade: true,
+  })
   items: AccountPayablePaymentBatchItem[];
 
   @CreateDateColumn()
@@ -150,7 +173,9 @@ export class AccountPayablePaymentBatchItem {
   @Column({ type: 'varchar', length: 40 })
   batchId: string;
 
-  @ManyToOne(() => AccountPayablePaymentBatch, (batch) => batch.items, { onDelete: 'CASCADE' })
+  @ManyToOne(() => AccountPayablePaymentBatch, (batch) => batch.items, {
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'batchId' })
   batch: AccountPayablePaymentBatch;
 
@@ -174,7 +199,12 @@ export class AccountPayablePaymentBatchItem {
   @Column({ type: 'varchar', nullable: true })
   invoiceNumber: string | null;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    transformer: new ColumnNumericTransformer(),
+  })
   amount: number;
 
   @Column({ type: 'varchar', default: 'VND' })

@@ -12,7 +12,7 @@ import {
 } from '@ant-design/icons';
 import { useSession } from 'next-auth/react';
 import PageBanner from '@/components/guest/PageBanner';
-import { sendRequest } from '@/lib/api-client';
+import { backendFetch, sendRequest } from '@/lib/api-client';
 import { getAccessToken } from '@/lib/auth-token';
 
 const { Text } = Typography;
@@ -141,7 +141,7 @@ const DocumentPortal = () => {
 
     setDownloadingKey(record._id);
     try {
-      const response = await fetch(
+      const response = await backendFetch(
         `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/export-documents/portal/${record._id}/download`,
         { headers: { Authorization: `Bearer ${accessToken}` } },
       );

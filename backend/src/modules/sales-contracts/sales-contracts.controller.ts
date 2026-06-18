@@ -1,17 +1,45 @@
-import { Body, Controller, Get, Patch, Param, Post, Query, Req, Res } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Patch,
+  Param,
+  Post,
+  Query,
+  Req,
+  Res,
+} from '@nestjs/common';
 import type { Response } from 'express';
 import { SalesContractsService } from './sales-contracts.service';
-import { Public, ResponseMessage, User, RequirePermissions } from '@/decorator/customize';
+import {
+  Public,
+  ResponseMessage,
+  User,
+  RequirePermissions,
+} from '@/decorator/customize';
 import { SignSalesContractDto } from './dto/sign-sales-contract.dto';
 import { RequestSignatureInvitationDto } from './dto/request-signature-invitation.dto';
 import { VerifySignatureOtpDto } from './dto/verify-signature-otp.dto';
 import { PortalSignSalesContractDto } from './dto/portal-sign-sales-contract.dto';
 import { RequestContractCancelDto } from './dto/request-contract-cancel.dto';
+import { RevokeSignatureInvitationDto } from './dto/revoke-signature-invitation.dto';
+import { CreateSalesContractDto } from './dto/create-sales-contract.dto';
+import { UpdateSalesContractDto } from './dto/update-sales-contract.dto';
+import { CalculateSalesContractDto } from './dto/calculate-sales-contract.dto';
 
 type RequestLike = {
   ip?: string;
   headers?: Record<string, string | string[] | undefined>;
 };
+
+type RequestUser = {
+  username?: string;
+};
+
+type SalesContractListQuery = Record<
+  string,
+  string | number | boolean | undefined
+>;
 
 const getRequestMeta = (req: RequestLike) => {
   const forwardedFor = req.headers?.['x-forwarded-for'];
@@ -23,7 +51,9 @@ const getRequestMeta = (req: RequestLike) => {
 
   return {
     ipAddress,
-    userAgent: Array.isArray(userAgent) ? userAgent.join(' ') : userAgent || null,
+    userAgent: Array.isArray(userAgent)
+      ? userAgent.join(' ')
+      : userAgent || null,
   };
 };
 
@@ -34,13 +64,13 @@ export class SalesContractsController {
   @Post()
   @RequirePermissions('write:sales_contract')
   @ResponseMessage('Create sales contract success')
-  create(@Body() createDto: any, @User() user: any) {
+  create(@Body() createDto: CreateSalesContractDto, @User() user: RequestUser) {
     return this.salesContractsService.create(createDto, user);
   }
 
   @Post('calculate')
   @ResponseMessage('Calculate sales contract totals')
-  calculate(@Body() dto: any) {
+  calculate(@Body() dto: CalculateSalesContractDto) {
     return this.salesContractsService.calculate(dto);
   }
 
@@ -49,16 +79,23 @@ export class SalesContractsController {
   findAll(
     @Query('current') current: string,
     @Query('pageSize') pageSize: string,
-    @Query() query: any,
+    @Query() query: SalesContractListQuery,
   ) {
-    return this.salesContractsService.findAll({ ...query, current: +current, pageSize: +pageSize });
+    return this.salesContractsService.findAll({
+      ...query,
+      current: +current,
+      pageSize: +pageSize,
+    });
   }
 
   @Public()
   @Get('signing/:token')
   @ResponseMessage('Fetch secure signing session')
   getSigningSession(@Param('token') token: string, @Req() req: RequestLike) {
-    return this.salesContractsService.getSigningSession(token, getRequestMeta(req));
+    return this.salesContractsService.getSigningSession(
+      token,
+      getRequestMeta(req),
+    );
   }
 
   @Public()
@@ -69,7 +106,11 @@ export class SalesContractsController {
     @Body() dto: VerifySignatureOtpDto,
     @Req() req: RequestLike,
   ) {
-    return this.salesContractsService.verifySignatureOtp(token, dto, getRequestMeta(req));
+    return this.salesContractsService.verifySignatureOtp(
+      token,
+      dto,
+      getRequestMeta(req),
+    );
   }
 
   @Public()
@@ -80,7 +121,11 @@ export class SalesContractsController {
     @Body() dto: PortalSignSalesContractDto,
     @Req() req: RequestLike,
   ) {
-    return this.salesContractsService.signContractFromInvitation(token, dto, getRequestMeta(req));
+    return this.salesContractsService.signContractFromInvitation(
+      token,
+      dto,
+      getRequestMeta(req),
+    );
   }
 
   @Get(':_id/signature-packet')
@@ -96,7 +141,8 @@ export class SalesContractsController {
     @Param('_id') recordId: string,
     @Res() res: Response,
   ) {
-    const buffer = await this.salesContractsService.getSignatureAuditPacketPdf(recordId);
+    const buffer =
+      await this.salesContractsService.getSignatureAuditPacketPdf(recordId);
     res.set({
       'Content-Type': 'application/pdf',
       'Content-Disposition': `attachment; filename="signature_packet_${recordId}.pdf"`,
@@ -114,21 +160,24 @@ export class SalesContractsController {
   @Patch(':_id')
   @RequirePermissions('write:sales_contract')
   @ResponseMessage('Update sales contract success')
-  update(@Param('_id') recordId: string, @Body() updateDto: any) {
+  update(
+    @Param('_id') recordId: string,
+    @Body() updateDto: UpdateSalesContractDto,
+  ) {
     return this.salesContractsService.update(recordId, updateDto);
   }
 
   @Patch(':_id/confirm')
   @RequirePermissions('write:sales_contract')
   @ResponseMessage('Confirm sales contract and reserve stock')
-  confirm(@Param('_id') recordId: string, @User() user: any) {
+  confirm(@Param('_id') recordId: string, @User() user: RequestUser) {
     return this.salesContractsService.confirmContract(recordId, user);
   }
 
   @Patch(':_id/submit-approval')
   @RequirePermissions('write:sales_contract')
   @ResponseMessage('Submit sales contract for approval')
-  submitApproval(@Param('_id') recordId: string, @User() user: any) {
+  submitApproval(@Param('_id') recordId: string, @User() user: RequestUser) {
     return this.salesContractsService.submitForApproval(recordId, user);
   }
 
@@ -138,9 +187,33 @@ export class SalesContractsController {
   sendSignature(
     @Param('_id') recordId: string,
     @Body() dto: RequestSignatureInvitationDto,
-    @User() user: any,
+    @User() user: RequestUser,
   ) {
     return this.salesContractsService.sendForSignature(recordId, dto, user);
+  }
+
+  @Patch(':_id/signature-invitations/resend')
+  @RequirePermissions('write:sales_contract')
+  @ResponseMessage('Resend sales contract buyer signature invitation')
+  resendSignature(@Param('_id') recordId: string, @User() user: RequestUser) {
+    return this.salesContractsService.resendSignatureInvitation(recordId, user);
+  }
+
+  @Patch(':_id/signature-invitations/:invitation_id/revoke')
+  @RequirePermissions('write:sales_contract')
+  @ResponseMessage('Revoke sales contract buyer signature invitation')
+  revokeSignature(
+    @Param('_id') recordId: string,
+    @Param('invitation_id') invitationId: string,
+    @Body() dto: RevokeSignatureInvitationDto,
+    @User() user: RequestUser,
+  ) {
+    return this.salesContractsService.revokeSignatureInvitation(
+      recordId,
+      invitationId,
+      dto,
+      user,
+    );
   }
 
   @Patch(':_id/cancel')
@@ -149,9 +222,13 @@ export class SalesContractsController {
   cancel(
     @Param('_id') recordId: string,
     @Body() dto: RequestContractCancelDto,
-    @User() user: any,
+    @User() user: RequestUser,
   ) {
-    return this.salesContractsService.requestCancelContract(recordId, dto, user);
+    return this.salesContractsService.requestCancelContract(
+      recordId,
+      dto,
+      user,
+    );
   }
 
   @Post(':_id/signatures')
@@ -160,16 +237,21 @@ export class SalesContractsController {
   sign(
     @Param('_id') recordId: string,
     @Body() dto: SignSalesContractDto,
-    @User() user: any,
+    @User() user: RequestUser,
     @Req() req: RequestLike,
   ) {
-    return this.salesContractsService.signContract(recordId, dto, user, getRequestMeta(req));
+    return this.salesContractsService.signContract(
+      recordId,
+      dto,
+      user,
+      getRequestMeta(req),
+    );
   }
 
   @Patch(':_id/ship')
   @RequirePermissions('write:sales_contract')
   @ResponseMessage('Ship sales contract items')
-  ship(@Param('_id') recordId: string, @User() user: any) {
+  ship(@Param('_id') recordId: string, @User() user: RequestUser) {
     return this.salesContractsService.shipContract(recordId, user);
   }
 }

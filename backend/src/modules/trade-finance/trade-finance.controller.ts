@@ -1,4 +1,13 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  Query,
+} from '@nestjs/common';
 import { TradeFinanceService } from './trade-finance.service';
 import { CreateLCDto } from './dto/create-lc.dto';
 import { UpdateLCDto } from './dto/update-lc.dto';
@@ -67,7 +76,9 @@ export class TradeFinanceController {
 
   @Get('lc/deadline-dashboard')
   @ResponseMessage('Fetch detailed L/C deadline dashboard')
-  getLCDeadlineDashboard(@Query('days') days?: string): Promise<Record<string, unknown>> {
+  getLCDeadlineDashboard(
+    @Query('days') days?: string,
+  ): Promise<Record<string, unknown>> {
     return this.tradeFinanceService.getLCAlerts(days ? Number(days) : 14);
   }
 
@@ -94,19 +105,25 @@ export class TradeFinanceController {
 
   @Get('collections')
   findAllCollections(@Query() query: QueryParams) {
-      return this.tradeFinanceService.findAllCollections(query);
+    return this.tradeFinanceService.findAllCollections(query);
   }
 
   @Post('collections')
   @Roles(...TRADE_FINANCE_WRITE_ROLES)
-  createCollection(@Body() data: CreateCollectionPayload, @User() user: UserEntity) {
-      return this.tradeFinanceService.createCollection(data, user);
+  createCollection(
+    @Body() data: CreateCollectionPayload,
+    @User() user: UserEntity,
+  ) {
+    return this.tradeFinanceService.createCollection(data, user);
   }
 
   @Patch('collections/:_id/status')
   @Roles(...TRADE_FINANCE_WRITE_ROLES)
-  updateCollectionStatus(@Param('_id') recordId: string, @Body('status') status: CollectionOrderStatus) {
-      return this.tradeFinanceService.updateCollectionStatus(recordId, status);
+  updateCollectionStatus(
+    @Param('_id') recordId: string,
+    @Body('status') status: CollectionOrderStatus,
+  ) {
+    return this.tradeFinanceService.updateCollectionStatus(recordId, status);
   }
 
   // --- TRANSACTIONS ---
@@ -121,7 +138,10 @@ export class TradeFinanceController {
   @Patch('lc/:_id/status')
   @Roles(...TRADE_FINANCE_WRITE_ROLES)
   @ResponseMessage('Update L/C status')
-  updateLCStatus(@Param('_id') recordId: string, @Body('status') status: LCStatus) {
+  updateLCStatus(
+    @Param('_id') recordId: string,
+    @Body('status') status: LCStatus,
+  ) {
     return this.tradeFinanceService.updateLCStatus(recordId, status);
   }
 
@@ -151,7 +171,12 @@ export class TradeFinanceController {
     @Body() dto: ResolveLCDiscrepancyDto,
     @User() user: UserEntity,
   ) {
-    return this.tradeFinanceService.resolveLCDiscrepancy(recordId, discrepancy_id, dto, user);
+    return this.tradeFinanceService.resolveLCDiscrepancy(
+      recordId,
+      discrepancy_id,
+      dto,
+      user,
+    );
   }
 
   // --- T/T & D/P & D/A Endpoints ---
@@ -159,7 +184,10 @@ export class TradeFinanceController {
   @Post('transactions')
   @Roles(...TRADE_FINANCE_WRITE_ROLES)
   @ResponseMessage('Create trade finance transaction successfully')
-  createTransaction(@Body() data: CreateTradeFinanceTransactionPayload, @User() user: UserEntity) {
+  createTransaction(
+    @Body() data: CreateTradeFinanceTransactionPayload,
+    @User() user: UserEntity,
+  ) {
     return this.tradeFinanceService.createTransaction(data, user);
   }
 
@@ -179,10 +207,14 @@ export class TradeFinanceController {
   @Roles(...TRADE_FINANCE_WRITE_ROLES)
   @ResponseMessage('Update transaction status and post accounting')
   updateTransactionStatus(
-    @Param('_id') recordId: string, 
-    @Body('status') status: TradeFinanceStatus, 
-    @User() user: UserEntity
+    @Param('_id') recordId: string,
+    @Body('status') status: TradeFinanceStatus,
+    @User() user: UserEntity,
   ) {
-    return this.tradeFinanceService.updateTransactionStatus(recordId, status, user);
+    return this.tradeFinanceService.updateTransactionStatus(
+      recordId,
+      status,
+      user,
+    );
   }
 }

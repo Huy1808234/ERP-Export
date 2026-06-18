@@ -64,7 +64,11 @@ export class AccountReceivable {
   @Column({ unique: true })
   invoiceNumber: string;
 
-  @Column({ type: 'enum', enum: ARSourceType, default: ARSourceType.COMMERCIAL_INVOICE })
+  @Column({
+    type: 'enum',
+    enum: ARSourceType,
+    default: ARSourceType.COMMERCIAL_INVOICE,
+  })
   sourceType: ARSourceType;
 
   @Column({ type: 'date' })
@@ -73,22 +77,50 @@ export class AccountReceivable {
   @Column({ type: 'date', nullable: true })
   dueDate: Date | null;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    transformer: new ColumnNumericTransformer(),
+  })
   amountForeign: number;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   paidAmountForeign: number;
 
   @Column({ type: 'varchar', default: 'USD' })
   currency: string;
 
-  @Column({ type: 'numeric', precision: 15, scale: 6, default: 1, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 6,
+    default: 1,
+    transformer: new ColumnNumericTransformer(),
+  })
   exchangeRate: number;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    transformer: new ColumnNumericTransformer(),
+  })
   amountVnd: number;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   paidAmountVnd: number;
 
   @Column({ type: 'enum', enum: ARStatus, default: ARStatus.UNPAID })
@@ -103,7 +135,10 @@ export class AccountReceivable {
   @Column({ type: 'text', nullable: true })
   note: string | null;
 
-  @OneToMany(() => PaymentAllocation, (allocation) => allocation.accountReceivable)
+  @OneToMany(
+    () => PaymentAllocation,
+    (allocation) => allocation.accountReceivable,
+  )
   allocations: PaymentAllocation[];
 
   @CreateDateColumn()

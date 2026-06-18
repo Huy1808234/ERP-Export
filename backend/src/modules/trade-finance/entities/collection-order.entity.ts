@@ -1,4 +1,13 @@
-import { BeforeInsert, Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryColumn, UpdateDateColumn } from 'typeorm';
+import {
+  BeforeInsert,
+  Column,
+  CreateDateColumn,
+  Entity,
+  JoinColumn,
+  ManyToOne,
+  PrimaryColumn,
+  UpdateDateColumn,
+} from 'typeorm';
 import { SalesContract } from '@/modules/sales-contracts/entities/sales-contract.entity';
 import { ColumnNumericTransformer } from '@/helpers/typeorm.util';
 import { createEntityId } from '@/common/ids/entity-id.util';
@@ -8,12 +17,12 @@ export enum CollectionOrderStatus {
   ACCEPTED = 'ACCEPTED',
   PAID = 'PAID',
   DISHONOURED = 'DISHONOURED',
-  CANCELLED = 'CANCELLED'
+  CANCELLED = 'CANCELLED',
 }
 
 export enum CollectionOrderType {
   DP = 'DP', // Documents against Payment
-  DA = 'DA'  // Documents against Acceptance
+  DA = 'DA', // Documents against Acceptance
 }
 
 @Entity('collection_orders')
@@ -41,7 +50,7 @@ export class CollectionOrder {
   @Column({
     type: 'enum',
     enum: CollectionOrderType,
-    default: CollectionOrderType.DP
+    default: CollectionOrderType.DP,
   })
   type: CollectionOrderType;
 
@@ -51,7 +60,12 @@ export class CollectionOrder {
   @Column({ nullable: true })
   collectingBank: string; // Ngân hàng thu hộ (Bên mua)
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    transformer: new ColumnNumericTransformer(),
+  })
   amount: number;
 
   @Column({ default: 'USD' })
@@ -66,7 +80,7 @@ export class CollectionOrder {
   @Column({
     type: 'enum',
     enum: CollectionOrderStatus,
-    default: CollectionOrderStatus.SENT
+    default: CollectionOrderStatus.SENT,
   })
   status: CollectionOrderStatus;
 

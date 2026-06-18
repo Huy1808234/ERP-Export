@@ -41,9 +41,12 @@ export class User {
   image: string | null;
 
   @Column({ type: 'varchar', nullable: true })
+  signatureImage: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
   roleName: string | null;
 
-  @ManyToOne(() => Role, role => role.users, { eager: true, nullable: true })
+  @ManyToOne(() => Role, (role) => role.users, { eager: true, nullable: true })
   @JoinColumn({ name: 'roleName', referencedColumnName: 'name' })
   role: Role | null;
 
@@ -62,6 +65,15 @@ export class User {
 
   @Column({ default: true })
   isActive: boolean;
+
+  @Column({ type: 'timestamp', nullable: true })
+  deactivatedAt: Date | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  deactivatedByUsername: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  deactivationReason: string | null;
 
   @Column({ type: 'varchar', nullable: true })
   codeId: string | null;

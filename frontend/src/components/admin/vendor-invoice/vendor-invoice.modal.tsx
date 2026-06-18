@@ -17,8 +17,10 @@ import {
   Table,
   Card,
   Badge,
-  App
+  App,
+  theme
 } from 'antd';
+import type { ColumnsType } from 'antd/es/table';
 import {
   FileProtectOutlined,
   ThunderboltOutlined,
@@ -30,9 +32,22 @@ import { useSession } from 'next-auth/react';
 import { getAccessToken } from '@/lib/auth-token';
 import { getSetting } from '@/services/settings.service';
 import AmountInWords from '@/components/ui/AmountInWords';
+import { useTheme } from '@/context/theme.context';
 
 const { Text } = Typography;
 const DEFAULT_PURCHASE_VAT_RATE_KEY = 'DEFAULT_PURCHASE_VAT_RATE';
+
+interface MatchingStatusRow {
+  purchaseOrderItem_id: string;
+  productId: string;
+  productName: string;
+  sku?: string | null;
+  orderedQty: number;
+  receivedQty: number;
+  invoicedQty: number;
+  unitPrice: number;
+  status: 'MATCHED' | 'OVER_INVOICED' | 'PARTIAL' | string;
+}
 
 interface IProps {
   open: boolean;
@@ -50,9 +65,11 @@ const VendorInvoiceModal = (props: IProps) => {
   const { data: session } = useSession();
   const accessToken = getAccessToken(session);
   const { message } = App.useApp();
+  const { token } = theme.useToken();
+  const { isDark } = useTheme();
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
-  const [matchingData, setMatchingData] = useState<any[]>([]);
+  const [matchingData, setMatchingData] = useState<MatchingStatusRow[]>([]);
   const [poContext, setPoContext] = useState<any | null>(null);
   const amount = Form.useWatch('amount', form);
   const taxAmount = Form.useWatch('taxAmount', form);
@@ -86,7 +103,7 @@ const VendorInvoiceModal = (props: IProps) => {
   const fetchMatchingData = useCallback(async (poId: string, taxRate: number) => {
     if (!accessToken) return;
 
-    const res = await sendRequest<IBackendRes<any[]>>({
+    const res = await sendRequest<IBackendRes<MatchingStatusRow[]>>({
       url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/vendor-invoices/matching-status/${poId}`,
       method: 'GET',
       headers: { Authorization: `Bearer ${accessToken}` },
@@ -200,12 +217,28 @@ const VendorInvoiceModal = (props: IProps) => {
     }
   };
 
-  const matchingColumns = [
+  const summaryCardStyle: React.CSSProperties = {
+    background: isDark ? 'rgba(15, 23, 42, 0.74)' : '#f8fbff',
+    border: `1px solid ${isDark ? 'rgba(96, 165, 250, 0.34)' : '#adc6ff'}`,
+    borderRadius: 8,
+  };
+
+  const summaryLabelStyle: React.CSSProperties = {
+    color: isDark ? '#94a3b8' : token.colorTextSecondary,
+    fontSize: 12,
+  };
+
+  const summaryValueStyle: React.CSSProperties = {
+    color: isDark ? '#f8fafc' : token.colorText,
+  };
+
+  const matchingColumns: ColumnsType<MatchingStatusRow> = [
     {
       title: 'Sản phẩm',
       dataIndex: 'productName',
       key: 'productName',
-      render: (text: string, record: any) => (
+      width: 240,
+      render: (text: string, record) => (
         <Space orientation="vertical" size={0}>
           <Text strong>{text}</Text>
           <Text type="secondary" style={{ fontSize: 11 }}>SKU: {record.sku}</Text>
@@ -237,6 +270,7 @@ const VendorInvoiceModal = (props: IProps) => {
       title: 'Trạng thái đối chiếu',
       dataIndex: 'status',
       key: 'status',
+      width: 180,
       render: (status: string) => {
         switch (status) {
           case 'MATCHED': return <Badge status="success" text="Khớp 100%" />;
@@ -265,19 +299,31 @@ const VendorInvoiceModal = (props: IProps) => {
       onOk={() => form.submit()}
       width={900}
       confirmLoading={loading}
-      styles={{ body: { paddingTop: 10 } }}
+      className="vendor-invoice-modal"
+      styles={{
+        body: {
+          paddingTop: 10,
+          maxHeight: 'calc(100vh - 178px)',
+          overflowY: 'auto',
+        },
+      }}
     >
       <div style={{ marginBottom: 20 }}>
-        <Card size="small" style={{ background: '#f0f5ff', border: '1px solid #adc6ff' }}>
-          <Row gutter={24}>
-            <Col span={8}>
-              <Text type="secondary">Đơn đặt hàng:</Text> <Text strong>{displayPoNumber}</Text>
+        <Card size="small" style={summaryCardStyle} styles={{ body: { padding: '10px 12px' } }}>
+          <Row gutter={[16, 8]} align="middle">
+            <Col xs={24} md={8}>
+              <Text style={summaryLabelStyle}>Đơn đặt hàng:</Text>{' '}
+              <Text strong style={summaryValueStyle}>{displayPoNumber}</Text>
             </Col>
-            <Col span={8}>
-              <Text type="secondary">Nhà cung cấp:</Text> <Text strong>{displayVendorName}</Text>
+            <Col xs={24} md={8}>
+              <Text style={summaryLabelStyle}>Nhà cung cấp:</Text>{' '}
+              <Text strong style={summaryValueStyle}>{displayVendorName}</Text>
             </Col>
-            <Col span={8}>
-              <Text type="secondary">Hạn mức PO:</Text> <Text strong style={{ color: '#cf1322' }}>{displayPoTotalAmount.toLocaleString()} VND</Text>
+            <Col xs={24} md={8}>
+              <Text style={summaryLabelStyle}>Hạn mức PO:</Text>{' '}
+              <Text strong style={{ color: isDark ? '#fca5a5' : '#cf1322' }}>
+                {displayPoTotalAmount.toLocaleString('vi-VN')} VND
+              </Text>
             </Col>
           </Row>
         </Card>
@@ -312,13 +358,15 @@ const VendorInvoiceModal = (props: IProps) => {
           columns={matchingColumns}
           pagination={false}
           rowKey="productId"
-          style={{ marginBottom: 24, border: '1px solid #f0f0f0', borderRadius: 8 }}
+          scroll={{ x: 760 }}
+          className="vendor-invoice-matching-table"
+          style={{ marginBottom: 24 }}
         />
 
         <Divider titlePlacement="start" style={{ margin: '12px 0' }}>Thông tin tài chính</Divider>
 
-        <Row gutter={16}>
-          <Col span={6}>
+        <Row gutter={[14, 10]} align="top">
+          <Col xs={24} md={12} lg={6}>
             <Form.Item label="Tiền trước thuế" name="amount" rules={[{ required: true }]}>
               <InputNumber
                 style={{ width: '100%' }}
@@ -329,7 +377,7 @@ const VendorInvoiceModal = (props: IProps) => {
             </Form.Item>
             <AmountInWords amount={amount} currency={currency} />
           </Col>
-          <Col span={3}>
+          <Col xs={12} md={6} lg={4}>
             <Form.Item label="Tiền tệ" name="currency">
               <Select onChange={(v) => form.setFieldsValue({ exchangeRate: v === 'VND' ? 1 : 25450 })}>
                 <Select.Option value="VND">VND</Select.Option>
@@ -338,7 +386,7 @@ const VendorInvoiceModal = (props: IProps) => {
               </Select>
             </Form.Item>
           </Col>
-          <Col span={4}>
+          <Col xs={12} md={6} lg={5}>
             <Form.Item label="Tỷ giá hạch toán" name="exchangeRate" rules={[{ required: true }]}>
               <InputNumber
                 style={{ width: '100%' }}
@@ -347,12 +395,12 @@ const VendorInvoiceModal = (props: IProps) => {
               />
             </Form.Item>
           </Col>
-          <Col span={3}>
+          <Col xs={12} md={6} lg={3}>
             <Form.Item label="VAT (%)" name="taxRate">
               <InputNumber style={{ width: '100%' }} min={0} max={100} onChange={calculateTotals} />
             </Form.Item>
           </Col>
-          <Col span={6}>
+          <Col xs={24} md={12} lg={6}>
             <Form.Item label="Tiền thuế" name="taxAmount">
               <InputNumber
                 style={{ width: '100%' }}
@@ -363,7 +411,7 @@ const VendorInvoiceModal = (props: IProps) => {
             </Form.Item>
             <AmountInWords amount={taxAmount} currency={currency} />
           </Col>
-          <Col span={8}>
+          <Col xs={24} md={12} lg={8}>
             <Form.Item label="Tổng tiền (Thanh toán)" name="totalAmount" rules={[{ required: true }]}>
               <InputNumber
                 style={{ width: '100%', fontWeight: 'bold' }}
@@ -392,6 +440,34 @@ const VendorInvoiceModal = (props: IProps) => {
           </Space>
         </div>
       )}
+
+      <style jsx global>{`
+        .vendor-invoice-modal .ant-modal-content {
+          overflow: hidden;
+        }
+
+        .vendor-invoice-modal .ant-form-item {
+          margin-bottom: 12px;
+        }
+
+        .vendor-invoice-matching-table .ant-table-container {
+          border: 1px solid ${isDark ? 'rgba(148, 163, 184, 0.32)' : '#d9d9d9'};
+          border-radius: 8px;
+          overflow: hidden;
+        }
+
+        .vendor-invoice-matching-table .ant-table {
+          background: transparent;
+        }
+
+        .vendor-invoice-matching-table .ant-table-thead > tr > th {
+          white-space: nowrap;
+        }
+
+        .vendor-invoice-matching-table .ant-table-tbody > tr > td {
+          vertical-align: middle;
+        }
+      `}</style>
     </Modal>
   );
 };

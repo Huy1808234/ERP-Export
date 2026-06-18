@@ -1,4 +1,15 @@
-import { BeforeInsert, Column, CreateDateColumn, DeleteDateColumn, Entity, Index, JoinColumn, ManyToOne, PrimaryColumn, UpdateDateColumn } from 'typeorm';
+import {
+  BeforeInsert,
+  Column,
+  CreateDateColumn,
+  DeleteDateColumn,
+  Entity,
+  Index,
+  JoinColumn,
+  ManyToOne,
+  PrimaryColumn,
+  UpdateDateColumn,
+} from 'typeorm';
 import { ColumnNumericTransformer } from '@/helpers/typeorm.util';
 import { Partner } from '@/modules/partners/entities/partner.entity';
 import { createEntityId } from '@/common/ids/entity-id.util';
@@ -49,22 +60,58 @@ export class Product {
   @Column({ type: 'int', nullable: true })
   cartonsPerPallet: number | null;
 
-  @Column({ type: 'numeric', precision: 12, scale: 4, nullable: true, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 12,
+    scale: 4,
+    nullable: true,
+    transformer: new ColumnNumericTransformer(),
+  })
   cartonLengthCm: number | null;
 
-  @Column({ type: 'numeric', precision: 12, scale: 4, nullable: true, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 12,
+    scale: 4,
+    nullable: true,
+    transformer: new ColumnNumericTransformer(),
+  })
   cartonWidthCm: number | null;
 
-  @Column({ type: 'numeric', precision: 12, scale: 4, nullable: true, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 12,
+    scale: 4,
+    nullable: true,
+    transformer: new ColumnNumericTransformer(),
+  })
   cartonHeightCm: number | null;
 
-  @Column({ type: 'numeric', precision: 12, scale: 4, nullable: true, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 12,
+    scale: 4,
+    nullable: true,
+    transformer: new ColumnNumericTransformer(),
+  })
   cbmPerCarton: number | null;
 
-  @Column({ type: 'numeric', precision: 12, scale: 4, nullable: true, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 12,
+    scale: 4,
+    nullable: true,
+    transformer: new ColumnNumericTransformer(),
+  })
   netWeightPerCarton: number | null;
 
-  @Column({ type: 'numeric', precision: 12, scale: 4, nullable: true, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 12,
+    scale: 4,
+    nullable: true,
+    transformer: new ColumnNumericTransformer(),
+  })
   grossWeightPerCarton: number | null;
 
   @Column({ type: 'int', nullable: true })
@@ -73,10 +120,22 @@ export class Product {
   @Column({ type: 'int', nullable: true })
   cartonsPerLayer: number | null;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, nullable: true, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    nullable: true,
+    transformer: new ColumnNumericTransformer(),
+  })
   purchasePriceVnd: number | null;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, nullable: true, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    nullable: true,
+    transformer: new ColumnNumericTransformer(),
+  })
   defaultExportPrice: number | null;
 
   @Column({ type: 'varchar', nullable: true })
@@ -104,13 +163,31 @@ export class Product {
   @Column({ type: 'text', nullable: true })
   note: string | null;
 
-  @Column({ type: 'numeric', precision: 12, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 12,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   currentStock: number;
 
-  @Column({ type: 'numeric', precision: 12, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 12,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   reservedStock: number;
 
-  @Column({ type: 'numeric', precision: 12, scale: 2, default: 5, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 12,
+    scale: 2,
+    default: 5,
+    transformer: new ColumnNumericTransformer(),
+  })
   minimumStock: number;
 
   @Column({ default: true })

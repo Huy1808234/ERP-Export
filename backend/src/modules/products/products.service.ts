@@ -43,6 +43,7 @@ import { randomBytes } from 'crypto';
 import { ApprovalMatrixService } from '@/modules/approval-matrix/approval-matrix.service';
 import { ApprovalDocumentType } from '@/modules/approval-matrix/entities/approval-rule.entity';
 import { CurrenciesService } from '@/modules/currencies/currencies.service';
+import { RedisCacheService } from '@/common/cache/redis-cache.service';
 
 type ProductSortDirection = 'ASC' | 'DESC';
 type ProductSortValue = 1 | -1;
@@ -55,6 +56,7 @@ const PRODUCT_PRICE_RATE_TO_VND: Record<string, number> = {
   JPY: 181,
   KRW: 19,
 };
+const PRODUCT_PUBLIC_CACHE_TTL_SECONDS = 300;
 
 @Injectable()
 export class ProductsService {
@@ -107,7 +109,12 @@ export class ProductsService {
     private readonly dataSource: DataSource,
     private readonly approvalMatrixService: ApprovalMatrixService,
     private readonly currenciesService: CurrenciesService,
+    private readonly cache: RedisCacheService,
   ) {}
+
+  private async invalidatePublicProductCache(): Promise<void> {
+    await this.cache.delByPattern('mini-erp:products:public:*');
+  }
 
   private async validateSupplier(preferredSupplierId?: string | null) {
     if (!preferredSupplierId) return;
@@ -497,7 +504,6 @@ export class ProductsService {
   }
 
   async create(createProductDto: CreateProductDto, user?: any) {
-    console.log('[ProductsService] Create DTO:', createProductDto);
     assertCanWriteCostFields(createProductDto, user);
     await this.validateSupplier(createProductDto.preferredSupplierId);
 
@@ -516,6 +522,7 @@ export class ProductsService {
     });
 
     const saved = await this.productRepository.save(entity);
+    await this.invalidatePublicProductCache();
     return this.findOne(saved._id, user);
   }
 
@@ -705,7 +712,6 @@ export class ProductsService {
       ),
     );
     assertCanWriteCostFields(rawPayload, user);
-    console.log('[ProductsService] Update payload:', rawPayload);
 
     const dimensionKeys = ['cartonLengthCm', 'cartonWidthCm', 'cartonHeightCm'];
     const hasDimensionChange = dimensionKeys.some((key) => key in rawPayload);
@@ -747,6 +753,7 @@ export class ProductsService {
         null,
         'Direct product update',
       );
+      await this.invalidatePublicProductCache();
     }
 
     if (Object.keys(controlledPatch).length > 0) {
@@ -765,7 +772,9 @@ export class ProductsService {
       };
     }
 
-    return this.findOne(id, user);
+    const updated = await this.findOne(id, user);
+    await this.invalidatePublicProductCache();
+    return updated;
   }
 
   async createChangeRequest(
@@ -851,7 +860,7 @@ export class ProductsService {
       requestedAt: new Date(),
     });
 
-    return this.dataSource.transaction(async (manager) => {
+    const result = await this.dataSource.transaction(async (manager) => {
       const requestRepo = manager.getRepository(ProductChangeRequest);
       const savedRequest = await requestRepo.save(request);
       const approvalRequest =
@@ -873,7 +882,8 @@ export class ProductsService {
             metadata: {
               productId: product._id,
               sku: product.sku,
-              productName: product.vietnameseName || product.englishName || null,
+              productName:
+                product.vietnameseName || product.englishName || null,
               changedFields,
               reason: dto.reason || null,
               source: 'products.change_request',
@@ -967,7 +977,7 @@ export class ProductsService {
       );
     }
 
-    return this.dataSource.transaction(async (manager) => {
+    const result = await this.dataSource.transaction(async (manager) => {
       const requestRepo = manager.getRepository(ProductChangeRequest);
       const productRepo = manager.getRepository(Product);
       const request = await requestRepo.findOne({
@@ -1051,6 +1061,8 @@ export class ProductsService {
 
       return savedRequest;
     });
+    await this.invalidatePublicProductCache();
+    return result;
   }
 
   async completeChangeRequestFromApprovalWorkflow(
@@ -1059,7 +1071,7 @@ export class ProductsService {
     approverUsername: string,
     note?: string | null,
   ) {
-    return this.dataSource.transaction(async (manager) => {
+    const result = await this.dataSource.transaction(async (manager) => {
       const requestRepo = manager.getRepository(ProductChangeRequest);
       const productRepo = manager.getRepository(Product);
       const request = await requestRepo.findOne({
@@ -1131,6 +1143,8 @@ export class ProductsService {
 
       return savedRequest;
     });
+    await this.invalidatePublicProductCache();
+    return result;
   }
 
   async rejectChangeRequest(
@@ -1245,11 +1259,13 @@ export class ProductsService {
     if (result.affected === 0) {
       throw new NotFoundException('Không tìm thấy sản phẩm');
     }
+    await this.invalidatePublicProductCache();
     return { id, deletedCount: result.affected };
   }
 
   async bulkRemove(ids: string[]) {
     const result = await this.productRepository.softDelete(ids);
+    await this.invalidatePublicProductCache();
     return {
       message: `Xoá thành công ${result.affected} sản phẩm`,
       deletedCount: result.affected,
@@ -1368,6 +1384,7 @@ export class ProductsService {
 
     // Bắt đầu transaction để đảm bảo an toàn
     const results = await this.productRepository.save(productsToCreate);
+    await this.invalidatePublicProductCache();
     return {
       message: `Đã nhập thành công ${results.length} sản phẩm`,
       count: results.length,
@@ -1422,70 +1439,84 @@ export class ProductsService {
     );
   }
   async findAllPublic(query: any, current: number, pageSize: number) {
-    console.log('[ProductsService] findAllPublic query:', query);
-    const curr = +current || 1;
-    const pSize = +pageSize || 12;
-    const skip = (curr - 1) * pSize;
+    const cacheKey = this.cache.makeKey('products:public', {
+      query,
+      current,
+      pageSize,
+    });
 
-    const searchTerm = query.search || query.q;
-    const category = query.category;
-    console.log('[ProductsService] Filter:', { searchTerm, category });
+    return this.cache.getOrSet(
+      cacheKey,
+      PRODUCT_PUBLIC_CACHE_TTL_SECONDS,
+      async () => {
+        const curr = +current || 1;
+        const pSize = +pageSize || 12;
+        const skip = (curr - 1) * pSize;
 
-    const qb = this.productRepository.createQueryBuilder('product');
+        const searchTerm = query.search || query.q;
+        const category = query.category;
 
-    // Show active products (handle null as active for safety if not explicitly false)
-    qb.where(
-      new Brackets((sqb) => {
-        sqb
-          .where('product.isActive = :active', { active: true })
-          .orWhere('product.isActive IS NULL');
-      }),
+        const qb = this.productRepository.createQueryBuilder('product');
+
+        // Show active products (handle null as active for safety if not explicitly false)
+        qb.where(
+          new Brackets((sqb) => {
+            sqb
+              .where('product.isActive = :active', { active: true })
+              .orWhere('product.isActive IS NULL');
+          }),
+        );
+
+        if (searchTerm) {
+          qb.andWhere(
+            new Brackets((sqb) => {
+              sqb
+                .where('product.vietnameseName ILIKE :s', {
+                  s: `%${searchTerm}%`,
+                })
+                .orWhere('product.englishName ILIKE :s', {
+                  s: `%${searchTerm}%`,
+                })
+                .orWhere('product.sku ILIKE :s', { s: `%${searchTerm}%` })
+                .orWhere('product.category ILIKE :s', { s: `%${searchTerm}%` });
+            }),
+          );
+        }
+
+        if (category) {
+          qb.andWhere('product.category ILIKE :category', {
+            category: `%${category}%`,
+          });
+        }
+
+        qb.orderBy('product.isBestseller', 'DESC')
+          .addOrderBy('product.isNew', 'DESC')
+          .addOrderBy('product.updatedAt', 'DESC');
+
+        const [results, totalItems] = await qb
+          .skip(skip)
+          .take(pSize)
+          .getManyAndCount();
+
+        return {
+          results: results.map((p) => ({
+            _id: p._id,
+            sku: p.sku,
+            vietnameseName: p.vietnameseName,
+            englishName: p.englishName,
+            category: p.category,
+            defaultExportPrice: p.defaultExportPrice,
+            exportCurrency: p.exportCurrency,
+            imageUrl: p.imageUrl,
+            isBestseller: p.isBestseller,
+            isNew: p.isNew,
+            description: p.description,
+            unitOfMeasure: p.unitOfMeasure,
+          })),
+          totalPages: Math.ceil(totalItems / pSize),
+          totalItems,
+        };
+      },
     );
-
-    if (searchTerm) {
-      qb.andWhere(
-        new Brackets((sqb) => {
-          sqb
-            .where('product.vietnameseName ILIKE :s', { s: `%${searchTerm}%` })
-            .orWhere('product.englishName ILIKE :s', { s: `%${searchTerm}%` })
-            .orWhere('product.sku ILIKE :s', { s: `%${searchTerm}%` })
-            .orWhere('product.category ILIKE :s', { s: `%${searchTerm}%` });
-        }),
-      );
-    }
-
-    if (category) {
-      qb.andWhere('product.category ILIKE :category', {
-        category: `%${category}%`,
-      });
-    }
-
-    qb.orderBy('product.isBestseller', 'DESC')
-      .addOrderBy('product.isNew', 'DESC')
-      .addOrderBy('product.updatedAt', 'DESC');
-
-    const [results, totalItems] = await qb
-      .skip(skip)
-      .take(pSize)
-      .getManyAndCount();
-
-    return {
-      results: results.map((p) => ({
-        _id: p._id,
-        sku: p.sku,
-        vietnameseName: p.vietnameseName,
-        englishName: p.englishName,
-        category: p.category,
-        defaultExportPrice: p.defaultExportPrice,
-        exportCurrency: p.exportCurrency,
-        imageUrl: p.imageUrl,
-        isBestseller: p.isBestseller,
-        isNew: p.isNew,
-        description: p.description,
-        unitOfMeasure: p.unitOfMeasure,
-      })),
-      totalPages: Math.ceil(totalItems / pSize),
-      totalItems,
-    };
   }
 }

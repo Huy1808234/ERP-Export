@@ -2,20 +2,23 @@
 
 import { 
   Divider, Form, Input, InputNumber, Modal, Select, 
-  Switch, App, Row, Col, Space, Typography, theme 
+  Switch, App, Row, Col, Space, Typography, theme, Button 
 } from 'antd';
 import { 
-  UserOutlined, GlobalOutlined, BankOutlined, 
+  UserOutlined, BankOutlined, 
   CreditCardOutlined, MailOutlined, PhoneOutlined,
   InfoCircleOutlined, PlusOutlined, SafetyCertificateOutlined,
   DollarOutlined
 } from '@ant-design/icons';
-import { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { sendRequest } from '@/lib/api-client';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { useMemo } from 'react';
 import { getAccessToken } from '@/lib/auth-token';
+import { useCountries, buildRegionOptions, getCountryRegion, normalizeCountryCode, getCountryDisplayName, loadCountries } from '@/constants/geo';
+import { countryService } from '@/services/country.service';
+import { QuickAddCountryModal } from '@/components/admin/country/country.quick-add';
 
 const { Text } = Typography;
 
@@ -36,6 +39,7 @@ const PartnerCreateModal = ({ isCreateModalOpen, setIsCreateModalOpen, fetchPart
 
   const tPartner = useTranslations('Partner');
   const tCommon = useTranslations('Common');
+  const locale = useLocale();
   const partnerType = Form.useWatch('partnerType', form);
   const defaultCurrency = Form.useWatch('defaultCurrency', form);
 
@@ -45,14 +49,14 @@ const PartnerCreateModal = ({ isCreateModalOpen, setIsCreateModalOpen, fetchPart
     { value: 'LOGISTICS', label: tPartner('types.LOGISTICS') },
   ], [tPartner]);
 
-  const regionOptions = useMemo(() => [
-    { value: 'EU', label: tPartner('regions.EU') },
-    { value: 'US', label: tPartner('regions.US') },
-    { value: 'ASEAN', label: tPartner('regions.ASEAN') },
-    { value: 'APAC', label: tPartner('regions.APAC') },
-    { value: 'MIDDLE_EAST', label: tPartner('regions.MIDDLE_EAST') },
-    { value: 'OTHER', label: tPartner('regions.OTHER') },
-  ], [tPartner]);
+  const regionOptions = useMemo(() => buildRegionOptions(tPartner), [tPartner]);
+  const { options: countryOptions } = useCountries(locale);
+  const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   const customerPaymentOptions = useMemo(() => [
     { value: 'T/T', label: tPartner('paymentTerms.TT') },
@@ -94,19 +98,29 @@ const PartnerCreateModal = ({ isCreateModalOpen, setIsCreateModalOpen, fetchPart
       return;
     }
 
+    const normalizedCountry = normalizeCountryCode(values.countryCode);
+    const normalizedValues = {
+      ...values,
+      countryCode: normalizedCountry ?? values.countryCode,
+      country: values.country,
+      region: partnerType === 'CUSTOMER'
+        ? values.region || getCountryRegion(normalizedCountry)
+        : values.region,
+    };
+
     setLoading(true);
     try {
       const res = await sendRequest<IBackendRes<any>>({
         url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/partners`,
         method: 'POST',
-        body: { ...values },
+        body: normalizedValues,
         headers: { Authorization: `Bearer ${accessToken}` },
       });
 
       if (res?.data) {
         notification.success({ 
           title: tCommon('success'),
-          description: `${tCommon('success')}: ${values.name}` 
+          description: `${tCommon('success')}: ${normalizedValues.name}` 
         });
         handleClose();
         fetchPartners();
@@ -119,6 +133,8 @@ const PartnerCreateModal = ({ isCreateModalOpen, setIsCreateModalOpen, fetchPart
       setLoading(false);
     }
   };
+
+  if (!isClient) return null;
 
   return (
     <Modal
@@ -135,6 +151,7 @@ const PartnerCreateModal = ({ isCreateModalOpen, setIsCreateModalOpen, fetchPart
       width={950}
       mask={{ closable: false }}
       destroyOnHidden
+      forceRender
       okText={tCommon('save')}
       cancelText={tCommon('cancel')}
       style={{ top: 20 }}
@@ -186,8 +203,36 @@ const PartnerCreateModal = ({ isCreateModalOpen, setIsCreateModalOpen, fetchPart
             </Form.Item>
           </Col>
           <Col span={8}>
+            <Form.Item label={tPartner('table.countryCode') || 'Mã quốc gia'} name="countryCode">
+              <Space.Compact style={{ width: '100%' }}>
+                <Select
+                  allowClear
+                  showSearch
+                  optionFilterProp="label"
+                  options={countryOptions}
+                  placeholder={tPartner('form.placeholders.country') || 'Chọn mã quốc gia'}
+                  onChange={(value?: string) => {
+                    const countryName = value ? (getCountryDisplayName(value, locale) || value) : undefined;
+                    form.setFieldsValue({
+                      country: countryName,
+                    });
+                    if (partnerType === 'CUSTOMER') {
+                      form.setFieldValue('region', getCountryRegion(value));
+                    }
+                  }}
+                  style={{ width: 'calc(100% - 40px)' }}
+                />
+                <Button
+                  icon={<PlusOutlined />}
+                  onClick={() => setIsQuickAddOpen(true)}
+                  style={{ width: 40 }}
+                />
+              </Space.Compact>
+            </Form.Item>
+          </Col>
+          <Col span={8}>
             <Form.Item label={tPartner('table.country')} name="country">
-              <Input prefix={<GlobalOutlined />} placeholder={tPartner('form.placeholders.country')} />
+              <Input disabled placeholder={tPartner('form.placeholders.country')} />
             </Form.Item>
           </Col>
           {partnerType === 'SUPPLIER' && (
@@ -366,6 +411,19 @@ const PartnerCreateModal = ({ isCreateModalOpen, setIsCreateModalOpen, fetchPart
           <Input.TextArea rows={3} placeholder={tPartner('form.placeholders.note')} />
         </Form.Item>
       </Form>
+      <QuickAddCountryModal
+        open={isQuickAddOpen}
+        onCancel={() => setIsQuickAddOpen(false)}
+        onSuccess={(code) => {
+          form.setFieldsValue({
+            countryCode: code,
+            country: getCountryDisplayName(code, locale) || code,
+          });
+          if (partnerType === 'CUSTOMER') {
+            form.setFieldValue('region', getCountryRegion(code));
+          }
+        }}
+      />
     </Modal>
   );
 };

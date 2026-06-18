@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useEffect, useState, useMemo } from 'react';
-import { Button, Space, Table, Tag, Input, Typography, Card, Tooltip, notification } from 'antd';
-import { ContainerOutlined, SearchOutlined, EyeOutlined, PlusOutlined, LoginOutlined } from '@ant-design/icons';
+import { App, Button, Space, Table, Tag, Input, Typography, Card, Tooltip } from 'antd';
+import { SearchOutlined, EyeOutlined, PlusOutlined, LoginOutlined, RollbackOutlined } from '@ant-design/icons';
+import type { ColumnsType } from 'antd/es/table';
 import { useTranslations } from 'next-intl';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { debounce } from '@/utils/debounce';
@@ -13,12 +14,19 @@ import { formatDate } from '@/utils/format';
 import GoodsReceiptModal from './goods-receipt.modal';
 import GoodsReceiptDetailModal from './goods-receipt.detail';
 import POSelectModal from './po-select.modal';
+import { useSearchParams } from 'next/navigation';
+import { sendRequest } from '@/lib/api-client';
+import { useSession } from 'next-auth/react';
+import { getAccessToken } from '@/lib/auth-token';
 
-const { Text, Title } = Typography;
+const { Text } = Typography;
 
 const GoodsReceiptTable = () => {
   const t = useTranslations('GoodsReceipt');
-  const { data, meta, loading, fetchGRNs } = useGoodsReceipts();
+  const { modal, notification } = App.useApp();
+  const { data: session } = useSession();
+  const searchParams = useSearchParams();
+  const { data, meta, loading, fetchGRNs, reverseGRN } = useGoodsReceipts();
   
   // Modals state
   const [isGrnModalOpen, setIsGrnModalOpen] = useState(false);
@@ -27,6 +35,7 @@ const GoodsReceiptTable = () => {
   
   const [selectedPoId, setSelectedPoId] = useState<string | null>(null);
   const [selectedGrn, setSelectedGrn] = useState<IGoodsReceipt | null>(null);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
   
   const [queryParams, setQueryParams] = useState({
     current: 1,
@@ -38,6 +47,28 @@ const GoodsReceiptTable = () => {
     fetchGRNs(queryParams);
   }, [queryParams, fetchGRNs]);
 
+  useEffect(() => {
+    const id = searchParams.get('id');
+    if (id) {
+      const fetchSingle = async () => {
+        try {
+          const res = await sendRequest<IBackendRes<IGoodsReceipt>>({
+            url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/goods-receipts/${id}`,
+            method: 'GET',
+            headers: { Authorization: `Bearer ${getAccessToken(session)}` },
+          });
+          if (res?.data) {
+            setSelectedGrn(res.data);
+            setIsDetailModalOpen(true);
+          }
+        } catch (error) {
+          console.error('Failed to fetch GRN details', error);
+        }
+      };
+      fetchSingle();
+    }
+  }, [searchParams, session]);
+
   const debouncedSearch = useMemo(
     () => debounce((value: string) => {
       setQueryParams(prev => ({ ...prev, grnNumber: value, current: 1 }));
@@ -45,7 +76,64 @@ const GoodsReceiptTable = () => {
     []
   );
 
-  const columns = useMemo(() => [
+  const getReverseErrorTitle = (error: unknown): string => {
+    const message = error instanceof Error ? error.message : '';
+
+    if (message.includes('active vendor invoice')) {
+      return t('notifications.reverseActiveVendorInvoiceError');
+    }
+
+    if (message.includes('Only completed GRNs')) {
+      return t('notifications.reverseCompletedOnlyError');
+    }
+
+    return message || t('notifications.reverseFailed');
+  };
+
+  const confirmReverse = (record: IGoodsReceipt) => {
+    let reason = '';
+    const grnNumber = record.grNumber || record.grnNumber || record._id;
+
+    modal.confirm({
+      title: t('reverseModal.title', { grnNumber }),
+      content: (
+        <Input.TextArea
+          rows={3}
+          placeholder={t('reverseModal.reasonPlaceholder')}
+          onChange={(event) => {
+            reason = event.target.value;
+          }}
+        />
+      ),
+      okText: t('reverseModal.okText'),
+      cancelText: t('reverseModal.cancelText'),
+      okButtonProps: { danger: true },
+      onOk: (close) => {
+        if (!reason.trim()) {
+          notification.error({ title: t('notifications.reverseReasonRequired') });
+          return;
+        }
+
+        setActionLoading(record._id);
+        void (async () => {
+          try {
+            await reverseGRN(record._id, reason.trim());
+            notification.success({ title: t('notifications.reverseSuccess') });
+            fetchGRNs(queryParams);
+            close();
+          } catch (error) {
+            notification.error({
+              title: getReverseErrorTitle(error),
+            });
+          } finally {
+            setActionLoading(null);
+          }
+        })();
+      },
+    });
+  };
+
+  const columns: ColumnsType<IGoodsReceipt> = [
     {
       title: t('table.columns.grNumber'),
       dataIndex: 'grNumber',
@@ -82,8 +170,8 @@ const GoodsReceiptTable = () => {
     {
       title: t('table.columns.actions'),
       key: 'action',
-      width: 100,
-      render: (_: any, record: IGoodsReceipt) => (
+      width: 140,
+      render: (_value: unknown, record: IGoodsReceipt) => (
         <Space>
           <Tooltip title={t('tooltips.viewDetail')}>
             <Button 
@@ -95,10 +183,21 @@ const GoodsReceiptTable = () => {
               }}
             />
           </Tooltip>
+          {record.status === 'COMPLETED' ? (
+            <Tooltip title={t('tooltips.reverse')}>
+              <Button
+                type="text"
+                danger
+                icon={<RollbackOutlined />}
+                loading={actionLoading === record._id}
+                onClick={() => confirmReverse(record)}
+              />
+            </Tooltip>
+          ) : null}
         </Space>
       ),
     },
-  ], [t]);
+  ];
 
   return (
     <Card variant="borderless" style={{ borderRadius: 12, boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>

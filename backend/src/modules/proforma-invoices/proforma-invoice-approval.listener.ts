@@ -8,10 +8,7 @@ import {
 } from '../approval-matrix/approval-workflow.events';
 import type { ApprovalWorkflowDecisionEvent } from '../approval-matrix/approval-workflow.events';
 import { ApprovalDocumentType } from '../approval-matrix/entities/approval-rule.entity';
-import {
-  PIStatus,
-  ProformaInvoice,
-} from './entities/proforma-invoice.entity';
+import { PIStatus, ProformaInvoice } from './entities/proforma-invoice.entity';
 
 @Injectable()
 export class ProformaInvoiceApprovalListener {

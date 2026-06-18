@@ -10,7 +10,16 @@ import { VendorEvaluationsController } from './vendor-evaluations.controller';
 import { VendorEvaluationsService } from './vendor-evaluations.service';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([VendorEvaluation, Partner, AccountPayable, PurchaseOrder, GoodsReceipt, QualityCheck])],
+  imports: [
+    TypeOrmModule.forFeature([
+      VendorEvaluation,
+      Partner,
+      AccountPayable,
+      PurchaseOrder,
+      GoodsReceipt,
+      QualityCheck,
+    ]),
+  ],
   controllers: [VendorEvaluationsController],
   providers: [VendorEvaluationsService],
   exports: [VendorEvaluationsService],

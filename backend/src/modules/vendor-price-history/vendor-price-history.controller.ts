@@ -15,7 +15,9 @@ import { UpdateVendorPriceHistoryDto } from './dto/update-vendor-price-history.d
 
 @Controller('vendor-price-history')
 export class VendorPriceHistoryController {
-  constructor(private readonly vendorPriceHistoryService: VendorPriceHistoryService) {}
+  constructor(
+    private readonly vendorPriceHistoryService: VendorPriceHistoryService,
+  ) {}
 
   @Post()
   @Roles('ADMIN', 'MANAGER', 'PURCHASING')
@@ -25,7 +27,10 @@ export class VendorPriceHistoryController {
 
   @Get()
   @Roles('ADMIN', 'MANAGER', 'PURCHASING', 'ACCOUNTANT')
-  findAll(@Query('vendorId') vendorId?: string, @Query('productId') productId?: string) {
+  findAll(
+    @Query('vendorId') vendorId?: string,
+    @Query('productId') productId?: string,
+  ) {
     return this.vendorPriceHistoryService.findAll(vendorId, productId);
   }
 
@@ -37,7 +42,10 @@ export class VendorPriceHistoryController {
 
   @Patch(':_id')
   @Roles('ADMIN', 'MANAGER', 'PURCHASING')
-  update(@Param('_id') recordId: string, @Body() dto: UpdateVendorPriceHistoryDto) {
+  update(
+    @Param('_id') recordId: string,
+    @Body() dto: UpdateVendorPriceHistoryDto,
+  ) {
     return this.vendorPriceHistoryService.update(recordId, dto);
   }
 

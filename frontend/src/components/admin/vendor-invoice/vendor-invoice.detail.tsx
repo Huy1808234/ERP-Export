@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Modal, Descriptions, Tag, Typography, Divider, Space, Card, Row, Col, Statistic, theme, List, Button } from 'antd';
+import { Modal, Descriptions, Tag, Typography, Divider, Space, Card, Row, Col, Statistic, theme, Button } from 'antd';
 import { useTranslations } from 'next-intl';
 import { 
   FileDoneOutlined, CalendarOutlined, 
@@ -88,7 +88,7 @@ const VendorInvoiceDetailModal = (props: IProps) => {
                         size="middle" 
                         bordered={false} 
                         styles={{ label: { color: '#8c8c8c', fontWeight: 500 } }}
-                    >
+                     >
                         <Descriptions.Item label={<Space><CalendarOutlined />Ngày hóa đơn</Space>}>
                             <Text strong>{formatDate(data?.invoiceDate || '')}</Text>
                         </Descriptions.Item>
@@ -113,20 +113,27 @@ const VendorInvoiceDetailModal = (props: IProps) => {
                 style={{ borderRadius: 16, boxShadow: '0 4px 12px rgba(0,0,0,0.05)', marginTop: 24 }}
               >
                   {data?.attachments && data.attachments.length > 0 ? (
-                      <List
-                        size="small"
-                        dataSource={data.attachments}
-                        renderItem={(item) => (
-                          <List.Item
-                            actions={[<Button key="view" type="link" size="small" icon={<EyeOutlined />}>Xem</Button>]}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                        {data.attachments.map((item, index) => (
+                          <div
+                            key={index}
+                            style={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              padding: '8px 12px',
+                              background: isDark ? '#1f1f1f' : '#f5f5f5',
+                              borderRadius: 8,
+                            }}
                           >
                             <Space>
                                 <FilePdfOutlined style={{ color: '#f5222d' }} />
                                 <Text style={{ fontSize: 13 }}>{item.split('/').pop()}</Text>
                             </Space>
-                          </List.Item>
-                        )}
-                      />
+                            <Button type="link" size="small" icon={<EyeOutlined />}>Xem</Button>
+                          </div>
+                        ))}
+                      </div>
                   ) : (
                       <div style={{ textAlign: 'center', padding: '20px', color: '#8c8c8c' }}>
                           <Text type="secondary" italic>Không có tệp đính kèm nào.</Text>

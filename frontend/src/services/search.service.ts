@@ -1,6 +1,4 @@
-import { getSession } from 'next-auth/react';
 import { sendRequest } from '@/lib/api-client';
-import { getAccessToken } from '@/lib/auth-token';
 import type { IBackendRes } from './base.service';
 
 export type GlobalSearchEntityType =
@@ -15,7 +13,19 @@ export type GlobalSearchEntityType =
   | 'COMMERCIAL_INVOICE'
   | 'EXPORT_DOCUMENT'
   | 'ACCOUNT_RECEIVABLE'
-  | 'ACCOUNT_PAYABLE';
+  | 'ACCOUNT_PAYABLE'
+  | 'INQUIRY'
+  | 'PRICING_POLICY'
+  | 'GOODS_RECEIPT'
+  | 'VENDOR_INVOICE'
+  | 'PURCHASE_RETURN'
+  | 'INVENTORY_COUNT'
+  | 'EXPORT_DELIVERY'
+  | 'CUSTOMER_RETURN'
+  | 'LETTER_OF_CREDIT'
+  | 'COLLECTION_ORDER'
+  | 'TRADE_FINANCE_TRANSACTION'
+  | 'JOURNAL_ENTRY';
 
 export interface GlobalSearchResult {
   _id: string;
@@ -52,7 +62,6 @@ class SearchService {
   private readonly productBaseUrl = `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/products`;
 
   async globalSearch(query: string, limit = 12): Promise<IBackendRes<GlobalSearchResponse>> {
-    const currentSession = await getSession();
     let response: IBackendRes<GlobalSearchResponse>;
 
     try {
@@ -60,7 +69,6 @@ class SearchService {
         url: `${this.baseUrl}/global`,
         method: 'GET',
         queryParams: { q: query, limit },
-        headers: { Authorization: `Bearer ${getAccessToken(currentSession)}` },
       });
     } catch (error) {
       const productFallback = await this.searchProductsFallback(query, Math.min(limit, 6)).catch(() => []);

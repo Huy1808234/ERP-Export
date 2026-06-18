@@ -309,8 +309,8 @@ const ShipmentDetailDrawer = ({ shipmentId, open, onClose, onSuccess }: IProps) 
         onClose();
         setData(null);
       }}
+      size={800}
       styles={{ 
-        wrapper: { width: 800 },
         body: { padding: '24px' } 
       }}
       destroyOnHidden

@@ -1,4 +1,10 @@
-import { IsDateString, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import {
+  IsDateString,
+  IsNumber,
+  IsOptional,
+  IsString,
+  Min,
+} from 'class-validator';
 import { IsEntityId } from '@/common/ids/entity-id.validator';
 
 export class AllocatePaymentDto {

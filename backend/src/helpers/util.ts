@@ -12,12 +12,14 @@ export const hashPasswordHelper = async (plainPassword: string) => {
   }
 };
 
-export const comparePasswordHelper = async (plainPassword: string, hashedPassword: string) => {
+export const comparePasswordHelper = async (
+  plainPassword: string,
+  hashedPassword: string,
+) => {
   try {
     // So sánh password thường với password đã được hash và trả về kết quả
-    return await bcrypt.compare(plainPassword, hashedPassword);       
-    
+    return await bcrypt.compare(plainPassword, hashedPassword);
   } catch (error) {
-    console.log(error)
+    console.log(error);
   }
-}
+};

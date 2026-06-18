@@ -79,13 +79,24 @@ export class PortalPaymentReceipt {
   @Column({ type: 'enum', enum: PortalReceiptType })
   receiptType: PortalReceiptType;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    transformer: new ColumnNumericTransformer(),
+  })
   amount: number;
 
   @Column({ type: 'varchar', default: 'USD' })
   currency: string;
 
-  @Column({ type: 'numeric', precision: 15, scale: 6, default: 1, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 6,
+    default: 1,
+    transformer: new ColumnNumericTransformer(),
+  })
   exchangeRate: number;
 
   @Column({ type: 'varchar', nullable: true })
@@ -107,11 +118,18 @@ export class PortalPaymentReceipt {
   @Column({ type: 'varchar', length: 40, nullable: true })
   tradeFinanceTransactionId: string | null;
 
-  @ManyToOne(() => TradeFinanceTransaction, { nullable: true, onDelete: 'SET NULL' })
+  @ManyToOne(() => TradeFinanceTransaction, {
+    nullable: true,
+    onDelete: 'SET NULL',
+  })
   @JoinColumn({ name: 'tradeFinanceTransactionId' })
   tradeFinanceTransaction: TradeFinanceTransaction | null;
 
-  @Column({ type: 'enum', enum: PortalReceiptStatus, default: PortalReceiptStatus.SUBMITTED })
+  @Column({
+    type: 'enum',
+    enum: PortalReceiptStatus,
+    default: PortalReceiptStatus.SUBMITTED,
+  })
   status: PortalReceiptStatus;
 
   @Column({ type: 'varchar' })

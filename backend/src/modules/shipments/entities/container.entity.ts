@@ -1,4 +1,13 @@
-import { BeforeInsert, Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryColumn, UpdateDateColumn } from 'typeorm';
+import {
+  BeforeInsert,
+  Column,
+  CreateDateColumn,
+  Entity,
+  JoinColumn,
+  ManyToOne,
+  PrimaryColumn,
+  UpdateDateColumn,
+} from 'typeorm';
 import { Shipment } from './shipment.entity';
 import { createEntityId } from '@/common/ids/entity-id.util';
 
@@ -8,7 +17,7 @@ export enum ContainerType {
   C40HC = '40HC',
   C20RF = '20RF',
   C40RF = '40RF',
-  LCL = 'LCL'
+  LCL = 'LCL',
 }
 
 @Entity('containers')
@@ -26,7 +35,9 @@ export class Container {
   @Column()
   shipmentId: string;
 
-  @ManyToOne(() => Shipment, (shipment) => shipment.containers, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Shipment, (shipment) => shipment.containers, {
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'shipmentId' })
   shipment: Shipment;
 

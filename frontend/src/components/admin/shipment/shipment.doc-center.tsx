@@ -16,6 +16,7 @@ import {
     Select,
     Space,
     Table,
+    Tabs,
     Tag,
     Typography,
     Upload,
@@ -34,8 +35,10 @@ import {
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import type { UploadFile } from 'antd/es/upload/interface';
-import { sendRequest, sendRequestFile } from '@/lib/api-client';
+import { backendFetch, sendRequest, sendRequestFile } from '@/lib/api-client';
 import { getAccessToken } from '@/lib/auth-token';
+import PortSelect from '@/components/admin/ports/PortSelect';
+import { formatPortLabel, type IPort } from '@/services/port.service';
 
 const { Text } = Typography;
 
@@ -318,7 +321,7 @@ const ShipmentDocCenter = ({ open, onClose, shipmentId, session }: IProps) => {
         if (!shipmentId || !accessToken) return;
 
         try {
-            const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/export-documents/download/${shipmentId}/${type}`, {
+            const response = await backendFetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/export-documents/download/${shipmentId}/${type}`, {
                 headers: { Authorization: `Bearer ${accessToken}` },
             });
 
@@ -458,6 +461,10 @@ const ShipmentDocCenter = ({ open, onClose, shipmentId, session }: IProps) => {
         }
     };
 
+    const setBusinessPortSnapshot = useCallback((fieldName: 'portOfLoading' | 'portOfDischarge', port?: IPort) => {
+        form.setFieldValue(['businessData', fieldName], port ? formatPortLabel(port) : undefined);
+    }, [form]);
+
     const renderBusinessFormFields = () => {
         if (selectedDocumentType === 'BILL_OF_LADING') {
             return (
@@ -492,11 +499,23 @@ const ShipmentDocCenter = ({ open, onClose, shipmentId, session }: IProps) => {
                         <Form.Item label="Voyage" name={['businessData', 'voyageNumber']} rules={[requiredRule]}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Port of loading" name={['businessData', 'portOfLoading']} rules={[requiredRule]}>
+                        <Form.Item name={['businessData', 'portOfLoading']} hidden>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Port of discharge" name={['businessData', 'portOfDischarge']} rules={[requiredRule]}>
+                        <Form.Item label="Port of loading" name={['businessData', 'portOfLoading_port_id']} rules={[requiredRule]}>
+                            <PortSelect
+                                legacyText={getRecordString(form.getFieldValue('businessData'), 'portOfLoading')}
+                                onPortChange={(port) => setBusinessPortSnapshot('portOfLoading', port)}
+                            />
+                        </Form.Item>
+                        <Form.Item name={['businessData', 'portOfDischarge']} hidden>
                             <Input />
+                        </Form.Item>
+                        <Form.Item label="Port of discharge" name={['businessData', 'portOfDischarge_port_id']} rules={[requiredRule]}>
+                            <PortSelect
+                                legacyText={getRecordString(form.getFieldValue('businessData'), 'portOfDischarge')}
+                                onPortChange={(port) => setBusinessPortSnapshot('portOfDischarge', port)}
+                            />
                         </Form.Item>
                         <Form.Item label="On board date" name={['businessData', 'onBoardDate']} rules={[requiredRule]}>
                             <DatePicker className="w-full" />
@@ -1045,7 +1064,8 @@ const ShipmentDocCenter = ({ open, onClose, shipmentId, session }: IProps) => {
     ];
 
     const renderVersionDetails = (record: ExportDocumentRecord) => {
-        const businessEntries = Object.entries(record.businessData || {});
+        const businessEntries = Object.entries(record.businessData || {})
+            .filter(([key]) => !key.endsWith('_port_id'));
 
         return (
             <Space className="w-full" orientation="vertical" size={12}>
@@ -1079,7 +1099,7 @@ const ShipmentDocCenter = ({ open, onClose, shipmentId, session }: IProps) => {
             title={
                 <Space>
                     <FilePdfOutlined className="text-red-500" />
-                    <span className="font-bold text-slate-800">Trung tâm chứng từ xuất khẩu</span>
+                    <Text strong>Trung tâm chứng từ xuất khẩu</Text>
                     {shipment?.shipmentNumber && <Tag color="blue">{shipment.shipmentNumber}</Tag>}
                 </Space>
             }
@@ -1109,36 +1129,55 @@ const ShipmentDocCenter = ({ open, onClose, shipmentId, session }: IProps) => {
                     <Descriptions.Item label="B/L">{shipment?.blNumber || '-'}</Descriptions.Item>
                 </Descriptions>
 
-                <div className="rounded-lg border border-slate-200 bg-white p-4">
-                    <Space className="w-full justify-between" wrap>
-                        <div>
-                            <Text strong>Hồ sơ hoàn thuế GTGT xuất khẩu</Text>
-                            <div className="text-xs text-slate-500">Cần đủ CI, PL, B/L, C/O và tờ khai hải quan.</div>
-                        </div>
-                        <Tag color={dossierReady ? 'green' : 'orange'}>
-                            {dossierReady ? 'Sẵn sàng' : 'Chưa đủ chứng từ'}
-                        </Tag>
-                    </Space>
-                </div>
+                <Tabs
+                    defaultActiveKey="checklist"
+                    items={[
+                        {
+                            key: 'checklist',
+                            label: 'Checklist chứng từ',
+                            children: (
+                                <Space className="w-full" orientation="vertical" size={16}>
+                                    <div className="rounded-lg border border-slate-200 bg-white p-4">
+                                        <Space className="w-full justify-between" wrap>
+                                            <div>
+                                                <Text strong>Hồ sơ hoàn thuế GTGT xuất khẩu</Text>
+                                                <div className="text-xs text-slate-500">Cần đủ CI, PL, B/L, C/O và tờ khai hải quan.</div>
+                                            </div>
+                                            <Tag color={dossierReady ? 'green' : 'orange'}>
+                                                {dossierReady ? 'Sẵn sàng' : 'Chưa đủ chứng từ'}
+                                            </Tag>
+                                        </Space>
+                                    </div>
 
-                <Table
-                    rowKey="documentType"
-                    bordered
-                    loading={loading}
-                    dataSource={center?.checklist || []}
-                    columns={checklistColumns}
-                    pagination={false}
-                />
-
-                <Table
-                    rowKey="_id"
-                    bordered
-                    size="small"
-                    title={() => <Text strong>Lịch sử phiên bản chứng từ</Text>}
-                    dataSource={center?.documents || []}
-                    columns={versionsColumns}
-                    expandable={{ expandedRowRender: renderVersionDetails }}
-                    pagination={{ pageSize: 6 }}
+                                    <Table
+                                        rowKey="documentType"
+                                        bordered
+                                        loading={loading}
+                                        dataSource={center?.checklist || []}
+                                        columns={checklistColumns}
+                                        pagination={false}
+                                        scroll={{ x: 860 }}
+                                    />
+                                </Space>
+                            ),
+                        },
+                        {
+                            key: 'versions',
+                            label: 'Lịch sử phiên bản',
+                            children: (
+                                <Table
+                                    rowKey="_id"
+                                    bordered
+                                    size="small"
+                                    dataSource={center?.documents || []}
+                                    columns={versionsColumns}
+                                    expandable={{ expandedRowRender: renderVersionDetails }}
+                                    pagination={{ pageSize: 6 }}
+                                    scroll={{ x: 960 }}
+                                />
+                            ),
+                        },
+                    ]}
                 />
             </Space>
 

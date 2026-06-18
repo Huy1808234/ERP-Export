@@ -1,4 +1,13 @@
-import { BeforeInsert, Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryColumn, UpdateDateColumn } from 'typeorm';
+import {
+  BeforeInsert,
+  Column,
+  CreateDateColumn,
+  Entity,
+  JoinColumn,
+  ManyToOne,
+  PrimaryColumn,
+  UpdateDateColumn,
+} from 'typeorm';
 import { Currency } from './currency.entity';
 import { Decimal } from 'decimal.js';
 import { createEntityId } from '@/common/ids/entity-id.util';
@@ -34,11 +43,17 @@ export class ExchangeRate {
   @Column()
   currencyId: string;
 
-  @ManyToOne(() => Currency, currency => currency.exchangeRates, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Currency, (currency) => currency.exchangeRates, {
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'currencyId' })
   currency: Currency;
 
-  @Column('decimal', { precision: 15, scale: 6, transformer: new DecimalTransformer() })
+  @Column('decimal', {
+    precision: 15,
+    scale: 6,
+    transformer: new DecimalTransformer(),
+  })
   rate: number;
 
   @Column({ type: 'varchar', length: 20, default: ExchangeRateType.TRANSFER })

@@ -1,4 +1,12 @@
-import { IsBoolean, IsDateString, IsEnum, IsNumber, IsOptional, IsPositive, IsString } from 'class-validator';
+import {
+  IsBoolean,
+  IsDateString,
+  IsEnum,
+  IsNumber,
+  IsOptional,
+  IsPositive,
+  IsString,
+} from 'class-validator';
 import { FxRevaluationSourceType } from '../entities/fx-revaluation.entity';
 
 export class RunFxRevaluationDto {

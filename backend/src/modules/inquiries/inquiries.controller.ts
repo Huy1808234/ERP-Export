@@ -1,4 +1,15 @@
-import { Controller, Post, Body, Delete, Get, Param, Patch, Query, Sse, MessageEvent } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Query,
+  Sse,
+  MessageEvent,
+} from '@nestjs/common';
 import { InquiriesService } from './inquiries.service';
 import { Public, Roles } from '@/decorator/customize';
 import { InquiryStatus } from './entities/inquiry.entity';
@@ -15,7 +26,7 @@ export class InquiriesController {
   @Sse('stream')
   sse(): Observable<MessageEvent> {
     return fromEvent(this.eventEmitter, 'notification.new_inquiry').pipe(
-      map((payload: any) => ({ data: payload } as MessageEvent)),
+      map((payload: any) => ({ data: payload }) as MessageEvent),
     );
   }
 
@@ -57,7 +68,10 @@ export class InquiriesController {
 
   @Patch(':_id/status')
   @Roles('ADMIN', 'MANAGER', 'SALES_EXPORT')
-  async updateStatus(@Param('_id') recordId: string, @Body('status') status: InquiryStatus) {
+  async updateStatus(
+    @Param('_id') recordId: string,
+    @Body('status') status: InquiryStatus,
+  ) {
     return {
       data: await this.inquiriesService.updateStatus(recordId, status),
     };

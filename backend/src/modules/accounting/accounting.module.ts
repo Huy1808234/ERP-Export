@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AccountingService } from './accounting.service';
 import { AccountingController } from './accounting.controller';
+import { PLTemplateController } from './pl-template-config.controller';
 import { JournalEntry } from './entities/journal-entry.entity';
 import { LedgerEntry } from './entities/ledger-entry.entity';
 import { AccountingPeriod } from './entities/accounting-period.entity';
@@ -10,6 +11,7 @@ import { VatRefundDossier } from './entities/vat-refund-dossier.entity';
 import { AccountingAuditEvent } from './entities/accounting-audit-event.entity';
 import { TaxReportRun } from './entities/tax-report-run.entity';
 import { AccountingPeriodClosePacket } from './entities/accounting-period-close-packet.entity';
+import { PLTemplate } from './entities/pl-template.entity';
 import { AccountingListener } from './accounting.listener';
 import { AccountingClosePolicyService } from './accounting-close-policy.service';
 import { AccountingPeriodGuardService } from './accounting-period-guard.service';
@@ -29,11 +31,12 @@ import { AccountingImmutableSubscriber } from './accounting-immutable.subscriber
       AccountingAuditEvent,
       TaxReportRun,
       AccountingPeriodClosePacket,
+      PLTemplate,
     ]),
     CurrenciesModule,
     ApprovalMatrixModule,
   ],
-  controllers: [AccountingController],
+  controllers: [AccountingController, PLTemplateController],
   providers: [
     AccountingService,
     AccountingClosePolicyService,

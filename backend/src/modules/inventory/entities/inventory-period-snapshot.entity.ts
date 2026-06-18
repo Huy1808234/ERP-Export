@@ -23,9 +23,13 @@ export type InventoryPeriodSnapshotLine = {
 };
 
 @Entity('inventory_period_snapshots')
-@Index('idx_inventory_period_snapshots_period_method', ['periodKey', 'valuationMethod'], {
-  unique: true,
-})
+@Index(
+  'idx_inventory_period_snapshots_period_method',
+  ['periodKey', 'valuationMethod'],
+  {
+    unique: true,
+  },
+)
 export class InventoryPeriodSnapshot {
   @PrimaryColumn({ type: 'varchar', length: 40, name: '_id' })
   _id: string;

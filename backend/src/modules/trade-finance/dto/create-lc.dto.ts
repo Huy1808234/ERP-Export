@@ -1,4 +1,11 @@
-import { IsDateString, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator';
+import {
+  IsDateString,
+  IsEnum,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 import { LCType } from '../entities/letter-of-credit.entity';
 import { IsEntityId } from '@/common/ids/entity-id.validator';
 
@@ -58,4 +65,8 @@ export class CreateLCDto {
   @IsString()
   @IsOptional()
   additionalConditions: string;
+
+  @IsString()
+  @IsOptional()
+  attachmentUrl?: string;
 }

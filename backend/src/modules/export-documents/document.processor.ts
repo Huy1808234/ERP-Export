@@ -10,9 +10,9 @@ export class DocumentProcessor extends WorkerHost {
 
   async process(job: Job<any, any, string>): Promise<any> {
     console.log(`Processing job ${job.id} of type ${job.name}...`);
-    
+
     const { documentId } = job.data;
-    
+
     // Thực hiện render PDF thực tế
     await this.exportDocsService.generatePdf(documentId);
 

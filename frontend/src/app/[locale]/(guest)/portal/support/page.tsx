@@ -291,7 +291,7 @@ export default function SupportPortal() {
         title={activeTicket ? `${activeTicket.ticketNumber} - ${activeTicket.subject}` : 'Ticket'}
         open={Boolean(activeTicket)}
         onClose={() => setActiveTicket(null)}
-        width={720}
+        size={720}
         extra={activeTicket && activeTicket.status !== 'CLOSED' ? (
           <Button icon={<CheckCircleOutlined />} onClick={closeTicket}>Close ticket</Button>
         ) : null}
@@ -306,7 +306,7 @@ export default function SupportPortal() {
             <Timeline
               items={(activeTicket.messages || []).map((item) => ({
                 color: item.authorType === 'BUYER' ? 'blue' : 'green',
-                children: (
+                content: (
                   <div>
                     <Text strong>{item.authorUsername}</Text>
                     <Text type="secondary" style={{ marginLeft: 8 }}>{dayjs(item.createdAt).format('DD/MM/YYYY HH:mm')}</Text>

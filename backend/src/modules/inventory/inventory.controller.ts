@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { InventoryService } from './inventory.service';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Product } from '../products/entities/product.entity';
@@ -14,6 +22,7 @@ import {
   ApproveInventoryCountDto,
   CreateInventoryCountDto,
   SubmitInventoryCountDto,
+  UpdateInventoryCountItemsDto,
 } from './dto/create-inventory-count.dto';
 import {
   CreateCustomerReturnDto,
@@ -61,7 +70,7 @@ export class InventoryController {
       dto.reason,
       user,
       dto.lotNumber,
-      dto.unitPrice
+      dto.unitPrice,
     );
   }
 
@@ -70,7 +79,8 @@ export class InventoryController {
   @ResponseMessage('Lấy báo cáo định giá tồn kho thành công')
   async getValuation(@Query('method') method?: string, @User() user?: any) {
     const normalizedMethod = method === 'AVG' ? 'AVG' : 'FIFO';
-    const report = await this.inventoryService.getValuationReport(normalizedMethod);
+    const report =
+      await this.inventoryService.getValuationReport(normalizedMethod);
     return maskCostFields(report, user, ['totalValue']);
   }
 
@@ -85,7 +95,10 @@ export class InventoryController {
   @Post('counts')
   @Roles('ADMIN', 'WAREHOUSE')
   @ResponseMessage('Tạo phiếu kiểm kê thành công')
-  async createInventoryCount(@Body() dto: CreateInventoryCountDto, @User() user: any) {
+  async createInventoryCount(
+    @Body() dto: CreateInventoryCountDto,
+    @User() user: any,
+  ) {
     return this.inventoryService.createInventoryCount(dto, user);
   }
 
@@ -94,6 +107,22 @@ export class InventoryController {
   @ResponseMessage('Lấy chi tiết phiếu kiểm kê thành công')
   async getInventoryCount(@Param('_id') recordId: string, @User() user: any) {
     const result = await this.inventoryService.findInventoryCount(recordId);
+    return maskCostFields(result, user);
+  }
+
+  @Patch('counts/:_id/items')
+  @Roles('ADMIN', 'WAREHOUSE')
+  @ResponseMessage('Lưu số thực đếm thành công')
+  async updateInventoryCountItems(
+    @Param('_id') recordId: string,
+    @Body() dto: UpdateInventoryCountItemsDto,
+    @User() user: any,
+  ) {
+    const result = await this.inventoryService.updateInventoryCountItems(
+      recordId,
+      dto,
+      user,
+    );
     return maskCostFields(result, user);
   }
 
@@ -130,7 +159,10 @@ export class InventoryController {
   @Post('customer-returns')
   @Roles('ADMIN', 'WAREHOUSE', 'SALES_EXPORT')
   @ResponseMessage('Tạo phiếu khách trả hàng thành công')
-  async createCustomerReturn(@Body() dto: CreateCustomerReturnDto, @User() user: any) {
+  async createCustomerReturn(
+    @Body() dto: CreateCustomerReturnDto,
+    @User() user: any,
+  ) {
     assertCanWriteCostFields(dto, user);
     const result = await this.inventoryService.createCustomerReturn(dto, user);
     return maskCostFields(result, user);
@@ -147,7 +179,10 @@ export class InventoryController {
   @Patch('customer-returns/:_id/submit')
   @Roles('ADMIN', 'WAREHOUSE', 'SALES_EXPORT')
   @ResponseMessage('Gửi duyệt phiếu khách trả hàng thành công')
-  async submitCustomerReturn(@Param('_id') recordId: string, @User() user: any) {
+  async submitCustomerReturn(
+    @Param('_id') recordId: string,
+    @User() user: any,
+  ) {
     return this.inventoryService.submitCustomerReturn(recordId, user);
   }
 
@@ -159,7 +194,11 @@ export class InventoryController {
     @Body() dto: CustomerReturnDecisionDto,
     @User() user: any,
   ) {
-    const result = await this.inventoryService.approveCustomerReturn(recordId, dto, user);
+    const result = await this.inventoryService.approveCustomerReturn(
+      recordId,
+      dto,
+      user,
+    );
     return maskCostFields(result, user);
   }
 
@@ -171,7 +210,11 @@ export class InventoryController {
     @Body() dto: CustomerReturnDecisionDto,
     @User() user: any,
   ) {
-    const result = await this.inventoryService.rejectCustomerReturn(recordId, dto, user);
+    const result = await this.inventoryService.rejectCustomerReturn(
+      recordId,
+      dto,
+      user,
+    );
     return maskCostFields(result, user);
   }
 
@@ -183,7 +226,11 @@ export class InventoryController {
     @Body() dto: CustomerReturnDecisionDto,
     @User() user: any,
   ) {
-    const result = await this.inventoryService.receiveCustomerReturn(recordId, dto, user);
+    const result = await this.inventoryService.receiveCustomerReturn(
+      recordId,
+      dto,
+      user,
+    );
     return maskCostFields(result, user);
   }
 
@@ -196,7 +243,14 @@ export class InventoryController {
   }
 
   @Get('export-deliveries')
-  @Roles('ADMIN', 'WAREHOUSE', 'LOGISTICS', 'SALES_EXPORT', 'ACCOUNTANT', 'MANAGER')
+  @Roles(
+    'ADMIN',
+    'WAREHOUSE',
+    'LOGISTICS',
+    'SALES_EXPORT',
+    'ACCOUNTANT',
+    'MANAGER',
+  )
   @ResponseMessage('Lấy danh sách phiếu xuất kho export thành công')
   async getExportDeliveries(@Query() query: any, @User() user: any) {
     const result = await this.inventoryService.findAllExportDeliveries(query);
@@ -211,12 +265,23 @@ export class InventoryController {
     @Body() dto: CreateExportDeliveryFromShipmentDto,
     @User() user: any,
   ) {
-    const result = await this.inventoryService.createExportDeliveryFromShipment(recordId, dto, user);
+    const result = await this.inventoryService.createExportDeliveryFromShipment(
+      recordId,
+      dto,
+      user,
+    );
     return maskCostFields(result, user, ['unitCost', 'totalCost']);
   }
 
   @Get('export-deliveries/:_id')
-  @Roles('ADMIN', 'WAREHOUSE', 'LOGISTICS', 'SALES_EXPORT', 'ACCOUNTANT', 'MANAGER')
+  @Roles(
+    'ADMIN',
+    'WAREHOUSE',
+    'LOGISTICS',
+    'SALES_EXPORT',
+    'ACCOUNTANT',
+    'MANAGER',
+  )
   @ResponseMessage('Lấy chi tiết phiếu xuất kho export thành công')
   async getExportDelivery(@Param('_id') recordId: string, @User() user: any) {
     const result = await this.inventoryService.findExportDelivery(recordId);
@@ -231,7 +296,11 @@ export class InventoryController {
     @Body() dto: IssueExportDeliveryDto,
     @User() user: any,
   ) {
-    const result = await this.inventoryService.issueExportDelivery(recordId, dto, user);
+    const result = await this.inventoryService.issueExportDelivery(
+      recordId,
+      dto,
+      user,
+    );
     return maskCostFields(result, user, ['unitCost', 'totalCost']);
   }
 
@@ -243,7 +312,11 @@ export class InventoryController {
     @Body() dto: CancelExportDeliveryDto,
     @User() user: any,
   ) {
-    const result = await this.inventoryService.cancelExportDelivery(recordId, dto, user);
+    const result = await this.inventoryService.cancelExportDelivery(
+      recordId,
+      dto,
+      user,
+    );
     return maskCostFields(result, user, ['unitCost', 'totalCost']);
   }
 
@@ -251,7 +324,8 @@ export class InventoryController {
   @Roles('ADMIN', 'WAREHOUSE', 'ACCOUNTANT', 'MANAGER')
   @ResponseMessage('Lấy danh sách phiếu điều chỉnh tồn kho thành công')
   async getAdjustments(@Query() query: any, @User() user: any) {
-    const result = await this.inventoryService.findAllInventoryAdjustments(query);
+    const result =
+      await this.inventoryService.findAllInventoryAdjustments(query);
     return maskCostFields(result, user, ['unitPrice', 'amountVnd']);
   }
 
@@ -259,7 +333,8 @@ export class InventoryController {
   @Roles('ADMIN', 'WAREHOUSE', 'ACCOUNTANT', 'MANAGER')
   @ResponseMessage('Lấy chi tiết phiếu điều chỉnh tồn kho thành công')
   async getAdjustment(@Param('_id') recordId: string, @User() user: any) {
-    const result = await this.inventoryService.findInventoryAdjustment(recordId);
+    const result =
+      await this.inventoryService.findInventoryAdjustment(recordId);
     return maskCostFields(result, user, ['unitPrice', 'amountVnd']);
   }
 
@@ -268,7 +343,11 @@ export class InventoryController {
   @ResponseMessage('Fetch inventory period snapshots successfully')
   async getPeriodSnapshots(@Query() query: any, @User() user: any) {
     const result = await this.inventoryService.findAllPeriodSnapshots(query);
-    return maskCostFields(result, user, ['totalValue', 'unitCost', 'inventoryValue']);
+    return maskCostFields(result, user, [
+      'totalValue',
+      'unitCost',
+      'inventoryValue',
+    ]);
   }
 
   @Post('period-snapshots')
@@ -279,7 +358,11 @@ export class InventoryController {
     @User() user: any,
   ) {
     const result = await this.inventoryService.createPeriodSnapshot(dto, user);
-    return maskCostFields(result, user, ['totalValue', 'unitCost', 'inventoryValue']);
+    return maskCostFields(result, user, [
+      'totalValue',
+      'unitCost',
+      'inventoryValue',
+    ]);
   }
 
   @Get('period-snapshots/:_id')
@@ -287,7 +370,11 @@ export class InventoryController {
   @ResponseMessage('Fetch inventory period snapshot successfully')
   async getPeriodSnapshot(@Param('_id') recordId: string, @User() user: any) {
     const result = await this.inventoryService.findPeriodSnapshot(recordId);
-    return maskCostFields(result, user, ['totalValue', 'unitCost', 'inventoryValue']);
+    return maskCostFields(result, user, [
+      'totalValue',
+      'unitCost',
+      'inventoryValue',
+    ]);
   }
 
   @Get()
@@ -297,15 +384,19 @@ export class InventoryController {
     const pageSize = +query.pageSize || 10;
     const skip = (current - 1) * pageSize;
     const search = typeof query.search === 'string' ? query.search.trim() : '';
-    const rawSort = typeof query.sort === 'string' && query.sort.trim()
-      ? query.sort.trim()
-      : 'availableStock';
-    const sortDirection: InventorySortDirection = rawSort.startsWith('-') ? 'DESC' : 'ASC';
+    const rawSort =
+      typeof query.sort === 'string' && query.sort.trim()
+        ? query.sort.trim()
+        : 'availableStock';
+    const sortDirection: InventorySortDirection = rawSort.startsWith('-')
+      ? 'DESC'
+      : 'ASC';
     const sortField = rawSort.replace(/^-/, '');
     const sortColumn =
       sortField === 'availableStock'
         ? INVENTORY_AVAILABLE_STOCK_EXPRESSION
-        : INVENTORY_STOCK_SORT_COLUMNS[sortField] || INVENTORY_AVAILABLE_STOCK_EXPRESSION;
+        : INVENTORY_STOCK_SORT_COLUMNS[sortField] ||
+          INVENTORY_AVAILABLE_STOCK_EXPRESSION;
 
     const qb = this.productRepository.createQueryBuilder('product');
 
@@ -336,23 +427,29 @@ export class InventoryController {
       .createQueryBuilder('product')
       .select('SUM(product.currentStock)', 'totalStock')
       .addSelect('COUNT(product._id)', 'totalItems')
-      .addSelect('SUM(CASE WHEN product.currentStock <= product.minimumStock THEN 1 ELSE 0 END)', 'lowStockCount')
+      .addSelect(
+        'SUM(CASE WHEN product.currentStock <= product.minimumStock THEN 1 ELSE 0 END)',
+        'lowStockCount',
+      )
       .getRawOne();
 
-    return maskCostFields({
-      results,
-      meta: {
-        current,
-        pageSize,
-        pages: Math.ceil(total / pageSize),
-        total,
+    return maskCostFields(
+      {
+        results,
+        meta: {
+          current,
+          pageSize,
+          pages: Math.ceil(total / pageSize),
+          total,
+        },
+        summary: {
+          totalStock: Number(summary.totalStock || 0),
+          totalItems: Number(summary.totalItems || 0),
+          lowStockCount: Number(summary.lowStockCount || 0),
+        },
       },
-      summary: {
-        totalStock: Number(summary.totalStock || 0),
-        totalItems: Number(summary.totalItems || 0),
-        lowStockCount: Number(summary.lowStockCount || 0),
-      }
-    }, user);
+      user,
+    );
   }
 
   @Get('ledger')

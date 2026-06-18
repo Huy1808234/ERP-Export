@@ -99,28 +99,70 @@ export class QualityCheck {
   @JoinColumn({ name: 'purchaseOrderId' })
   purchaseOrder: PurchaseOrder | null;
 
-  @Column({ type: 'numeric', precision: 5, scale: 2, nullable: true, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 5,
+    scale: 2,
+    nullable: true,
+    transformer: new ColumnNumericTransformer(),
+  })
   moisture: number | null;
 
   @Column({ type: 'integer', nullable: true })
   nutCount: number | null;
 
-  @Column({ type: 'numeric', precision: 5, scale: 2, nullable: true, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 5,
+    scale: 2,
+    nullable: true,
+    transformer: new ColumnNumericTransformer(),
+  })
   defectRate: number | null;
 
-  @Column({ type: 'numeric', precision: 12, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 12,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   receivedQuantity: number;
 
-  @Column({ type: 'numeric', precision: 12, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 12,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   acceptedQuantity: number;
 
-  @Column({ type: 'numeric', precision: 12, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 12,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   rejectedQuantity: number;
 
-  @Column({ type: 'numeric', precision: 12, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 12,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   quarantineQuantity: number;
 
-  @Column({ type: 'numeric', precision: 12, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 12,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   backorderQuantity: number;
 
   @Column({ type: 'enum', enum: QCResult, default: QCResult.PASSED })
@@ -151,7 +193,13 @@ export class QualityCheck {
   @Column({ type: 'varchar', default: QCResolutionType.NONE })
   resolutionType: QCResolutionType;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   creditAmount: number;
 
   @Column({ type: 'date', nullable: true })

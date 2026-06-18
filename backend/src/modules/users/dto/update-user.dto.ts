@@ -1,4 +1,13 @@
-import { IsBoolean, IsEmail, IsOptional, IsString } from 'class-validator';
+import {
+  ArrayMinSize,
+  IsArray,
+  IsBoolean,
+  IsEmail,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  MinLength,
+} from 'class-validator';
 
 export class UpdateUserDto {
   @IsOptional()
@@ -32,4 +41,23 @@ export class UpdateUserDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+}
+
+export class DeactivateUserDto {
+  @IsNotEmpty({ message: 'Deactivation reason is required' })
+  @IsString({ message: 'Deactivation reason must be a string' })
+  @MinLength(3)
+  reason: string;
+}
+
+export class BulkDeactivateUsersDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @IsString({ each: true })
+  userRefs: string[];
+
+  @IsNotEmpty({ message: 'Deactivation reason is required' })
+  @IsString({ message: 'Deactivation reason must be a string' })
+  @MinLength(3)
+  reason: string;
 }

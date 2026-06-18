@@ -10,7 +10,9 @@ import { AccountPayablesService } from './account-payables.service';
 
 @Injectable()
 export class AccountPayableApprovalListener {
-  constructor(private readonly accountPayablesService: AccountPayablesService) {}
+  constructor(
+    private readonly accountPayablesService: AccountPayablesService,
+  ) {}
 
   @OnEvent(APPROVAL_WORKFLOW_APPROVED_EVENT)
   async handleApproved(payload: ApprovalWorkflowDecisionEvent) {

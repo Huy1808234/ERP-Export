@@ -65,13 +65,30 @@ export class AccountPayableSettlementAudit {
   @Column({ type: 'timestamp' })
   settlementDate: Date;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    transformer: new ColumnNumericTransformer(),
+  })
   amount: number;
 
-  @Column({ type: 'numeric', precision: 15, scale: 6, default: 1, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 6,
+    default: 1,
+    transformer: new ColumnNumericTransformer(),
+  })
   exchangeRate: number;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   amountVnd: number;
 
   @Column({ type: 'varchar', default: 'VND' })
@@ -98,7 +115,10 @@ export class AccountPayableSettlementAudit {
   @Column({ type: 'varchar', length: 40, nullable: true })
   reversedSettlementAudit_id: string | null;
 
-  @ManyToOne(() => AccountPayableSettlementAudit, { nullable: true, onDelete: 'SET NULL' })
+  @ManyToOne(() => AccountPayableSettlementAudit, {
+    nullable: true,
+    onDelete: 'SET NULL',
+  })
   @JoinColumn({ name: 'reversedSettlementAudit_id' })
   reversedSettlementAudit: AccountPayableSettlementAudit | null;
 

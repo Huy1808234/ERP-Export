@@ -1,4 +1,11 @@
-import { IsEnum, IsNumber, IsObject, IsOptional, IsString, Min } from 'class-validator';
+import {
+  IsEnum,
+  IsNumber,
+  IsObject,
+  IsOptional,
+  IsString,
+  Min,
+} from 'class-validator';
 import type { JsonRecord } from '@/common/types/authenticated-user.type';
 import { ApprovalDocumentType } from '../entities/approval-rule.entity';
 

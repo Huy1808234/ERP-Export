@@ -1,4 +1,8 @@
-import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository } from 'typeorm';
 import {
@@ -162,7 +166,10 @@ export class ApprovalsService {
     });
 
     const pendingInventoryCounts = await this.inventoryCountRepository.find({
-      where: { status: InventoryCountStatus.SUBMITTED },
+      where: {
+        status: InventoryCountStatus.SUBMITTED,
+        approvalWorkflowRequestId: IsNull(),
+      },
       relations: ['items', 'items.product'],
       order: { submittedAt: 'DESC', createdAt: 'DESC' },
     });
@@ -407,7 +414,9 @@ export class ApprovalsService {
       const q = await this.quotationRepository.findOne({ where: { _id: id } });
       if (q) {
         q.status = QuotationStatus.REJECTED;
-        q.note = [q.note, `Rejected: ${rejectionReason}`].filter(Boolean).join('\n');
+        q.note = [q.note, `Rejected: ${rejectionReason}`]
+          .filter(Boolean)
+          .join('\n');
         q.rejectedByUsername = user.username;
         q.rejectedAt = new Date();
         q.rejectionReason = rejectionReason;
@@ -417,7 +426,9 @@ export class ApprovalsService {
       const pi = await this.piRepository.findOne({ where: { _id: id } });
       if (pi) {
         pi.status = PIStatus.REJECTED;
-        pi.note = [pi.note, `Rejected: ${rejectionReason}`].filter(Boolean).join('\n');
+        pi.note = [pi.note, `Rejected: ${rejectionReason}`]
+          .filter(Boolean)
+          .join('\n');
         pi.rejectedByUsername = user.username;
         pi.rejectedAt = new Date();
         pi.rejectionReason = rejectionReason;
@@ -427,14 +438,18 @@ export class ApprovalsService {
       const po = await this.poRepository.findOne({ where: { _id: id } });
       if (po) {
         po.status = PurchaseOrderStatus.CANCELLED;
-        po.note = [po.note, `Rejected: ${rejectionReason}`].filter(Boolean).join('\n');
+        po.note = [po.note, `Rejected: ${rejectionReason}`]
+          .filter(Boolean)
+          .join('\n');
         return this.poRepository.save(po);
       }
     } else if (type === 'SALES_CONTRACT') {
       const sc = await this.scRepository.findOne({ where: { _id: id } });
       if (sc) {
         sc.status = SalesContractStatus.CANCELLED;
-        sc.notes = [sc.notes, `Rejected: ${rejectionReason}`].filter(Boolean).join('\n');
+        sc.notes = [sc.notes, `Rejected: ${rejectionReason}`]
+          .filter(Boolean)
+          .join('\n');
         return this.scRepository.save(sc);
       }
     } else if (type === 'TRADE_FINANCE') {
@@ -447,11 +462,23 @@ export class ApprovalsService {
         );
       }
     } else if (type === 'INVENTORY_COUNT') {
-      return this.inventoryService.rejectInventoryCount(id, rejectionReason, user);
+      return this.inventoryService.rejectInventoryCount(
+        id,
+        rejectionReason,
+        user,
+      );
     } else if (type === 'APPROVAL_WORKFLOW') {
-      return this.approvalMatrixService.rejectRequest(id, { reason: rejectionReason }, user);
+      return this.approvalMatrixService.rejectRequest(
+        id,
+        { reason: rejectionReason },
+        user,
+      );
     } else if (type === 'PRODUCT_CHANGE_REQUEST') {
-      return this.productsService.rejectChangeRequest(id, { reason: rejectionReason }, user);
+      return this.productsService.rejectChangeRequest(
+        id,
+        { reason: rejectionReason },
+        user,
+      );
     }
     return null;
   }

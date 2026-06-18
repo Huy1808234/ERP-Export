@@ -1,4 +1,11 @@
-import { BeforeInsert, Entity, PrimaryColumn, Column, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import {
+  BeforeInsert,
+  Entity,
+  PrimaryColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+} from 'typeorm';
 import { createEntityId } from '@/common/ids/entity-id.util';
 
 export enum AccountingPeriodStatus {

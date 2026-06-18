@@ -23,4 +23,8 @@ export class SignSalesContractDto {
   @IsOptional()
   @IsString()
   consentText?: string | null;
+
+  @IsOptional()
+  @IsString()
+  password?: string | null;
 }

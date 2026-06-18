@@ -32,15 +32,18 @@ import {
   SafetyCertificateOutlined,
   DashboardOutlined
 } from '@ant-design/icons';
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import { sendRequest } from '@/lib/api-client';
 import dayjs from 'dayjs';
+import type { Dayjs } from 'dayjs';
 import { IProduct } from '@/types/product';
-import { IQuotation } from '@/types/o2c';
+import { IQuotation, IQuotationLine } from '@/types/o2c';
 import { INCOTERMS_KEYS, PAYMENT_TERM_KEYS, SELLER_LED_INCOTERMS, IncotermKey } from '@/constants/o2c';
 import { useTranslations } from 'next-intl';
 import { getAccessToken } from '@/lib/auth-token';
+import PortSelect from '@/components/admin/ports/PortSelect';
+import { normalizeCountryCode } from '@/constants/geo';
 
 const { Text, Title } = Typography;
 
@@ -49,7 +52,7 @@ interface IProps {
   setIsCreateModalOpen: (v: boolean) => void;
   fetchQuotations: () => void;
   editData?: IQuotation;
-  initialInquiryData?: any;
+  initialInquiryData?: InitialInquiryData;
 }
 
 // Removed local INCOTERMS_OPTIONS
@@ -61,6 +64,206 @@ const CURRENCY_OPTIONS = [
   { value: 'CNY', label: '🇨🇳 CNY' },
 ];
 // UNIT_OPTIONS moved inside component with i18n
+
+type PricingSource = 'PRICING_POLICY' | 'PRICING_POLICY_DERIVED' | 'PRODUCT_DEFAULT';
+type PriceStateSource = PricingSource | 'MANUAL' | 'UNRESOLVED';
+type LogisticsFeeField = 'seaFreight' | 'insuranceCost' | 'domesticTransportCost' | 'portCharges';
+type BreakdownCostField =
+  | 'inlandCostPerUnit'
+  | 'portChargePerUnit'
+  | 'freightCostPerUnit'
+  | 'insuranceCostPerUnit'
+  | 'destinationDeliveryCostPerUnit';
+
+interface PriceBreakdown {
+  baseIncoterm: IncotermKey;
+  targetIncoterm: IncotermKey;
+  baseUnitPrice: number;
+  inlandCostPerUnit: number;
+  portChargePerUnit: number;
+  freightCostPerUnit: number;
+  insuranceCostPerUnit: number;
+  destinationDeliveryCostPerUnit: number;
+  customsCostPerUnit: number;
+  derivedUnitPrice: number;
+}
+
+interface ResolvePriceResult {
+  source: PricingSource;
+  pricingPolicyId: string | null;
+  unitPrice: number;
+  currency: string;
+  priceBreakdown?: PriceBreakdown;
+}
+
+interface PriceLineState {
+  source: PriceStateSource;
+  pricingPolicyId?: string | null;
+  priceBreakdown?: PriceBreakdown;
+  message?: string;
+}
+
+interface QuotationFormLine {
+  productId?: string;
+  quantity?: number;
+  unit?: string;
+  unitPrice?: number;
+  note?: string;
+}
+
+interface QuotationFormValues {
+  customerId?: string;
+  incoterm?: IncotermKey;
+  currency?: string;
+  portOfLoading?: string;
+  portOfLoading_port_id?: string | null;
+  portOfDischarge?: string;
+  portOfDischarge_port_id?: string | null;
+  paymentTerms?: string[] | string;
+  note?: string;
+  issueDate?: Dayjs;
+  expiryDate?: Dayjs;
+  items?: QuotationFormLine[];
+  logisticsFee?: number;
+  otherFee?: number;
+  domesticTransportCost?: number;
+  portCharges?: number;
+  seaFreight?: number;
+  insuranceCost?: number;
+  bankInfo?: string;
+}
+
+interface InitialInquiryData {
+  _id?: string;
+  customerId?: string;
+  customerName?: string;
+  productId?: string;
+  quantity?: number;
+  product?: Pick<IProduct, 'unitOfMeasure'>;
+  note?: string;
+}
+
+interface CompanyBankInfoSetting {
+  value?: string;
+}
+
+interface QuotationMutationResult {
+  quotationNumber: string;
+}
+
+const LOGISTICS_INCLUDED_RULES: Array<{
+  field: LogisticsFeeField;
+  breakdownFields: BreakdownCostField[];
+}> = [
+  {
+    field: 'domesticTransportCost',
+    breakdownFields: ['inlandCostPerUnit', 'destinationDeliveryCostPerUnit'],
+  },
+  {
+    field: 'portCharges',
+    breakdownFields: ['portChargePerUnit'],
+  },
+  {
+    field: 'seaFreight',
+    breakdownFields: ['freightCostPerUnit'],
+  },
+  {
+    field: 'insuranceCost',
+    breakdownFields: ['insuranceCostPerUnit'],
+  },
+];
+
+const EXACT_POLICY_INCLUDED_FIELDS_BY_INCOTERM: Record<IncotermKey, LogisticsFeeField[]> = {
+  EXW: [],
+  FOB: ['domesticTransportCost', 'portCharges'],
+  CFR: ['domesticTransportCost', 'portCharges', 'seaFreight'],
+  CIF: ['domesticTransportCost', 'portCharges', 'seaFreight', 'insuranceCost'],
+  DAP: ['domesticTransportCost', 'portCharges', 'seaFreight', 'insuranceCost'],
+  DDP: ['domesticTransportCost', 'portCharges', 'seaFreight', 'insuranceCost'],
+};
+
+type EditableQuotation = IQuotation & {
+  issueDate?: string;
+};
+
+type EditableQuotationLine = IQuotationLine & {
+  productId?: string;
+};
+
+const isIncotermKey = (value?: string): value is IncotermKey =>
+  Boolean(value && INCOTERMS_KEYS.includes(value as IncotermKey));
+
+const isSellerLedIncoterm = (value?: string): value is IncotermKey =>
+  isIncotermKey(value) && SELLER_LED_INCOTERMS.includes(value);
+
+const getIncludedLogisticsFields = (
+  priceStates: Record<number, PriceLineState>,
+  incoterm?: IncotermKey,
+): Set<LogisticsFeeField> => {
+  const includedFields = new Set<LogisticsFeeField>();
+
+  Object.values(priceStates).forEach((state) => {
+    if (state.source === 'PRICING_POLICY' && incoterm) {
+      EXACT_POLICY_INCLUDED_FIELDS_BY_INCOTERM[incoterm].forEach((field) => includedFields.add(field));
+      return;
+    }
+
+    if (state.source !== 'PRICING_POLICY_DERIVED' || !state.priceBreakdown) return;
+
+    LOGISTICS_INCLUDED_RULES.forEach((rule) => {
+      const isIncluded = rule.breakdownFields.some((field) => Number(state.priceBreakdown?.[field] || 0) > 0);
+      if (isIncluded) includedFields.add(rule.field);
+    });
+  });
+
+  return includedFields;
+};
+
+const normalizeQuotationLogisticsFees = (
+  values: QuotationFormValues,
+  includedFields: Set<LogisticsFeeField>,
+): QuotationFormValues => {
+  const nextValues: QuotationFormValues = { ...values };
+
+  if (!isSellerLedIncoterm(nextValues.incoterm)) {
+    nextValues.seaFreight = 0;
+    nextValues.domesticTransportCost = 0;
+    nextValues.portCharges = 0;
+    nextValues.logisticsFee = 0;
+  }
+
+  if (nextValues.incoterm !== 'CIF') {
+    nextValues.insuranceCost = 0;
+  }
+
+  includedFields.forEach((field) => {
+    nextValues[field] = 0;
+  });
+
+  return nextValues;
+};
+
+const shiftIndexSetAfterRemove = (source: Set<number>, removedIndex: number) => {
+  const next = new Set<number>();
+  source.forEach((rowIndex) => {
+    if (rowIndex < removedIndex) next.add(rowIndex);
+    if (rowIndex > removedIndex) next.add(rowIndex - 1);
+  });
+  return next;
+};
+
+const shiftPriceStatesAfterRemove = (
+  source: Record<number, PriceLineState>,
+  removedIndex: number,
+) => {
+  const next: Record<number, PriceLineState> = {};
+  Object.entries(source).forEach(([rawIndex, state]) => {
+    const rowIndex = Number(rawIndex);
+    if (rowIndex < removedIndex) next[rowIndex] = state;
+    if (rowIndex > removedIndex) next[rowIndex - 1] = state;
+  });
+  return next;
+};
 
 const QuotationCreateModal = (props: IProps) => {
   const { isCreateModalOpen, setIsCreateModalOpen, editData, initialInquiryData } = props;
@@ -154,18 +357,32 @@ const QuotationFormInner = (props: InnerProps) => {
   }, [tUom]);
 
   const [form] = Form.useForm();
-  const [customers, setCustomers] = useState<any[]>([]);
+  const [customers, setCustomers] = useState<IPartner[]>([]);
   const [products, setProducts] = useState<IProduct[]>([]);
-  const [currencyRates, setCurrencyRates] = useState<Record<string, number>>({});
+  const [manualPriceRows, setManualPriceRows] = useState<Set<number>>(new Set());
+  const [resolvingPriceRows, setResolvingPriceRows] = useState<Set<number>>(new Set());
+  const [priceLineStates, setPriceLineStates] = useState<Record<number, PriceLineState>>({});
+  const priceResolveTimersRef = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
+  const priceResolveSequenceRef = useRef<Record<number, number>>({});
 
   // Watch for dynamic calculation
   const watchedItems = Form.useWatch('items', form);
   const watchedCurrency = Form.useWatch('currency', form) || 'USD';
   const watchedIncoterm = Form.useWatch('incoterm', form);
+  const watchedCustomerId = Form.useWatch('customerId', form);
+  const watchedIssueDate = Form.useWatch('issueDate', form);
+  const watchedPortOfLoading_port_id = Form.useWatch('portOfLoading_port_id', form);
+  const watchedPortOfDischarge_port_id = Form.useWatch('portOfDischarge_port_id', form);
+  const watchedPortOfLoading = Form.useWatch('portOfLoading', form);
+  const watchedPortOfDischarge = Form.useWatch('portOfDischarge', form);
+  const selectedCustomerCountryCode = useMemo(() => {
+    const customer = customers.find((item) => item._id === watchedCustomerId);
+    return normalizeCountryCode(customer?.country);
+  }, [customers, watchedCustomerId]);
 
   // TECH LEAD LOGIC: Reset fees when switching to Buyer-Led Incoterms
   useEffect(() => {
-    if (watchedIncoterm && !SELLER_LED_INCOTERMS.includes(watchedIncoterm as any)) {
+    if (watchedIncoterm && !isSellerLedIncoterm(watchedIncoterm)) {
       form.setFieldsValue({
         seaFreight: 0,
         insuranceCost: 0,
@@ -176,14 +393,20 @@ const QuotationFormInner = (props: InnerProps) => {
     }
   }, [watchedIncoterm, form]);
 
+  useEffect(() => {
+    if (watchedIncoterm && watchedIncoterm !== 'CIF') {
+      form.setFieldValue('insuranceCost', 0);
+    }
+  }, [watchedIncoterm, form]);
+
   const fetchDropdowns = useCallback(async () => {
     const accessToken = getAccessToken(session);
     if (!accessToken) return;
 
     const headers = { Authorization: `Bearer ${accessToken}` };
 
-    const [partnersRes, productsRes, curRes] = await Promise.all([
-      sendRequest<IBackendRes<IModelPaginate<any>>>({
+    const [partnersRes, productsRes] = await Promise.all([
+      sendRequest<IBackendRes<IModelPaginate<IPartner>>>({
         url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/partners`,
         method: 'GET',
         queryParams: { current: 1, pageSize: 500, partnerType: 'CUSTOMER' },
@@ -195,20 +418,15 @@ const QuotationFormInner = (props: InnerProps) => {
         queryParams: { current: 1, pageSize: 500, isActive: true },
         headers,
       }),
-      sendRequest<IBackendRes<any>>({
-        url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/currencies`,
-        method: 'GET',
-        headers,
-      }),
     ]);
 
     if (partnersRes?.data) {
       const fetchedCustomers = partnersRes.data.results || [];
       // TECH LEAD: Ensure initial customer from inquiry is in the list to avoid UUID display issue
-      if (initialInquiryData?.customerId && !fetchedCustomers.find((c: any) => c._id === initialInquiryData.customerId)) {
+      if (initialInquiryData?.customerId && !fetchedCustomers.find((c) => c._id === initialInquiryData.customerId)) {
         fetchedCustomers.unshift({
-          id: initialInquiryData.customerId,
-          name: initialInquiryData.customerName,
+          _id: initialInquiryData.customerId,
+          name: initialInquiryData.customerName || initialInquiryData.customerId,
           defaultCurrency: 'USD',
         });
       }
@@ -217,41 +435,187 @@ const QuotationFormInner = (props: InnerProps) => {
     if (productsRes?.data) {
       setProducts(productsRes.data.results || []);
     }
+  }, [session, initialInquiryData]);
 
-    const nextRates: Record<string, number> = {};
-    if (curRes?.data) {
-      for (const c of curRes.data) {
-        const code = c?.code;
-        if (!code) continue;
-        const list = Array.isArray(c.exchangeRates) ? c.exchangeRates : [];
-        const normalized = (r: any) => (r?.rateType || 'TRANSFER') as string;
-        const latest =
-          list.find((r: any) => r?.isActive && normalized(r) === 'TRANSFER')?.rate ??
-          list.find((r: any) => normalized(r) === 'TRANSFER')?.rate;
-        if (latest) nextRates[code] = Number(latest);
+  const setRowResolving = useCallback((rowIndex: number, isResolving: boolean) => {
+    setResolvingPriceRows((prev) => {
+      const next = new Set(prev);
+      if (isResolving) {
+        next.add(rowIndex);
+      } else {
+        next.delete(rowIndex);
+      }
+      return next;
+    });
+  }, []);
+
+  const clearRowPriceState = useCallback((rowIndex: number) => {
+    setPriceLineStates((prev) => {
+      const next = { ...prev };
+      delete next[rowIndex];
+      return next;
+    });
+  }, []);
+
+  const clearAllPriceTimers = useCallback(() => {
+    Object.values(priceResolveTimersRef.current).forEach((timer) => clearTimeout(timer));
+    priceResolveTimersRef.current = {};
+  }, []);
+
+  useEffect(() => () => clearAllPriceTimers(), [clearAllPriceTimers]);
+
+  const resolveLinePrice = useCallback(async (
+    rowIndex: number,
+    linePatch: Partial<QuotationFormLine> = {},
+  ) => {
+    if (manualPriceRows.has(rowIndex)) return;
+
+    const accessToken = getAccessToken(session);
+    const values = form.getFieldsValue(true) as QuotationFormValues;
+    const items = Array.isArray(values.items) ? values.items : [];
+    const currentLine: QuotationFormLine = {
+      ...(items[rowIndex] || {}),
+      ...linePatch,
+    };
+    const quantity = Number(currentLine.quantity || 0);
+    const incoterm = isIncotermKey(values.incoterm) ? values.incoterm : undefined;
+    const currency = values.currency || 'USD';
+
+    if (!accessToken || !values.customerId || !currentLine.productId || !incoterm || quantity <= 0) {
+      return;
+    }
+
+    const nextSequence = (priceResolveSequenceRef.current[rowIndex] || 0) + 1;
+    priceResolveSequenceRef.current[rowIndex] = nextSequence;
+    setRowResolving(rowIndex, true);
+
+    try {
+      const res = await sendRequest<IBackendRes<ResolvePriceResult>>({
+        url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/pricing-policies/resolve`,
+        method: 'GET',
+        queryParams: {
+          productId: currentLine.productId,
+          buyerId: values.customerId,
+          quantity,
+          incoterm,
+          currency,
+          origin_port_id: values.portOfLoading_port_id || undefined,
+          destination_port_id: values.portOfDischarge_port_id || undefined,
+          priceDate: values.issueDate?.format('YYYY-MM-DD'),
+        },
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+
+      if (priceResolveSequenceRef.current[rowIndex] !== nextSequence) return;
+
+      const latestItems = [...((form.getFieldValue('items') || []) as QuotationFormLine[])];
+      if (!latestItems[rowIndex]) return;
+
+      if (res?.data) {
+        const resolvedPrice = res.data;
+        latestItems[rowIndex] = {
+          ...latestItems[rowIndex],
+          ...currentLine,
+          quantity,
+          unitPrice: Number(resolvedPrice.unitPrice || 0),
+        };
+        form.setFieldsValue({ items: latestItems });
+        setPriceLineStates((prev) => ({
+          ...prev,
+          [rowIndex]: {
+            source: resolvedPrice.source,
+            pricingPolicyId: resolvedPrice.pricingPolicyId,
+            priceBreakdown: resolvedPrice.priceBreakdown,
+          },
+        }));
+        return;
+      }
+
+      latestItems[rowIndex] = {
+        ...latestItems[rowIndex],
+        ...currentLine,
+        quantity,
+        unitPrice: 0,
+      };
+      form.setFieldsValue({ items: latestItems });
+      setPriceLineStates((prev) => ({
+        ...prev,
+        [rowIndex]: {
+          source: 'UNRESOLVED',
+          message: res?.message || tQ('create.pricing.unresolvedHint'),
+        },
+      }));
+    } catch (error) {
+      if (priceResolveSequenceRef.current[rowIndex] !== nextSequence) return;
+      const message = error instanceof Error ? error.message : tQ('create.pricing.unresolvedHint');
+      setPriceLineStates((prev) => ({
+        ...prev,
+        [rowIndex]: {
+          source: 'UNRESOLVED',
+          message,
+        },
+      }));
+    } finally {
+      if (priceResolveSequenceRef.current[rowIndex] === nextSequence) {
+        setRowResolving(rowIndex, false);
       }
     }
-    setCurrencyRates(nextRates);
-  }, [session, initialInquiryData]);
+  }, [form, manualPriceRows, session, setRowResolving, tQ]);
+
+  const scheduleResolveLinePrice = useCallback((
+    rowIndex: number,
+    linePatch: Partial<QuotationFormLine> = {},
+  ) => {
+    const currentTimer = priceResolveTimersRef.current[rowIndex];
+    if (currentTimer) clearTimeout(currentTimer);
+    priceResolveTimersRef.current[rowIndex] = setTimeout(() => {
+      void resolveLinePrice(rowIndex, linePatch);
+    }, 250);
+  }, [resolveLinePrice]);
+
+  const resolveAllAutoLines = useCallback(() => {
+    const items = (form.getFieldValue('items') || []) as QuotationFormLine[];
+    items.forEach((line, rowIndex) => {
+      if (manualPriceRows.has(rowIndex)) return;
+      if (!line?.productId || Number(line.quantity || 0) <= 0) return;
+      scheduleResolveLinePrice(rowIndex);
+    });
+  }, [form, manualPriceRows, scheduleResolveLinePrice]);
+
+  useEffect(() => {
+    resolveAllAutoLines();
+  }, [
+    watchedCustomerId,
+    watchedIncoterm,
+    watchedCurrency,
+    watchedIssueDate,
+    watchedPortOfLoading_port_id,
+    watchedPortOfDischarge_port_id,
+    resolveAllAutoLines,
+  ]);
 
   useEffect(() => {
     fetchDropdowns();
     if (editData) {
+      const editableData = editData as EditableQuotation;
+      const existingItems = (editData.items || []) as EditableQuotationLine[];
       form.setFieldsValue({
         customerId: editData.customer?._id,
         incoterm: editData.incoterm,
         currency: editData.currency,
         portOfLoading: editData.portOfLoading,
+        portOfLoading_port_id: editData.portOfLoading_port_id || undefined,
         portOfDischarge: editData.portOfDischarge,
+        portOfDischarge_port_id: editData.portOfDischarge_port_id || undefined,
         paymentTerms: editData.paymentTerms ? editData.paymentTerms.split(', ') : [],
         note: editData.note,
-        issueDate: (editData as any).issueDate ? dayjs((editData as any).issueDate) : dayjs(),
+        issueDate: editableData.issueDate ? dayjs(editableData.issueDate) : dayjs(),
         expiryDate: editData.expiryDate ? dayjs(editData.expiryDate) : null,
-        items: (editData.items || []).map((l: any) => ({
-          productId: l.product?._id || l.productId,
-          quantity: l.quantity,
-          unit: l.unit,
-          unitPrice: l.unitPrice,
+        items: existingItems.map((line) => ({
+          productId: line.product?._id || line.productId,
+          quantity: line.quantity,
+          unit: line.unit,
+          unitPrice: line.unitPrice,
         })),
         logisticsFee: editData.logisticsFee || 0,
         otherFee: editData.otherFee || 0,
@@ -261,6 +625,11 @@ const QuotationFormInner = (props: InnerProps) => {
         insuranceCost: editData.insuranceCost || 0,
         bankInfo: editData.bankInfo,
       });
+      setManualPriceRows(new Set(existingItems.map((_, rowIndex) => rowIndex)));
+      setPriceLineStates(existingItems.reduce<Record<number, PriceLineState>>((acc, _, rowIndex) => {
+        acc[rowIndex] = { source: 'MANUAL' };
+        return acc;
+      }, {}));
     } else if (initialInquiryData) {
       // TECH LEAD: Auto-fill from Inquiry (I2Q Workflow)
       form.setFieldsValue({
@@ -278,10 +647,12 @@ const QuotationFormInner = (props: InnerProps) => {
           productId: initialInquiryData.productId,
           quantity: initialInquiryData.quantity,
           unit: initialInquiryData.product?.unitOfMeasure || 'CARTONS',
-          unitPrice: initialInquiryData.product?.defaultExportPrice || 0,
+          unitPrice: 0,
         }],
         note: `Được tạo từ Yêu cầu báo giá của: ${initialInquiryData.customerName}\n${initialInquiryData.note || ''}`,
       });
+      setManualPriceRows(new Set());
+      setPriceLineStates({});
     } else {
       form.setFieldsValue({ 
         currency: 'USD', 
@@ -295,12 +666,14 @@ const QuotationFormInner = (props: InnerProps) => {
         issueDate: dayjs(),
         items: [{ quantity: 1, unit: 'CARTONS', unitPrice: 0 }] 
       });
+      setManualPriceRows(new Set());
+      setPriceLineStates({});
 
       // Fetch default bank info for new quotation
       const fetchDefaultBank = async () => {
         const accessToken = getAccessToken(session);
         if (accessToken) {
-           const bankSetting = await sendRequest<IBackendRes<any>>({
+           const bankSetting = await sendRequest<IBackendRes<CompanyBankInfoSetting>>({
               url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/settings/COMPANY_BANK_INFO`,
               method: 'GET',
               headers: { Authorization: `Bearer ${accessToken}` },
@@ -320,30 +693,63 @@ const QuotationFormInner = (props: InnerProps) => {
       form.setFieldsValue({
         currency: customer.defaultCurrency || 'USD',
         paymentTerms: customer.defaultPaymentTerm ? [customer.defaultPaymentTerm] : [],
+        portOfDischarge: undefined,
+        portOfDischarge_port_id: undefined,
       });
     }
   };
 
   const handleProductChange = (productId: string, index: number) => {
     const product = products.find(p => p._id === productId);
-    const currency = form.getFieldValue('currency') || 'USD';
     
     if (product) {
-      let price = product.defaultExportPrice || 0;
-      
-      // Auto convert if current currency is VND and price is USD
-      if (currency === 'VND' && currencyRates['USD']) {
-        price = Math.round(price * currencyRates['USD']);
-      }
-
-      const currentItems = form.getFieldValue('items');
+      const currentItems = [...((form.getFieldValue('items') || []) as QuotationFormLine[])];
       currentItems[index] = {
         ...currentItems[index],
+        productId,
         unit: product.unitOfMeasure || 'CARTONS',
-        unitPrice: price,
+        unitPrice: 0,
       };
       form.setFieldsValue({ items: currentItems });
+      setManualPriceRows((prev) => {
+        const next = new Set(prev);
+        next.delete(index);
+        return next;
+      });
+      clearRowPriceState(index);
+      scheduleResolveLinePrice(index, currentItems[index]);
     }
+  };
+
+  const handleQuantityChange = (index: number, value: number | null) => {
+    if (manualPriceRows.has(index)) return;
+    scheduleResolveLinePrice(index, { quantity: Number(value || 0) });
+  };
+
+  const handleUnitPriceChange = (index: number, value: number | null) => {
+    priceResolveSequenceRef.current[index] = (priceResolveSequenceRef.current[index] || 0) + 1;
+    const nextPrice = Number(value || 0);
+    if (nextPrice > 0) {
+      setManualPriceRows((prev) => {
+        const next = new Set(prev);
+        next.add(index);
+        return next;
+      });
+      setPriceLineStates((prev) => ({
+        ...prev,
+        [index]: { source: 'MANUAL' },
+      }));
+      setRowResolving(index, false);
+      return;
+    }
+
+    setManualPriceRows((prev) => {
+      const next = new Set(prev);
+      next.delete(index);
+      return next;
+    });
+    clearRowPriceState(index);
+    scheduleResolveLinePrice(index, { unitPrice: 0 });
   };
 
   const watchedLogisticsFee = Form.useWatch('logisticsFee', form) || 0;
@@ -352,10 +758,41 @@ const QuotationFormInner = (props: InnerProps) => {
   const watchedPortCharges = Form.useWatch('portCharges', form) || 0;
   const watchedSeaFreight = Form.useWatch('seaFreight', form) || 0;
   const watchedInsurance = Form.useWatch('insuranceCost', form) || 0;
+  const includedLogisticsFields = useMemo(() => (
+    getIncludedLogisticsFields(priceLineStates, isIncotermKey(watchedIncoterm) ? watchedIncoterm : undefined)
+  ), [priceLineStates, watchedIncoterm]);
+  const includedLogisticsLabels = useMemo(() => {
+    const labelByField: Record<LogisticsFeeField, string> = {
+      seaFreight: tQ('create.logistics.seaFreight'),
+      insuranceCost: tQ('create.logistics.insurance'),
+      domesticTransportCost: tQ('create.logistics.domestic'),
+      portCharges: tQ('create.logistics.portCharges'),
+    };
+
+    return Array.from(includedLogisticsFields).map((field) => labelByField[field]);
+  }, [includedLogisticsFields, tQ]);
+
+  useEffect(() => {
+    const currentValues = form.getFieldsValue(true) as QuotationFormValues;
+    const normalizedValues = normalizeQuotationLogisticsFees(currentValues, includedLogisticsFields);
+    const resetPatch: Partial<Pick<QuotationFormValues, LogisticsFeeField>> = {};
+    let shouldReset = false;
+
+    includedLogisticsFields.forEach((field) => {
+      if (Number(currentValues[field] || 0) !== Number(normalizedValues[field] || 0)) {
+        resetPatch[field] = normalizedValues[field];
+        shouldReset = true;
+      }
+    });
+
+    if (shouldReset) {
+      form.setFieldsValue(resetPatch);
+    }
+  }, [form, includedLogisticsFields]);
 
   const grandTotal = useMemo(() => {
     if (!watchedItems) return 0;
-    const itemsTotal = watchedItems.reduce((acc: number, curr: any) => {
+    const itemsTotal = (watchedItems as QuotationFormLine[]).reduce((acc: number, curr) => {
       const q = curr?.quantity || 0;
       const p = curr?.unitPrice || 0;
       return acc + (q * p);
@@ -369,57 +806,30 @@ const QuotationFormInner = (props: InnerProps) => {
            (watchedInsurance || 0);
   }, [watchedItems, watchedLogisticsFee, watchedOtherFee, watchedDomesticTransport, watchedPortCharges, watchedSeaFreight, watchedInsurance]);
 
-  const onFinish = async (values: any) => {
+  const onFinish = async (values: QuotationFormValues) => {
     if (!values.items || values.items.length === 0) {
       notification.warning({ title: tQ('create.notifications.atLeastOneItem') });
       return;
     }
-
-    const incoterm = values.incoterm as IncotermKey;
-    const seaFreight = Number(values.seaFreight || 0);
-    const insurance = Number(values.insuranceCost || 0);
-
-    // TECH LEAD VALIDATION: Incoterm-Specific Fee Guardrail
-    if (incoterm === 'CIF') {
-      if (seaFreight <= 0 || insurance <= 0) {
-        notification.error({ title: tQ('create.notifications.cifError'), description: tQ('create.notifications.cifDetail') });
-        return;
-      }
-    } else if (incoterm === 'CFR') {
-      if (seaFreight <= 0) {
-        notification.error({ title: tQ('create.notifications.cfrError'), description: tQ('create.notifications.cfrDetail') });
-        return;
-      }
-    } else if (['DDP', 'DAP'].includes(incoterm)) {
-      const domestic = Number(values.domesticTransportCost || 0);
-      if (seaFreight <= 0 || domestic <= 0) {
-        notification.error({ title: tQ('create.notifications.doorError', { incoterm }), description: tQ('create.notifications.doorDetail', { incoterm }) });
-        return;
-      }
-    } else if (SELLER_LED_INCOTERMS.includes(incoterm)) {
-      // Các trường hợp Seller-led khác (như CIP, CPT) ít nhất phải có cước vận chuyển
-      if (seaFreight <= 0) {
-        notification.error({ title: tQ('create.notifications.error'), description: tQ('create.notifications.cfrDetail') });
-        return;
-      }
-    }
+    clearAllPriceTimers();
 
     setSubmitting(true);
     const accessToken = getAccessToken(session);
 
+    const normalizedValues = normalizeQuotationLogisticsFees(values, includedLogisticsFields);
     const payload = {
-      ...values,
-      issueDate: values.issueDate ? values.issueDate.format('YYYY-MM-DD') : undefined,
-      expiryDate: values.expiryDate ? values.expiryDate.format('YYYY-MM-DD') : undefined,
-      paymentTerms: Array.isArray(values.paymentTerms) ? values.paymentTerms.join(', ') : values.paymentTerms,
-      items: values.items.map((l: any) => ({
-        ...l,
-        quantity: Number(l.quantity),
-        unitPrice: Number(l.unitPrice),
+      ...normalizedValues,
+      issueDate: normalizedValues.issueDate ? normalizedValues.issueDate.format('YYYY-MM-DD') : undefined,
+      expiryDate: normalizedValues.expiryDate ? normalizedValues.expiryDate.format('YYYY-MM-DD') : undefined,
+      paymentTerms: Array.isArray(normalizedValues.paymentTerms) ? normalizedValues.paymentTerms.join(', ') : normalizedValues.paymentTerms,
+      items: values.items.map((line, rowIndex) => ({
+        ...line,
+        quantity: Number(line.quantity),
+        unitPrice: manualPriceRows.has(rowIndex) ? Number(line.unitPrice) : 0,
       })),
     };
 
-    const res = await sendRequest<IBackendRes<any>>({
+    const res = await sendRequest<IBackendRes<QuotationMutationResult>>({
       url: isEditMode
         ? `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/quotations/${editData._id}`
         : `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/quotations`,
@@ -459,6 +869,88 @@ const QuotationFormInner = (props: InnerProps) => {
   const { token } = theme.useToken();
   const { isDark } = useTheme();
 
+  const getPriceSourceLabel = (source: PriceStateSource) => {
+    switch (source) {
+      case 'PRICING_POLICY':
+        return tQ('create.pricing.sourcePolicy');
+      case 'PRICING_POLICY_DERIVED':
+        return tQ('create.pricing.sourceDerived');
+      case 'PRODUCT_DEFAULT':
+        return tQ('create.pricing.sourceProductDefault');
+      case 'MANUAL':
+        return tQ('create.pricing.sourceManual');
+      case 'UNRESOLVED':
+        return tQ('create.pricing.sourceUnresolved');
+      default:
+        return source;
+    }
+  };
+
+  const getPriceSourceColor = (source: PriceStateSource) => {
+    switch (source) {
+      case 'PRICING_POLICY':
+        return 'green';
+      case 'PRICING_POLICY_DERIVED':
+        return 'gold';
+      case 'PRODUCT_DEFAULT':
+        return 'orange';
+      case 'UNRESOLVED':
+        return 'red';
+      case 'MANUAL':
+      default:
+        return 'blue';
+    }
+  };
+
+  const getIncludedCostLabels = (breakdown: PriceBreakdown): string[] => {
+    const costs = [
+      { label: tQ('create.pricing.costInland'), value: breakdown.inlandCostPerUnit },
+      { label: tQ('create.pricing.costPort'), value: breakdown.portChargePerUnit },
+      { label: tQ('create.pricing.costFreight'), value: breakdown.freightCostPerUnit },
+      { label: tQ('create.pricing.costInsurance'), value: breakdown.insuranceCostPerUnit },
+      { label: tQ('create.pricing.costDestination'), value: breakdown.destinationDeliveryCostPerUnit },
+      { label: tQ('create.pricing.costCustoms'), value: breakdown.customsCostPerUnit },
+    ];
+
+    return costs
+      .filter((cost) => Number(cost.value || 0) > 0)
+      .map((cost) => cost.label);
+  };
+
+  const renderPriceSourceMeta = (rowIndex: number) => {
+    if (resolvingPriceRows.has(rowIndex)) {
+      return <Tag color="processing">{tQ('create.pricing.resolving')}</Tag>;
+    }
+
+    const state = priceLineStates[rowIndex] ?? (manualPriceRows.has(rowIndex) ? { source: 'MANUAL' as const } : undefined);
+    if (!state) return null;
+    const includedCosts = state.priceBreakdown ? getIncludedCostLabels(state.priceBreakdown) : [];
+
+    return (
+      <Space orientation="vertical" size={2} style={{ width: '100%' }}>
+        <Tag color={getPriceSourceColor(state.source)} style={{ width: 'fit-content', marginInlineEnd: 0 }}>
+          {getPriceSourceLabel(state.source)}
+        </Tag>
+        {state.source === 'PRICING_POLICY_DERIVED' && state.priceBreakdown && includedCosts.length > 0 && (
+          <Text type="secondary" style={{ fontSize: 11, lineHeight: 1.45 }}>
+            {state.priceBreakdown.baseIncoterm} -&gt; {state.priceBreakdown.targetIncoterm}.{' '}
+            {tQ('create.pricing.includedCosts', { items: includedCosts.join(', ') })}
+          </Text>
+        )}
+        {state.source === 'PRODUCT_DEFAULT' && (
+          <Text type="secondary" style={{ fontSize: 11 }}>
+            {tQ('create.pricing.productDefaultHint')}
+          </Text>
+        )}
+        {state.source === 'UNRESOLVED' && (
+          <Text type="danger" style={{ fontSize: 11 }}>
+            {state.message || tQ('create.pricing.unresolvedHint')}
+          </Text>
+        )}
+      </Space>
+    );
+  };
+
   return (
       <Form form={form} onFinish={onFinish} layout="vertical">
         {/* --- PHẦN 1: THÔNG TIN CHUNG --- */}
@@ -489,7 +981,7 @@ const QuotationFormInner = (props: InnerProps) => {
               rules={[{ required: true }]}
               extra={
                 <Text type="secondary" style={{ fontSize: 11 }}>
-                  {watchedIncoterm && (SELLER_LED_INCOTERMS.includes(watchedIncoterm as any) 
+                  {watchedIncoterm && (isSellerLedIncoterm(watchedIncoterm)
                     ? tQ('create.form.incotermHintSeller') 
                     : tQ('create.form.incotermHintBuyer'))}
                 </Text>
@@ -517,13 +1009,38 @@ const QuotationFormInner = (props: InnerProps) => {
 
         <Row gutter={16}>
           <Col span={6}>
-            <Form.Item label={tQ('create.form.pol')} name="portOfLoading">
-              <Input placeholder={tQ('create.form.polPlaceholder')} />
+            <Form.Item name="portOfLoading" hidden>
+              <Input />
+            </Form.Item>
+            <Form.Item label={tQ('create.form.pol')} name="portOfLoading_port_id">
+              <PortSelect
+                placeholder={tQ('create.form.polPlaceholder')}
+                legacyText={watchedPortOfLoading}
+                afterChange={(value) => {
+                  form.setFieldsValue({
+                    portOfLoading_port_id: value ?? null,
+                    portOfLoading: null,
+                  });
+                }}
+              />
             </Form.Item>
           </Col>
           <Col span={6}>
-            <Form.Item label={tQ('create.form.pod')} name="portOfDischarge">
-              <Input placeholder={tQ('create.form.podPlaceholder')} />
+            <Form.Item name="portOfDischarge" hidden>
+              <Input />
+            </Form.Item>
+            <Form.Item label={tQ('create.form.pod')} name="portOfDischarge_port_id">
+              <PortSelect
+                placeholder={tQ('create.form.podPlaceholder')}
+                countryCode={selectedCustomerCountryCode}
+                legacyText={watchedPortOfDischarge}
+                afterChange={(value) => {
+                  form.setFieldsValue({
+                    portOfDischarge_port_id: value ?? null,
+                    portOfDischarge: null,
+                  });
+                }}
+              />
             </Form.Item>
           </Col>
           <Col span={12}>
@@ -595,7 +1112,11 @@ const QuotationFormInner = (props: InnerProps) => {
                           rules={[{ required: true }]}
                           noStyle
                         >
-                          <InputNumber min={0.01} style={{ width: '100%' }} />
+                          <InputNumber<number>
+                            min={0.01}
+                            style={{ width: '100%' }}
+                            onChange={(value) => handleQuantityChange(name, value)}
+                          />
                         </Form.Item>
                       ),
                     },
@@ -623,20 +1144,25 @@ const QuotationFormInner = (props: InnerProps) => {
                       dataIndex: 'unitPrice',
                       width: 150,
                       render: (_, { key, name, ...restField }) => (
-                        <Form.Item
-                          {...restField}
-                          key={key}
-                          name={[name, 'unitPrice']}
-                          rules={[{ required: true }]}
-                          noStyle
-                        >
-                          <InputNumber
-                            min={0}
-                            style={{ width: '100%' }}
-                            formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                            parser={v => Number(v!.replace(/\$\s?|(,*)/g, '')) as any}
-                          />
-                        </Form.Item>
+                        <Space orientation="vertical" size={4} style={{ width: '100%' }}>
+                          <Form.Item
+                            {...restField}
+                            key={key}
+                            name={[name, 'unitPrice']}
+                            rules={[{ required: true }]}
+                            noStyle
+                          >
+                            <InputNumber<number>
+                              min={0}
+                              style={{ width: '100%' }}
+                              disabled={resolvingPriceRows.has(name)}
+                              formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                              parser={value => Number((value || '').replace(/\$\s?|(,*)/g, ''))}
+                              onChange={(value) => handleUnitPriceChange(name, value)}
+                            />
+                          </Form.Item>
+                          {renderPriceSourceMeta(name)}
+                        </Space>
                       ),
                     },
                     {
@@ -662,7 +1188,17 @@ const QuotationFormInner = (props: InnerProps) => {
                           type="text"
                           danger
                           icon={<DeleteOutlined />}
-                          onClick={() => remove(name)}
+                          onClick={() => {
+                            clearAllPriceTimers();
+                            Object.keys(priceResolveSequenceRef.current).forEach((rawIndex) => {
+                              const rowIndex = Number(rawIndex);
+                              priceResolveSequenceRef.current[rowIndex] = (priceResolveSequenceRef.current[rowIndex] || 0) + 1;
+                            });
+                            setManualPriceRows((prev) => shiftIndexSetAfterRemove(prev, name));
+                            setResolvingPriceRows((prev) => shiftIndexSetAfterRemove(prev, name));
+                            setPriceLineStates((prev) => shiftPriceStatesAfterRemove(prev, name));
+                            remove(name);
+                          }}
                         />
                       ),
                     },
@@ -671,7 +1207,7 @@ const QuotationFormInner = (props: InnerProps) => {
               </div>
               <Button
                 type="dashed"
-                onClick={() => add({ quantity: 1, unit: 'CTN', unitPrice: 0 })}
+                onClick={() => add({ quantity: 1, unit: 'CARTONS', unitPrice: 0 })}
                 block
                 icon={<PlusOutlined />}
               >
@@ -716,12 +1252,20 @@ const QuotationFormInner = (props: InnerProps) => {
                   <Title level={5} style={{ margin: 0, color: token.colorTextHeading, fontSize: 15 }}>
                     <DashboardOutlined /> {tQ('create.sections.logistics')}
                   </Title>
-                  {watchedIncoterm && !SELLER_LED_INCOTERMS.includes(watchedIncoterm as any) && (
+                  {watchedIncoterm && !isSellerLedIncoterm(watchedIncoterm) && (
                     <Tag color="blue" style={{ borderRadius: 4, margin: 0 }}>
                       {tQ('create.logistics.buyerCollect')}
                     </Tag>
                   )}
+                  <Tag style={{ borderRadius: 4, margin: 0 }}>
+                    {tQ('create.logistics.optional')}
+                  </Tag>
                 </div>
+                {includedLogisticsLabels.length > 0 && (
+                  <Text type="secondary" style={{ display: 'block', fontSize: 12, lineHeight: 1.45, marginBottom: 12 }}>
+                    {tQ('create.logistics.includedLocked', { items: includedLogisticsLabels.join(', ') })}
+                  </Text>
+                )}
                 
                 <Row justify="space-between" align="middle" style={{ marginBottom: 12 }}>
                   <Space>
@@ -731,23 +1275,14 @@ const QuotationFormInner = (props: InnerProps) => {
                   <Form.Item 
                     name="seaFreight" 
                     noStyle
-                    rules={[{ 
-                      validator: (_, value) => {
-                        if (SELLER_LED_INCOTERMS.includes(watchedIncoterm as any) && (!value || value <= 0)) {
-                          return Promise.reject(tQ('create.logistics.required'));
-                        }
-                        return Promise.resolve();
-                      }
-                    }]}
                   >
-                    <InputNumber 
+                    <InputNumber<number>
                       size="small" 
                       min={0} 
-                      disabled={!SELLER_LED_INCOTERMS.includes(watchedIncoterm as any)}
-                      status={SELLER_LED_INCOTERMS.includes(watchedIncoterm as any) && (!watchedSeaFreight || watchedSeaFreight <= 0) ? 'error' : ''}
+                      disabled={!isSellerLedIncoterm(watchedIncoterm) || includedLogisticsFields.has('seaFreight')}
                       style={{ width: 130, borderRadius: 6, fontWeight: 'bold' }} 
                       formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                      parser={v => Number(v!.replace(/\$\s?|(,*)/g, '')) as any}
+                      parser={v => Number((v || '').replace(/\$\s?|(,*)/g, ''))}
                     />
                   </Form.Item>
                 </Row>
@@ -760,23 +1295,14 @@ const QuotationFormInner = (props: InnerProps) => {
                   <Form.Item 
                     name="insuranceCost" 
                     noStyle
-                    rules={[{ 
-                      validator: (_, value) => {
-                        if (watchedIncoterm === 'CIF' && (!value || value <= 0)) {
-                          return Promise.reject(tQ('create.logistics.required'));
-                        }
-                        return Promise.resolve();
-                      }
-                    }]}
                   >
-                    <InputNumber 
+                    <InputNumber<number>
                       size="small" 
                       min={0} 
-                      disabled={watchedIncoterm !== 'CIF'}
-                      status={watchedIncoterm === 'CIF' && (!watchedInsurance || watchedInsurance <= 0) ? 'error' : ''}
+                      disabled={watchedIncoterm !== 'CIF' || includedLogisticsFields.has('insuranceCost')}
                       style={{ width: 130, borderRadius: 6, fontWeight: 'bold' }} 
                       formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                      parser={v => Number(v!.replace(/\$\s?|(,*)/g, '')) as any}
+                      parser={v => Number((v || '').replace(/\$\s?|(,*)/g, ''))}
                     />
                   </Form.Item>
                 </Row>
@@ -789,23 +1315,14 @@ const QuotationFormInner = (props: InnerProps) => {
                   <Form.Item 
                     name="domesticTransportCost" 
                     noStyle
-                    rules={[{ 
-                      validator: (_, value) => {
-                        if (['DDP', 'DAP'].includes(watchedIncoterm as any) && (!value || value <= 0)) {
-                          return Promise.reject('Bắt buộc!');
-                        }
-                        return Promise.resolve();
-                      }
-                    }]}
                   >
-                    <InputNumber 
+                    <InputNumber<number>
                       size="small" 
                       min={0} 
-                      disabled={!SELLER_LED_INCOTERMS.includes(watchedIncoterm as any)}
-                      status={['DDP', 'DAP'].includes(watchedIncoterm as any) && (!watchedDomesticTransport || watchedDomesticTransport <= 0) ? 'error' : ''}
+                      disabled={!isSellerLedIncoterm(watchedIncoterm) || includedLogisticsFields.has('domesticTransportCost')}
                       style={{ width: 130, borderRadius: 6, fontWeight: 'bold' }} 
                       formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                      parser={v => Number(v!.replace(/\$\s?|(,*)/g, '')) as any}
+                      parser={v => Number((v || '').replace(/\$\s?|(,*)/g, ''))}
                     />
                   </Form.Item>
                 </Row>
@@ -816,13 +1333,13 @@ const QuotationFormInner = (props: InnerProps) => {
                     <Text style={{ fontSize: 13, color: token.colorTextDescription }}>Phí cảng (Port Charges):</Text>
                   </Space>
                   <Form.Item name="portCharges" noStyle>
-                    <InputNumber 
+                    <InputNumber<number>
                       size="small" 
                       min={0} 
-                      disabled={!SELLER_LED_INCOTERMS.includes(watchedIncoterm as any)}
+                      disabled={!isSellerLedIncoterm(watchedIncoterm) || includedLogisticsFields.has('portCharges')}
                       style={{ width: 130, borderRadius: 6, fontWeight: 'bold' }} 
                       formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                      parser={v => Number(v!.replace(/\$\s?|(,*)/g, '')) as any}
+                      parser={v => Number((v || '').replace(/\$\s?|(,*)/g, ''))}
                     />
                   </Form.Item>
                 </Row>
@@ -833,12 +1350,12 @@ const QuotationFormInner = (props: InnerProps) => {
                     <Text style={{ fontSize: 13, color: token.colorTextDescription }}>Phí khác (Other):</Text>
                   </Space>
                   <Form.Item name="otherFee" noStyle>
-                    <InputNumber 
+                    <InputNumber<number>
                       size="small" 
                       min={0} 
                       style={{ width: 130, borderRadius: 6, fontWeight: 'bold' }} 
                       formatter={v => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                      parser={v => Number(v!.replace(/\$\s?|(,*)/g, '')) as any}
+                      parser={v => Number((v || '').replace(/\$\s?|(,*)/g, ''))}
                     />
                   </Form.Item>
                 </Row>

@@ -1,4 +1,13 @@
-import { BeforeInsert, Entity, Column, PrimaryColumn, CreateDateColumn, ManyToOne, JoinColumn, Index } from 'typeorm';
+import {
+  BeforeInsert,
+  Entity,
+  Column,
+  PrimaryColumn,
+  CreateDateColumn,
+  ManyToOne,
+  JoinColumn,
+  Index,
+} from 'typeorm';
 import { Product } from '../../products/entities/product.entity';
 import { ColumnNumericTransformer } from '@/helpers/typeorm.util';
 import { createEntityId } from '@/common/ids/entity-id.util';
@@ -10,7 +19,7 @@ export enum InventoryTransactionType {
   RETURN = 'RETURN',
   REJECTION = 'REJECTION',
   RESERVE = 'RESERVE',
-  RELEASE = 'RELEASE'
+  RELEASE = 'RELEASE',
 }
 
 @Entity('inventory_ledger')
@@ -40,13 +49,29 @@ export class InventoryLedger {
   transactionType: InventoryTransactionType;
 
   // Positive for in, Negative for out
-  @Column({ type: 'numeric', precision: 12, scale: 2, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 12,
+    scale: 2,
+    transformer: new ColumnNumericTransformer(),
+  })
   quantityChange: number;
 
-  @Column({ type: 'numeric', precision: 12, scale: 2, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 12,
+    scale: 2,
+    transformer: new ColumnNumericTransformer(),
+  })
   balanceAfter: number;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   unitPrice: number;
 
   @Column()
@@ -65,7 +90,13 @@ export class InventoryLedger {
   @Column({ type: 'text', nullable: true })
   notes: string;
 
-  @Column({ type: 'numeric', precision: 12, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 12,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   remainingQuantity: number;
 
   @Column({ nullable: true })

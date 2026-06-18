@@ -28,7 +28,8 @@ import {
 import { PageHeader } from '@/components/ui/PageHeader';
 import { useEffect, useRef, useState } from 'react';
 import { useSession } from 'next-auth/react';
-import { sendRequest } from '@/lib/api-client';
+import { useSearchParams } from 'next/navigation';
+import { backendFetch, sendRequest } from '@/lib/api-client';
 import { useReactToPrint } from 'react-to-print';
 import ShipmentDocCenter from '../shipment/shipment.doc-center';
 import { getAccessToken } from '@/lib/auth-token';
@@ -53,6 +54,15 @@ const DocumentsPage = () => {
   const [selected, setSelected] = useState<any>(null);
   const [docCenterOpen, setDocCenterOpen] = useState(false);
   const [selectedShipmentId, setSelectedShipmentId] = useState<string | null>(null);
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const id = searchParams.get('id');
+    if (id) {
+      setSelectedShipmentId(id);
+      setDocCenterOpen(true);
+    }
+  }, [searchParams]);
 
   const printCIRef = useRef<HTMLDivElement>(null);
   const printPLRef = useRef<HTMLDivElement>(null);
@@ -73,7 +83,7 @@ const DocumentsPage = () => {
     notification.info({ title: 'Đang tạo bản PDF chính thức...' });
     
     try {
-      const response = await fetch(
+      const response = await backendFetch(
         `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/export-documents/download/${selected._id}/${type}`,
         {
           headers: { Authorization: `Bearer ${accessToken}` },

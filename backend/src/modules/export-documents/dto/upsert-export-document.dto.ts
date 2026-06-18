@@ -1,6 +1,17 @@
-import { IsBoolean, IsDateString, IsEnum, IsNumber, IsObject, IsOptional, IsString } from 'class-validator';
+import {
+  IsBoolean,
+  IsDateString,
+  IsEnum,
+  IsNumber,
+  IsObject,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 import { IsEntityId } from '@/common/ids/entity-id.validator';
-import { DocumentChecklistStatus, DocumentType } from '../entities/export-document.entity';
+import {
+  DocumentChecklistStatus,
+  DocumentType,
+} from '../entities/export-document.entity';
 
 export class UpsertExportDocumentDto {
   @IsEntityId()

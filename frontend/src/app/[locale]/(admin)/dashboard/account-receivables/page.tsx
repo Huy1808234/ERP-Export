@@ -2,11 +2,11 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  App,
   Badge,
   Button,
   Card,
   Col,
+  Empty,
   Input,
   Progress,
   Row,
@@ -18,14 +18,16 @@ import {
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import {
-  CloudSyncOutlined,
   DollarOutlined,
+  FileTextOutlined,
   ReloadOutlined,
   SearchOutlined,
   WalletOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import AdminPageScroll from '@/components/layout/admin.page-scroll';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { sendRequest } from '@/lib/api-client';
@@ -92,25 +94,26 @@ interface IDso {
   dso: number;
 }
 
-const statusMeta: Record<ARStatus, { label: string; color: string; badge: 'default' | 'processing' | 'success' | 'warning' | 'error' }> = {
-  UNPAID: { label: 'Chưa thu', color: 'orange', badge: 'warning' },
-  PARTIAL: { label: 'Thu một phần', color: 'blue', badge: 'processing' },
-  PAID: { label: 'Đã thu đủ', color: 'green', badge: 'success' },
-  OVERDUE: { label: 'Quá hạn', color: 'red', badge: 'error' },
-  CANCELLED: { label: 'Đã hủy', color: 'default', badge: 'default' },
+const statusMeta: Record<ARStatus, { badge: 'default' | 'processing' | 'success' | 'warning' | 'error' }> = {
+  UNPAID: { badge: 'warning' },
+  PARTIAL: { badge: 'processing' },
+  PAID: { badge: 'success' },
+  OVERDUE: { badge: 'error' },
+  CANCELLED: { badge: 'default' },
 };
 
-const allocationStageMeta: Record<string, { label: string; color: string }> = {
-  ADVANCE: { label: 'T/T Advance', color: 'blue' },
-  BALANCE: { label: 'T/T Balance', color: 'cyan' },
-  COLLECTION: { label: 'D/P D/A', color: 'purple' },
-  MANUAL: { label: 'Manual', color: 'default' },
+const allocationStageMeta: Record<string, { color: string }> = {
+  ADVANCE: { color: 'blue' },
+  BALANCE: { color: 'cyan' },
+  COLLECTION: { color: 'purple' },
+  MANUAL: { color: 'default' },
 };
 
 const AccountReceivablesPage = () => {
+  const t = useTranslations('AccountReceivables');
   const { data: session } = useSession();
+  const router = useRouter();
   const accessToken = getAccessToken(session);
-  const { message } = App.useApp();
 
   const [rows, setRows] = useState<IAccountReceivable[]>([]);
   const [aging, setAging] = useState<IAging>({ current: 0, days_30: 0, days_60: 0, days_90: 0, over_90: 0 });
@@ -164,44 +167,33 @@ const AccountReceivablesPage = () => {
     ));
   }, [rows, search]);
 
-  const syncShippedContracts = async () => {
-    if (!accessToken) return;
-    const res = await sendRequest<IBackendRes<{ syncedCount: number }>>({
-      url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/account-receivables/sync-shipped`,
-      method: 'POST',
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-
-    if (res?.data) {
-      message.success(`Đã đồng bộ ${res.data.syncedCount} hợp đồng đã giao`);
-      fetchRows();
-    } else {
-      message.error(res?.message || 'Không đồng bộ được công nợ phải thu');
-    }
-  };
+  const hasAllocationRows = useMemo(
+    () => filteredRows.some((row) => Boolean(row.allocations?.length)),
+    [filteredRows],
+  );
 
   const agingTotal = Object.values(aging).reduce((sum, value) => sum + Number(value || 0), 0);
 
-  const columns: ColumnsType<IAccountReceivable> = [
+  const columns = useMemo<ColumnsType<IAccountReceivable>>(() => [
     {
-      title: 'Hóa đơn / Hợp đồng',
+      title: t('table.invoiceContract'),
       key: 'invoice',
       render: (_, record) => (
         <Space orientation="vertical" size={0}>
           <Text strong>{record.invoiceNumber}</Text>
           <Text type="secondary" style={{ fontSize: 12 }}>
-            {record.salesContract?.contractNumber || record.salesContractId || 'Commercial Invoice'}
+            {record.salesContract?.contractNumber || record.salesContractId || t('fallback.commercialInvoice')}
           </Text>
         </Space>
       ),
     },
     {
-      title: 'Buyer',
+      title: t('table.buyer'),
       key: 'buyer',
       render: (_, record) => record.buyer?.name || record.buyerId,
     },
     {
-      title: 'Giá trị',
+      title: t('table.amount'),
       key: 'amount',
       align: 'right',
       render: (_, record) => (
@@ -212,7 +204,7 @@ const AccountReceivablesPage = () => {
       ),
     },
     {
-      title: 'Đã thu',
+      title: t('table.paid'),
       key: 'paid',
       align: 'right',
       render: (_, record) => {
@@ -226,69 +218,103 @@ const AccountReceivablesPage = () => {
       },
     },
     {
-      title: 'Hạn thu',
+      title: t('table.dueDate'),
       key: 'dueDate',
       render: (_, record) => (
         <Space orientation="vertical" size={0}>
           <Text>{record.dueDate ? dayjs(record.dueDate).format('DD/MM/YYYY') : '-'}</Text>
           <Text type="secondary" style={{ fontSize: 12 }}>
-            Invoice: {dayjs(record.invoiceDate).format('DD/MM/YYYY')}
+            {t('table.invoiceDate', { date: dayjs(record.invoiceDate).format('DD/MM/YYYY') })}
           </Text>
         </Space>
       ),
     },
     {
-      title: 'Trạng thái',
+      title: t('table.status'),
       dataIndex: 'status',
       key: 'status',
       render: (value: ARStatus) => (
-        <Badge status={statusMeta[value]?.badge ?? 'default'} text={statusMeta[value]?.label ?? value} />
+        <Badge status={statusMeta[value]?.badge ?? 'default'} text={t(`status.${value}`)} />
       ),
     },
     {
-      title: 'Người tạo',
+      title: t('table.createdBy'),
       dataIndex: 'createdByUsername',
       key: 'createdByUsername',
-      render: (value?: string | null) => value || 'system',
+      render: (value?: string | null) => value || t('fallback.system'),
     },
-  ];
+  ], [t]);
 
-  const allocationColumns: ColumnsType<IPaymentAllocation> = [
+  const allocationColumns = useMemo<ColumnsType<IPaymentAllocation>>(() => [
     {
-      title: 'Giao dịch',
+      title: t('payments.transaction'),
       key: 'tradeFinanceTransactionId',
+      width: 250,
       render: (_, record) => {
         const stage = record.paymentStage || 'MANUAL';
         return (
           <Space orientation="vertical" size={0}>
             <Tag color={allocationStageMeta[stage]?.color || 'default'}>
-              {allocationStageMeta[stage]?.label || stage}
+              {t(`allocationStages.${stage}`)}
             </Tag>
-            <Text code>{record.tradeFinanceTransaction?.bankReference || record.tradeFinanceTransactionId || 'Manual'}</Text>
+            <Text code style={{ whiteSpace: 'normal', wordBreak: 'break-all' }}>
+              {record.tradeFinanceTransaction?.bankReference || record.tradeFinanceTransactionId || t('fallback.manual')}
+            </Text>
           </Space>
         );
       },
     },
-    { title: 'Ngoại tệ', dataIndex: 'allocatedAmountForeign', key: 'allocatedAmountForeign', align: 'right', render: (value: number) => formatCurrency(value, 2) },
-    { title: 'VND', dataIndex: 'allocatedAmountVnd', key: 'allocatedAmountVnd', align: 'right', render: (value: number) => formatVND(value || 0) },
-    { title: 'Tỷ giá', dataIndex: 'exchangeRate', key: 'exchangeRate', align: 'right', render: (value: number) => formatCurrency(value, 2) },
-    { title: 'Ngày phân bổ', dataIndex: 'allocatedAt', key: 'allocatedAt', render: (value: string) => dayjs(value).format('DD/MM/YYYY HH:mm') },
-    { title: 'Người xử lý', dataIndex: 'allocatedByUsername', key: 'allocatedByUsername' },
-  ];
+    { title: t('payments.foreignAmount'), dataIndex: 'allocatedAmountForeign', key: 'allocatedAmountForeign', align: 'right', width: 130, render: (value: number) => formatCurrency(value, 2) },
+    { title: 'VND', dataIndex: 'allocatedAmountVnd', key: 'allocatedAmountVnd', align: 'right', width: 150, render: (value: number) => formatVND(value || 0) },
+    { title: t('payments.exchangeRate'), dataIndex: 'exchangeRate', key: 'exchangeRate', align: 'right', width: 120, render: (value: number) => formatCurrency(value, 2) },
+    { title: t('payments.allocatedAt'), dataIndex: 'allocatedAt', key: 'allocatedAt', width: 160, render: (value: string) => dayjs(value).format('DD/MM/YYYY HH:mm') },
+    { title: t('payments.allocatedBy'), dataIndex: 'allocatedByUsername', key: 'allocatedByUsername', width: 140 },
+  ], [t]);
+
+  const renderAllocationDetails = useCallback((record: IAccountReceivable) => {
+    const allocations = record.allocations ?? [];
+
+    if (!allocations.length) {
+      return (
+        <div className="ar-allocation-panel">
+          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('empty.noPayments')} />
+        </div>
+      );
+    }
+
+    return (
+      <div className="ar-allocation-panel">
+        <Table<IPaymentAllocation>
+          rowKey="_id"
+          columns={allocationColumns}
+          dataSource={allocations}
+          pagination={false}
+          size="small"
+          tableLayout="fixed"
+          scroll={{ x: 950 }}
+          locale={{ emptyText: t('empty.noPayments') }}
+        />
+      </div>
+    );
+  }, [allocationColumns, t]);
 
   return (
     <AdminPageScroll>
       <PageHeader
-        title="Công nợ phải thu Buyer"
+        title={t('title')}
         icon={<WalletOutlined />}
-        description="Theo dõi AR ngoại tệ theo từng Commercial Invoice, phân bổ tiền T/T và tính DSO"
+        description={t('description')}
         extra={(
           <Space orientation="horizontal">
             <Button icon={<ReloadOutlined />} onClick={fetchRows}>
-              Tải lại
+              {t('actions.reload')}
             </Button>
-            <Button type="primary" icon={<CloudSyncOutlined />} onClick={syncShippedContracts}>
-              Đồng bộ hợp đồng đã giao
+            <Button
+              type="primary"
+              icon={<FileTextOutlined />}
+              onClick={() => router.push('/dashboard/commercial-invoices')}
+            >
+              {t('actions.openCommercialInvoices')}
             </Button>
           </Space>
         )}
@@ -297,38 +323,38 @@ const AccountReceivablesPage = () => {
       <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
         <Col xs={24} md={6}>
           <Card variant="borderless">
-            <Statistic title="AR còn mở" value={dso.openAr} formatter={(value) => formatVND(Number(value || 0))} prefix={<DollarOutlined />} />
+            <Statistic title={t('stats.openAr')} value={dso.openAr} formatter={(value) => formatVND(Number(value || 0))} prefix={<DollarOutlined />} />
           </Card>
         </Col>
         <Col xs={24} md={6}>
           <Card variant="borderless">
-            <Statistic title="DSO 90 ngày" value={dso.dso} suffix="ngày" />
+            <Statistic title={t('stats.dsoWindow', { days: dso.days || 90 })} value={dso.dso} suffix={t('units.days')} />
           </Card>
         </Col>
         <Col xs={24} md={6}>
           <Card variant="borderless">
-            <Statistic title="Quá hạn > 90 ngày" value={aging.over_90} formatter={(value) => formatVND(Number(value || 0))} />
+            <Statistic title={t('stats.over90')} value={aging.over_90} formatter={(value) => formatVND(Number(value || 0))} />
           </Card>
         </Col>
         <Col xs={24} md={6}>
           <Card variant="borderless">
-            <Statistic title="Tổng Aging" value={agingTotal} formatter={(value) => formatVND(Number(value || 0))} />
+            <Statistic title={t('stats.totalAging')} value={agingTotal} formatter={(value) => formatVND(Number(value || 0))} />
           </Card>
         </Col>
       </Row>
 
       <Card
         variant="borderless"
-        title="AR Aging"
+        title={t('aging.title')}
         style={{ marginBottom: 16 }}
       >
         <Row gutter={[12, 12]}>
           {[
-            ['Current', aging.current, 'green'],
-            ['1-30', aging.days_30, 'blue'],
-            ['31-60', aging.days_60, 'gold'],
-            ['61-90', aging.days_90, 'orange'],
-            ['>90', aging.over_90, 'red'],
+            [t('aging.current'), aging.current, 'green'],
+            [t('aging.days30'), aging.days_30, 'blue'],
+            [t('aging.days60'), aging.days_60, 'gold'],
+            [t('aging.days90'), aging.days_90, 'orange'],
+            [t('aging.over90'), aging.over_90, 'red'],
           ].map(([label, value, color]) => (
             <Col xs={24} sm={12} lg={4} key={String(label)}>
               <Tag color={String(color)} style={{ width: '100%', padding: '10px 12px', borderRadius: 8 }}>
@@ -344,12 +370,12 @@ const AccountReceivablesPage = () => {
 
       <Card
         variant="borderless"
-        title="Danh sách công nợ phải thu"
+        title={t('table.title')}
         extra={(
           <Input
             allowClear
             prefix={<SearchOutlined />}
-            placeholder="Tìm hóa đơn, buyer, hợp đồng"
+            placeholder={t('table.searchPlaceholder')}
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             style={{ width: 320 }}
@@ -361,20 +387,35 @@ const AccountReceivablesPage = () => {
           columns={columns}
           dataSource={filteredRows}
           loading={loading}
-          expandable={{
-            expandedRowRender: (record) => (
-              <Table<IPaymentAllocation>
-                rowKey="_id"
-                columns={allocationColumns}
-                dataSource={record.allocations ?? []}
-                pagination={false}
-                size="small"
-              />
-            ),
-          }}
+          locale={{ emptyText: t('empty.noReceivables') }}
+          expandable={hasAllocationRows ? {
+            expandedRowRender: renderAllocationDetails,
+            rowExpandable: (record) => Boolean(record.allocations?.length),
+          } : undefined}
           pagination={{ pageSize: 10, showSizeChanger: true }}
+          scroll={{ x: 1180 }}
+          className="account-receivables-table"
         />
       </Card>
+
+      <style jsx global>{`
+        .account-receivables-table .ant-table-expanded-row > .ant-table-cell {
+          padding: 12px 24px 16px 56px !important;
+          background: transparent !important;
+        }
+
+        .ar-allocation-panel {
+          border: 1px solid rgba(148, 163, 184, 0.18);
+          border-radius: 8px;
+          overflow: hidden;
+          background: rgba(15, 23, 42, 0.12);
+        }
+
+        .ar-allocation-panel .ant-empty {
+          margin: 0;
+          padding: 18px 12px;
+        }
+      `}</style>
     </AdminPageScroll>
   );
 };

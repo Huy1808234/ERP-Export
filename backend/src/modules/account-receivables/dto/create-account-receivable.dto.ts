@@ -1,4 +1,11 @@
-import { IsDateString, IsEnum, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import {
+  IsDateString,
+  IsEnum,
+  IsNumber,
+  IsOptional,
+  IsString,
+  Min,
+} from 'class-validator';
 import { IsEntityId } from '@/common/ids/entity-id.validator';
 import { ARSourceType, ARStatus } from '../entities/account-receivable.entity';
 

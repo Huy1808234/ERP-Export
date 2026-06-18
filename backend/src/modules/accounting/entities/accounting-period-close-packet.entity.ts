@@ -1,4 +1,11 @@
-import { BeforeInsert, Column, CreateDateColumn, Entity, Index, PrimaryColumn } from 'typeorm';
+import {
+  BeforeInsert,
+  Column,
+  CreateDateColumn,
+  Entity,
+  Index,
+  PrimaryColumn,
+} from 'typeorm';
 import { createEntityId } from '@/common/ids/entity-id.util';
 
 export enum AccountingPeriodClosePacketStatus {
@@ -38,7 +45,10 @@ export class AccountingPeriodClosePacket {
   @Column({ type: 'date' })
   periodEnd: Date;
 
-  @Column({ type: 'varchar', default: AccountingPeriodClosePacketStatus.GENERATED })
+  @Column({
+    type: 'varchar',
+    default: AccountingPeriodClosePacketStatus.GENERATED,
+  })
   status: AccountingPeriodClosePacketStatus;
 
   @Column({ type: 'varchar' })

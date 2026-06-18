@@ -54,7 +54,8 @@ type ApprovalDocumentType =
   | 'ACCOUNTING_PERIOD_LOCK'
   | 'SALES_CONTRACT_CANCEL'
   | 'EXPORT_DOCUMENT_REVIEW'
-  | 'TRADE_FINANCE';
+  | 'TRADE_FINANCE'
+  | 'PRICING_POLICY';
 
 type ApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
 
@@ -133,6 +134,7 @@ const approvalDocumentTypes: ApprovalDocumentType[] = [
   'SALES_CONTRACT_CANCEL',
   'EXPORT_DOCUMENT_REVIEW',
   'TRADE_FINANCE',
+  'PRICING_POLICY',
 ];
 
 const fallbackDocumentTypeLabels: Record<ApprovalDocumentType, string> = {
@@ -152,6 +154,7 @@ const fallbackDocumentTypeLabels: Record<ApprovalDocumentType, string> = {
   SALES_CONTRACT_CANCEL: 'Sales Contract Cancel',
   EXPORT_DOCUMENT_REVIEW: 'Export Document Review',
   TRADE_FINANCE: 'Trade Finance',
+  PRICING_POLICY: 'Pricing Policy',
 };
 
 const roleOptions = [

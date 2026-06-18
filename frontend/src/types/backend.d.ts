@@ -39,6 +39,8 @@ declare global {
         phone?: string;
         address?: string;
         partnerType?: string;
+        country?: string;
+        region?: string;
         defaultCurrency?: string;
         defaultPaymentTerm?: string;
     }
@@ -55,7 +57,9 @@ declare global {
         bookingNumber?: string;
         vesselFlight?: string;
         pol?: string;
+        pol_port_id?: string | null;
         pod?: string;
+        pod_port_id?: string | null;
         etd?: string;
         eta?: string;
         containers?: Array<{
@@ -69,14 +73,12 @@ declare global {
     interface ISessionUser {
         _id: string;
         username: string;
-        email: string;
         name: string;
         roleName?: string | null;
         role?: {
             _id: string;
             name: string;
-            permissions?: Array<{ _id: string; name: string }>;
-        };
+        } | null;
         partnerId?: string | null;
     }
 

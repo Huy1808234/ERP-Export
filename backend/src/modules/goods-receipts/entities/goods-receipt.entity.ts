@@ -1,4 +1,14 @@
-import { BeforeInsert, Column, CreateDateColumn, Entity, OneToMany, PrimaryColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
+import {
+  BeforeInsert,
+  Column,
+  CreateDateColumn,
+  Entity,
+  OneToMany,
+  PrimaryColumn,
+  UpdateDateColumn,
+  ManyToOne,
+  JoinColumn,
+} from 'typeorm';
 import { GoodsReceiptItem } from './goods-receipt-item.entity';
 import { PurchaseOrder } from '@/modules/purchase-orders/entities/purchase-order.entity';
 import { User } from '@/modules/users/entities/user.entity';
@@ -48,7 +58,9 @@ export class GoodsReceipt {
   @JoinColumn({ name: 'receivedByUsername', referencedColumnName: 'username' })
   receivedBy: User;
 
-  @OneToMany(() => GoodsReceiptItem, (item) => item.goodsReceipt, { cascade: true })
+  @OneToMany(() => GoodsReceiptItem, (item) => item.goodsReceipt, {
+    cascade: true,
+  })
   items: GoodsReceiptItem[];
 
   @Column({ type: 'text', nullable: true })

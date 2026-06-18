@@ -4,12 +4,16 @@ import { Repository } from 'typeorm';
 import { Setting } from './entities/setting.entity';
 import { UpdateSettingDto } from './dto/update-setting.dto';
 import { SETTING_KEYS } from './settings.keys';
+import { RedisCacheService } from '@/common/cache/redis-cache.service';
+
+const SETTINGS_CACHE_TTL_SECONDS = 900;
 
 @Injectable()
 export class SettingsService implements OnModuleInit {
   constructor(
     @InjectRepository(Setting)
     private readonly settingRepository: Repository<Setting>,
+    private readonly cache: RedisCacheService,
   ) {}
 
   async onModuleInit() {
@@ -26,7 +30,8 @@ export class SettingsService implements OnModuleInit {
       {
         key: 'COMPANY_BANK_INFO',
         value: `Bank Name: VIETCOMBANK\nBeneficiary: CÔNG TY TNHH XUẤT NHẬP KHẨU ABC\nAccount Number: 0123456789\nSwift Code: BFTVVNVX`,
-        description: 'Company default bank information for invoices and quotations',
+        description:
+          'Company default bank information for invoices and quotations',
       },
       {
         key: 'COMPANY_ADDRESS',
@@ -46,24 +51,37 @@ export class SettingsService implements OnModuleInit {
       {
         key: SETTING_KEYS.THREE_WAY_MATCHING_PRICE_TOLERANCE_PERCENT,
         value: '0',
-        description: 'Allowed unit price variance percentage for 3-way matching',
-      }
+        description:
+          'Allowed unit price variance percentage for 3-way matching',
+      },
     ];
 
     for (const setting of defaultSettings) {
-      const exists = await this.settingRepository.findOne({ where: { key: setting.key } });
+      const exists = await this.settingRepository.findOne({
+        where: { key: setting.key },
+      });
       if (!exists) {
-        await this.settingRepository.save(this.settingRepository.create(setting));
+        await this.settingRepository.save(
+          this.settingRepository.create(setting),
+        );
       }
     }
   }
 
   async findAll(): Promise<Setting[]> {
-    return this.settingRepository.find();
+    return this.cache.getOrSet(
+      'mini-erp:settings:all',
+      SETTINGS_CACHE_TTL_SECONDS,
+      () => this.settingRepository.find(),
+    );
   }
 
   async findOne(key: string): Promise<Setting | null> {
-    return this.settingRepository.findOne({ where: { key } });
+    return this.cache.getOrSet(
+      `mini-erp:settings:key:${key}`,
+      SETTINGS_CACHE_TTL_SECONDS,
+      () => this.settingRepository.findOne({ where: { key } }),
+    );
   }
 
   async getNumber(key: string, fallback: number): Promise<number> {
@@ -74,7 +92,7 @@ export class SettingsService implements OnModuleInit {
 
   async update(updateSettingDto: UpdateSettingDto): Promise<Setting> {
     const { key, value, description } = updateSettingDto;
-    let setting = await this.findOne(key);
+    let setting = await this.settingRepository.findOne({ where: { key } });
 
     if (!setting) {
       setting = this.settingRepository.create({ key, value, description });
@@ -83,7 +101,12 @@ export class SettingsService implements OnModuleInit {
       if (description) setting.description = description;
     }
 
-    return this.settingRepository.save(setting);
+    const saved = await this.settingRepository.save(setting);
+    await this.cache.del([
+      'mini-erp:settings:all',
+      `mini-erp:settings:key:${key}`,
+    ]);
+    return saved;
   }
 
   async bulkUpdate(settings: UpdateSettingDto[]): Promise<Setting[]> {
@@ -91,6 +114,7 @@ export class SettingsService implements OnModuleInit {
     for (const s of settings) {
       results.push(await this.update(s));
     }
+    await this.cache.del('mini-erp:settings:all');
     return results;
   }
 }

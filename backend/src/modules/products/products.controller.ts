@@ -1,5 +1,19 @@
 import * as express from 'express';
-import { Body, Controller, DefaultValuePipe, Delete, Get, Param, ParseIntPipe, Patch, Post, Query, Res, UploadedFile, UseInterceptors } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  DefaultValuePipe,
+  Delete,
+  Get,
+  Param,
+  ParseIntPipe,
+  Patch,
+  Post,
+  Query,
+  Res,
+  UploadedFile,
+  UseInterceptors,
+} from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { User, Roles, Public } from '@/decorator/customize';
 import { CreateProductDto } from './dto/create-product.dto';
@@ -33,10 +47,15 @@ export class ProductsController {
 
   @Get('export')
   @Roles('ADMIN', 'MANAGER', 'PURCHASING', 'SALES_EXPORT', 'ACCOUNTANT')
-  async exportExcel(@Query() query: any, @Res() res: express.Response, @User() user: any) {
+  async exportExcel(
+    @Query() query: any,
+    @Res() res: express.Response,
+    @User() user: any,
+  ) {
     const buffer = await this.productsService.exportExcel(query, user);
     res.set({
-      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Type':
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       'Content-Disposition': `attachment; filename="Products_Export_${new Date().getTime()}.xlsx"`,
       'Content-Length': buffer.length,
     });
@@ -59,11 +78,23 @@ export class ProductsController {
   ) {
     delete query.current;
     delete query.pageSize;
-    return this.productsService.findChangeRequests(query, current, pageSize, user);
+    return this.productsService.findChangeRequests(
+      query,
+      current,
+      pageSize,
+      user,
+    );
   }
 
   @Patch('change-requests/:_id/approve')
-  @Roles('ADMIN', 'DIRECTOR', 'MANAGER', 'PURCHASING', 'ACCOUNTANT', 'CHIEF_ACCOUNTANT')
+  @Roles(
+    'ADMIN',
+    'DIRECTOR',
+    'MANAGER',
+    'PURCHASING',
+    'ACCOUNTANT',
+    'CHIEF_ACCOUNTANT',
+  )
   approveChangeRequest(
     @Param('_id') recordId: string,
     @Body() dto: ProductChangeDecisionDto,
@@ -73,7 +104,14 @@ export class ProductsController {
   }
 
   @Patch('change-requests/:_id/reject')
-  @Roles('ADMIN', 'DIRECTOR', 'MANAGER', 'PURCHASING', 'ACCOUNTANT', 'CHIEF_ACCOUNTANT')
+  @Roles(
+    'ADMIN',
+    'DIRECTOR',
+    'MANAGER',
+    'PURCHASING',
+    'ACCOUNTANT',
+    'CHIEF_ACCOUNTANT',
+  )
   rejectChangeRequest(
     @Param('_id') recordId: string,
     @Body() dto: ProductChangeDecisionDto,
@@ -83,7 +121,14 @@ export class ProductsController {
   }
 
   @Get()
-  @Roles('ADMIN', 'MANAGER', 'PURCHASING', 'SALES_EXPORT', 'LOGISTICS', 'ACCOUNTANT')
+  @Roles(
+    'ADMIN',
+    'MANAGER',
+    'PURCHASING',
+    'SALES_EXPORT',
+    'LOGISTICS',
+    'ACCOUNTANT',
+  )
   findAll(
     @Query('current', new DefaultValuePipe(1), ParseIntPipe) current: number,
     @Query('pageSize', new DefaultValuePipe(10), ParseIntPipe) pageSize: number,
@@ -96,7 +141,14 @@ export class ProductsController {
   }
 
   @Get(':_id')
-  @Roles('ADMIN', 'MANAGER', 'PURCHASING', 'SALES_EXPORT', 'LOGISTICS', 'ACCOUNTANT')
+  @Roles(
+    'ADMIN',
+    'MANAGER',
+    'PURCHASING',
+    'SALES_EXPORT',
+    'LOGISTICS',
+    'ACCOUNTANT',
+  )
   findOne(@Param('_id') recordId: string, @User() user: any) {
     return this.productsService.findOne(recordId, user);
   }
@@ -118,7 +170,14 @@ export class ProductsController {
   }
 
   @Get(':_id/convert-uom')
-  @Roles('ADMIN', 'MANAGER', 'PURCHASING', 'SALES_EXPORT', 'LOGISTICS', 'ACCOUNTANT')
+  @Roles(
+    'ADMIN',
+    'MANAGER',
+    'PURCHASING',
+    'SALES_EXPORT',
+    'LOGISTICS',
+    'ACCOUNTANT',
+  )
   convertUom(
     @Param('_id') recordId: string,
     @Query('quantity') quantity: string,

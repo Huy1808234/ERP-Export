@@ -17,15 +17,27 @@ export class CreatePricingPolicyDto {
 
   @IsOptional()
   @IsEntityId()
-  buyerId?: string;
+  buyerId?: string | null;
 
   @IsOptional()
   @IsEnum(BuyerRegion)
-  marketRegion?: BuyerRegion;
+  marketRegion?: BuyerRegion | null;
 
   @IsOptional()
   @IsString()
-  country?: string;
+  countryCode?: string | null;
+
+  @IsOptional()
+  @IsString()
+  country?: string | null;
+
+  @IsOptional()
+  @IsEntityId()
+  origin_port_id?: string | null;
+
+  @IsOptional()
+  @IsEntityId()
+  destination_port_id?: string | null;
 
   @IsEnum(Incoterm)
   incoterm: Incoterm;
@@ -40,7 +52,7 @@ export class CreatePricingPolicyDto {
   @IsOptional()
   @IsNumber()
   @Min(0)
-  maxQuantity?: number;
+  maxQuantity?: number | null;
 
   @IsNumber()
   @Min(0.0001)
@@ -51,11 +63,41 @@ export class CreatePricingPolicyDto {
 
   @IsOptional()
   @IsDateString()
-  effectiveTo?: string;
+  effectiveTo?: string | null;
 
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  inlandCostPerUnit?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  portChargePerUnit?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  freightCostPerUnit?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  insuranceCostPerUnit?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  destinationDeliveryCostPerUnit?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  customsCostPerUnit?: number;
 
   @IsOptional()
   @IsString()

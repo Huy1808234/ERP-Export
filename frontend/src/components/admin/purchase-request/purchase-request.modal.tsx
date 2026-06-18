@@ -53,12 +53,13 @@ interface IFormValues {
 }
 
 const DEFAULT_DEPARTMENTS = (t: any) => [
+  { label: t('departments.KINHDOANH_XK'), value: 'KINHDOANH_XK', icon: <ProjectOutlined style={{ color: '#faad14' }} /> },
   { label: t('departments.KHO'), value: 'KHO', icon: <ShopOutlined style={{ color: '#1890ff' }} /> },
-  { label: t('departments.SANXUAT'), value: 'SANXUAT', icon: <BlockOutlined style={{ color: '#52c41a' }} /> },
-  { label: t('departments.MARKETING'), value: 'MARKETING', icon: <ThunderboltOutlined style={{ color: '#faad14' }} /> },
-  { label: t('departments.HANHCHINH'), value: 'HANHCHINH', icon: <TeamOutlined style={{ color: '#722ed1' }} /> },
-  { label: t('departments.KETOAN'), value: 'KETOAN', icon: <BankOutlined style={{ color: '#eb2f96' }} /> },
+  { label: t('departments.MUAHANG'), value: 'MUAHANG', icon: <ShoppingCartOutlined style={{ color: '#52c41a' }} /> },
+  { label: t('departments.VANHANH'), value: 'VANHANH', icon: <BlockOutlined style={{ color: '#722ed1' }} /> },
   { label: t('departments.KYTHUAT'), value: 'KYTHUAT', icon: <SafetyCertificateOutlined style={{ color: '#13c2c2' }} /> },
+  { label: t('departments.MARKETING'), value: 'MARKETING', icon: <ThunderboltOutlined style={{ color: '#fa8c16' }} /> },
+  { label: t('departments.KETOAN'), value: 'KETOAN', icon: <BankOutlined style={{ color: '#eb2f96' }} /> },
 ];
 
 const PRIORITY_OPTIONS = (t: any) => [

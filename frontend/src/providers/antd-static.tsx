@@ -1,7 +1,7 @@
 'use client';
 
 import { App } from 'antd';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
 // Extract types from App.useApp() return type
 type StaticFunctions = ReturnType<typeof App.useApp>;
@@ -23,6 +23,7 @@ const AntdStatic = () => {
     notification: appNotification,
     modal: appModal,
   } = App.useApp();
+  const lastForbiddenNoticeAtRef = useRef(0);
 
   useEffect(() => {
     message = appMessage;
@@ -47,6 +48,27 @@ const AntdStatic = () => {
 
     modal = appModal;
   }, [appMessage, appNotification, appModal]);
+
+  useEffect(() => {
+    const handleForbidden = (event: Event) => {
+      const now = Date.now();
+      if (now - lastForbiddenNoticeAtRef.current < 1500) return;
+
+      lastForbiddenNoticeAtRef.current = now;
+      const detail = (event as CustomEvent<{ message?: string }>).detail;
+
+      appNotification.warning({
+        message: 'Không có quyền truy cập',
+        description: detail?.message || 'Tài khoản của bạn chưa được cấp quyền cho thao tác này.',
+        placement: 'topRight',
+      });
+    };
+
+    window.addEventListener('mini-erp:api-forbidden', handleForbidden);
+    return () => {
+      window.removeEventListener('mini-erp:api-forbidden', handleForbidden);
+    };
+  }, [appNotification]);
 
   return null;
 };

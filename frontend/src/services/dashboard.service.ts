@@ -1,6 +1,4 @@
-import { getSession } from 'next-auth/react';
 import { sendRequest } from '@/lib/api-client';
-import { getAccessToken } from '@/lib/auth-token';
 import { BaseApiService, IBackendRes } from './base.service';
 
 export interface DashboardHistoryPoint {
@@ -33,10 +31,19 @@ export interface DashboardCashflowForecast {
   payables: DashboardCashflowItem[];
 }
 
+export interface DashboardArAging {
+  current: number;
+  days_30: number;
+  days_60: number;
+  days_90: number;
+  over_90: number;
+}
+
 export interface DashboardDirector {
   revenueVnd: number;
   revenueGrowth: number;
   grossProfitMargin?: number;
+  arAging?: DashboardArAging;
   inventoryValue?: number;
   topBuyers: DashboardPartnerLine[];
   topSuppliers: DashboardPartnerLine[];
@@ -80,6 +87,8 @@ export interface DashboardLowStockProduct {
   name: string;
   sku: string;
   currentStock: number;
+  minimumStock?: number;
+  safetyStock?: number;
   imageUrl?: string | null;
 }
 
@@ -189,13 +198,10 @@ class DashboardService extends BaseApiService {
     if (startDate) queryParams.startDate = startDate;
     if (endDate) queryParams.endDate = endDate;
 
-    const currentSession = await getSession();
-
     return sendRequest<IBackendRes<T>>({
       url: `${this.baseUrl}/${path}`,
       method: 'GET',
       queryParams,
-      headers: { Authorization: `Bearer ${getAccessToken(currentSession)}` },
     });
   }
 }

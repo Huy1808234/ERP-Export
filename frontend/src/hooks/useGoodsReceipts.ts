@@ -22,7 +22,7 @@ export const useGoodsReceipts = () => {
   const fetchGRNs = useCallback(async (params: FetchParams) => {
     setLoading(true);
     try {
-      const res = await sendRequest<IBackendRes<any>>({
+      const res = await sendRequest<IBackendRes<IModelPaginate<IGoodsReceipt>>>({
         url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/goods-receipts`,
         method: 'GET',
         queryParams: {
@@ -44,11 +44,26 @@ export const useGoodsReceipts = () => {
         });
       }
     } catch (error) {
+      console.error(error);
       notification.error({ title: 'Lỗi tải dữ liệu Phiếu nhập kho' });
     } finally {
       setLoading(false);
     }
   }, [session]);
 
-  return { data, meta, loading, fetchGRNs };
+  const reverseGRN = useCallback(async (recordId: string, reason: string) => {
+    const res = await sendRequest<IBackendRes<IGoodsReceipt>>({
+      url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/goods-receipts/${recordId}/reverse`,
+      method: 'PATCH',
+      body: { reason },
+      headers: { Authorization: `Bearer ${getAccessToken(session)}` },
+    });
+
+    if (res?.data) {
+      return res.data;
+    }
+    throw new Error(res?.message || 'Reverse GRN failed');
+  }, [session]);
+
+  return { data, meta, loading, fetchGRNs, reverseGRN };
 };

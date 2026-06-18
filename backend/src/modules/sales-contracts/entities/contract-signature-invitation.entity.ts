@@ -34,7 +34,9 @@ export type ContractSignatureInvitationAuditEvent = {
 
 @Entity('contract_signature_invitations')
 @Index('idx_contract_signature_invitations_contract', ['contractId', 'status'])
-@Index('idx_contract_signature_invitations_token', ['tokenHash'], { unique: true })
+@Index('idx_contract_signature_invitations_token', ['tokenHash'], {
+  unique: true,
+})
 export class ContractSignatureInvitation {
   @PrimaryColumn({ type: 'varchar', length: 40, name: '_id' })
   _id: string;
@@ -49,8 +51,10 @@ export class ContractSignatureInvitation {
   @Column({ type: 'varchar', length: 40 })
   contractId: string;
 
-  @ManyToOne(() => SalesContract, (contract) => contract.signatureInvitations, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'contractId' })
+  @ManyToOne(() => SalesContract, (contract) => contract.signatureInvitations, {
+    onDelete: 'CASCADE',
+  })
+  @JoinColumn({ name: 'contractId', referencedColumnName: '_id' })
   contract: SalesContract;
 
   @Column({ type: 'varchar' })
@@ -65,7 +69,10 @@ export class ContractSignatureInvitation {
   @Column({ type: 'varchar', nullable: true })
   signerEmail: string | null;
 
-  @Column({ type: 'varchar', default: ContractSignatureInvitationStatus.CREATED })
+  @Column({
+    type: 'varchar',
+    default: ContractSignatureInvitationStatus.CREATED,
+  })
   status: ContractSignatureInvitationStatus;
 
   @Column({ type: 'varchar' })

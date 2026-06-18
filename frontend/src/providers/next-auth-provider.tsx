@@ -10,8 +10,12 @@ function AuthSessionGuard({ children }: { children: React.ReactNode }) {
             const pathname = window.location.pathname || "/vi";
             const locale = pathname.split("/").filter(Boolean)[0] || "vi";
             const returnTo = `${pathname}${window.location.search}`;
+            const isLoginPage = pathname === `/${locale}/auth/login`;
+
             signOut({
-                callbackUrl: `/${locale}/auth/login?callbackUrl=${encodeURIComponent(returnTo)}`,
+                callbackUrl: isLoginPage
+                    ? `/${locale}/auth/login`
+                    : `/${locale}/auth/login?callbackUrl=${encodeURIComponent(returnTo)}`,
             });
         }
     }, [session?.error]);
@@ -21,7 +25,7 @@ function AuthSessionGuard({ children }: { children: React.ReactNode }) {
 
 export default function NextAuthWrapper({ children }: { children: React.ReactNode }) {
     return (
-        <SessionProvider>
+        <SessionProvider refetchInterval={4 * 60} refetchOnWindowFocus>
             <AuthSessionGuard>
                 {children}
             </AuthSessionGuard>

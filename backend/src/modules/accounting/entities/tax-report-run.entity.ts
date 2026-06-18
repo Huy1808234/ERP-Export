@@ -1,4 +1,11 @@
-import { BeforeInsert, Column, CreateDateColumn, Entity, Index, PrimaryColumn } from 'typeorm';
+import {
+  BeforeInsert,
+  Column,
+  CreateDateColumn,
+  Entity,
+  Index,
+  PrimaryColumn,
+} from 'typeorm';
 import { createEntityId } from '@/common/ids/entity-id.util';
 
 export enum TaxReportRunStatus {

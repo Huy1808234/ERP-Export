@@ -8,7 +8,7 @@ import { types as pgTypes } from 'pg';
 
 const POSTGRES_TIMESTAMP_WITHOUT_TIME_ZONE_OID = 1114;
 
-pgTypes.setTypeParser(POSTGRES_TIMESTAMP_WITHOUT_TIME_ZONE_OID, (value: string) => new Date(`${value}Z`));
+// pgTypes.setTypeParser(POSTGRES_TIMESTAMP_WITHOUT_TIME_ZONE_OID, (value: string) => new Date(`${value}Z`));
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -31,10 +31,18 @@ async function bootstrap() {
   console.log(`[Static] Serving uploads from: ${uploadsPath}`);
 
   app.useGlobalPipes(
-    new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: false }),
+    new ValidationPipe({
+      transform: true,
+      whitelist: true,
+      forbidNonWhitelisted: false,
+    }),
   );
   app.setGlobalPrefix('api/v1', { exclude: [''] });
-  app.enableCors({ "origin": true, "methods": "GET,HEAD,PUT,PATCH,POST,DELETE", credentials: true });
+  app.enableCors({
+    origin: true,
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+    credentials: true,
+  });
 
   await app.listen(port);
   console.log(`[Server] Listening at: http://localhost:${port}/api/v1`);

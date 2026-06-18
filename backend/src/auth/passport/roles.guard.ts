@@ -27,10 +27,10 @@ export class RolesGuard implements CanActivate {
       return true;
     }
 
-    const requiredRoles = this.reflector.getAllAndOverride<string[]>(ROLES_KEY, [
-      context.getHandler(),
-      context.getClass(),
-    ]);
+    const requiredRoles = this.reflector.getAllAndOverride<string[]>(
+      ROLES_KEY,
+      [context.getHandler(), context.getClass()],
+    );
 
     if (!requiredRoles || requiredRoles.length === 0) {
       return true;
@@ -38,7 +38,7 @@ export class RolesGuard implements CanActivate {
 
     const request = context.switchToHttp().getRequest<RequestWithUser>();
     const userRoleObj = request.user?.role;
-    
+
     // Support both string fallback and Role object
     const userRoleRaw =
       typeof userRoleObj === 'string'
@@ -46,7 +46,9 @@ export class RolesGuard implements CanActivate {
         : userRoleObj?.name || request.user?.roleName;
 
     if (!userRoleRaw) {
-      throw new ForbiddenException('Bạn không có quyền truy cập tài nguyên này');
+      throw new ForbiddenException(
+        'Bạn không có quyền truy cập tài nguyên này',
+      );
     }
 
     const userRole = normalizeRoleName(userRoleRaw);
@@ -55,7 +57,9 @@ export class RolesGuard implements CanActivate {
     const hasRole = normalizedRequiredRoles.includes(userRole);
 
     if (!hasRole) {
-      throw new ForbiddenException('Bạn không có quyền truy cập tài nguyên này');
+      throw new ForbiddenException(
+        'Bạn không có quyền truy cập tài nguyên này',
+      );
     }
 
     return true;

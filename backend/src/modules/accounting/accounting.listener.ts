@@ -33,25 +33,35 @@ export class AccountingListener {
   async handleShipmentOnBoard(payload: ShipmentOnBoardPayload) {
     const { shipment } = payload;
     const pi = shipment?.proformaInvoice;
-    
+
     if (pi) {
-      const amountVnd = await this.currenciesService.convertToBase(pi.totalAmount, pi.currency || 'USD');
-      
+      const amountVnd = await this.currenciesService.convertToBase(
+        pi.totalAmount,
+        pi.currency || 'USD',
+      );
+
       await this.accountingService.createJournalEntry({
         description: `Doanh thu xuất khẩu ${shipment.shipmentNumber} - PI: ${pi.piNumber}`,
         referenceType: 'SHIPMENT',
-            referenceId: shipment._id,
-            items: [
-          { accountCode: '131', debit: amountVnd, credit: 0, partnerId: pi.customerId || undefined },
-          { accountCode: '511', debit: 0, credit: amountVnd }
-        ]
+        referenceId: shipment._id,
+        items: [
+          {
+            accountCode: '131',
+            debit: amountVnd,
+            credit: 0,
+            partnerId: pi.customerId || undefined,
+          },
+          { accountCode: '511', debit: 0, credit: amountVnd },
+        ],
       });
     }
   }
 
   @OnEvent(APPROVAL_WORKFLOW_APPROVED_EVENT)
   async handleApprovalWorkflowApproved(payload: ApprovalWorkflowDecisionEvent) {
-    if (payload.documentType === ApprovalDocumentType.ACCOUNTING_PERIOD_REOPEN) {
+    if (
+      payload.documentType === ApprovalDocumentType.ACCOUNTING_PERIOD_REOPEN
+    ) {
       await this.accountingService.completePeriodReopenWorkflowApproval(
         payload.documentId,
         payload.requestId,
@@ -83,7 +93,9 @@ export class AccountingListener {
 
   @OnEvent(APPROVAL_WORKFLOW_REJECTED_EVENT)
   async handleApprovalWorkflowRejected(payload: ApprovalWorkflowDecisionEvent) {
-    if (payload.documentType === ApprovalDocumentType.ACCOUNTING_PERIOD_REOPEN) {
+    if (
+      payload.documentType === ApprovalDocumentType.ACCOUNTING_PERIOD_REOPEN
+    ) {
       await this.accountingService.rejectPeriodReopenWorkflow(
         payload.documentId,
         payload.requestId,

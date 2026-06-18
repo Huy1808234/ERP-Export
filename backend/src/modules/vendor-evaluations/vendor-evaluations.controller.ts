@@ -35,10 +35,12 @@ export class VendorEvaluationsController {
   getVendorScorecardDetail(
     @Param('_id') vendor_id: string,
     @Query('months') months?: string,
+    @Query('month') month?: string,
   ) {
     return this.vendorEvaluationsService.getVendorScorecardDetail(
       vendor_id,
       months ? Number(months) : 6,
+      month,
     );
   }
 

@@ -9,21 +9,21 @@ export class GuestController {
   @Public()
   @Get('summary')
   async getSummary() {
-    console.log("[GuestController] Fetching summary");
+    console.log('[GuestController] Fetching summary');
     return this.guestService.getSummary();
   }
 
   @Public()
   @Get('track/:number')
   async trackShipment(@Param('number') number: string) {
-    console.log("[GuestController] Tracking shipment:", number);
+    console.log('[GuestController] Tracking shipment:', number);
     return this.guestService.trackShipment(number);
   }
 
   @Public()
   @Get('products')
   async getFeaturedProducts() {
-    console.log("[GuestController] Fetching featured products");
+    console.log('[GuestController] Fetching featured products');
     return this.guestService.getFeaturedProducts();
   }
 }

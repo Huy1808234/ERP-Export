@@ -7,21 +7,32 @@ import {
 } from "@/utils/errors";
 import { sendRequest } from "./lib/api-client";
 
-import { IAuthSessionUser, IUser } from "./types/next-auth";
+import type { IAuthSessionRole, IAuthSessionUser } from "./types/next-auth";
 
-type AuthUser = IUser & {
+type AuthUser = IAuthSessionUser & {
   accessToken?: string;
   refreshToken?: string;
   accessTokenExpiresAt?: number;
 };
 
+const toSessionRole = (
+  role: IAuthSessionUser["role"],
+): IAuthSessionRole | undefined => {
+  if (!role?.name) return undefined;
+
+  return {
+    _id: role._id,
+    name: role.name,
+  };
+};
+
 const toSessionUser = (user: IAuthSessionUser): IAuthSessionUser => ({
   _id: user._id,
   username: user.username,
-  email: user.email,
   name: user.name,
+  email: user.email,
   roleName: user.roleName,
-  role: user.role,
+  role: toSessionRole(user.role),
   partnerId: user.partnerId,
 });
 
@@ -84,10 +95,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           return {
             _id: res.data?.user._id,
             username: res.data?.user.username,
-            email: res.data?.user.email,
             name: res.data?.user.name,
             roleName: res.data?.user.roleName,
-            role: res.data?.user.role,
+            role: toSessionRole(res.data?.user.role),
             partnerId: res.data?.user.partnerId || undefined,
             accessToken: res.data?.access_token,
             refreshToken: res.data?.refresh_token,
@@ -142,8 +152,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       }
       return session;
     },
-    authorized: async ({ auth }) => {
-      return !!auth;
+    authorized: async () => {
+      return true;
     },
   },
 });

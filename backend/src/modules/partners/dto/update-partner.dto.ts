@@ -1,6 +1,20 @@
-import { IsString, IsEnum, IsOptional, IsBoolean, Min, IsNumber, IsEmail, IsDateString } from 'class-validator';
+import {
+  IsString,
+  IsEnum,
+  IsOptional,
+  IsBoolean,
+  Min,
+  IsNumber,
+  IsEmail,
+  IsDateString,
+} from 'class-validator';
 import { Transform } from 'class-transformer';
-import { BuyerRegion, BuyerPaymentTerm, BuyerRiskLevel, PartnerType } from '../entities/partner.entity';
+import {
+  BuyerRegion,
+  BuyerPaymentTerm,
+  BuyerRiskLevel,
+  PartnerType,
+} from '../entities/partner.entity';
 
 const toOptionalNumber = () =>
   Transform(({ value }) => {
@@ -21,6 +35,10 @@ export class UpdatePartnerDto {
   @IsOptional()
   @IsString()
   country?: string;
+
+  @IsOptional()
+  @IsString()
+  countryCode?: string;
 
   @IsOptional()
   @IsString()

@@ -19,7 +19,16 @@ import { ProductsModule } from '@/modules/products/products.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([PurchaseRequest, PurchaseOrder, Quotation, ProformaInvoice, TradeFinanceTransaction, SalesContract, InventoryCount, ProductChangeRequest]),
+    TypeOrmModule.forFeature([
+      PurchaseRequest,
+      PurchaseOrder,
+      Quotation,
+      ProformaInvoice,
+      TradeFinanceTransaction,
+      SalesContract,
+      InventoryCount,
+      ProductChangeRequest,
+    ]),
     TradeFinanceModule,
     SalesContractsModule,
     InventoryModule,

@@ -1,4 +1,12 @@
-import { BeforeInsert, Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryColumn } from 'typeorm';
+import {
+  BeforeInsert,
+  Column,
+  CreateDateColumn,
+  Entity,
+  JoinColumn,
+  ManyToOne,
+  PrimaryColumn,
+} from 'typeorm';
 import { Product } from '../../products/entities/product.entity';
 import { Partner } from '../../partners/entities/partner.entity';
 import { ColumnNumericTransformer } from '@/helpers/typeorm.util';
@@ -19,7 +27,13 @@ export class Lot {
   @Column({ unique: true })
   lotNumber: string;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   unitPrice: number;
 
   @Column()

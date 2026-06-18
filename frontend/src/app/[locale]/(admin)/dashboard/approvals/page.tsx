@@ -114,6 +114,10 @@ type ApprovalData = {
     sku?: string;
     reason?: string;
     changedFields?: ChangedFieldLine[];
+    countDate?: string | null;
+    items?: ApprovalLineItem[];
+    totalVarianceValue?: number | string;
+    warehouseName?: string | null;
   };
   note?: string | null;
   priority?: string | null;
@@ -300,6 +304,8 @@ const ApprovalsPage = () => {
           {data.requesterUsername ? <Text>{t('details.workflow.requester')}: <Text strong>{data.requesterUsername}</Text></Text> : null}
           {data.metadata?.sku ? <Text>SKU: <Text strong>{data.metadata.sku}</Text></Text> : null}
           {data.metadata?.reason ? <Text>{data.metadata.reason}</Text> : null}
+          {data.metadata?.warehouseName ? <Text>{t('details.inventory.warehouse')}: <Text strong>{data.metadata.warehouseName}</Text></Text> : null}
+          {data.metadata?.countDate ? <Text>{t('details.inventory.countDate')}: <Text strong>{dayjs(data.metadata.countDate).format('DD/MM/YYYY')}</Text></Text> : null}
           <Divider style={{ margin: 0 }} />
           <Statistic
             title={isInventoryCount ? t('details.inventory.totalVariance') : isWorkflow ? t('details.workflow.amount') : t('details.totalValue')}
@@ -329,8 +335,28 @@ const ApprovalsPage = () => {
     }
 
     if (record.type === 'APPROVAL_WORKFLOW') {
+      const isInventoryCountWorkflow = data.documentType === 'INVENTORY_COUNT';
+      const workflowInventoryItems = data.metadata?.items || [];
+
       return (
         <Space orientation="vertical" size={12} style={{ width: '100%' }}>
+          {isInventoryCountWorkflow && workflowInventoryItems.length ? (
+            <Table<ApprovalLineItem>
+              dataSource={workflowInventoryItems}
+              pagination={false}
+              size="small"
+              rowKey={rowLabel}
+              columns={[
+                { title: t('details.columns.product'), key: 'product', render: (_, line) => <Text strong>{line.product?.vietnameseName || line.product?.sku || line.productId || '-'}</Text> },
+                { title: t('details.inventory.systemQuantity'), dataIndex: 'systemQuantity', align: 'right' as const, render: (value: number | string) => <Text>{money(value)}</Text> },
+                { title: t('details.inventory.countedQuantity'), dataIndex: 'countedQuantity', align: 'right' as const, render: (value: number | string) => <Text>{money(value)}</Text> },
+                { title: t('details.inventory.varianceQuantity'), dataIndex: 'varianceQuantity', align: 'right' as const, render: (value: number | string) => <Tag color={Number(value) === 0 ? 'green' : Number(value) < 0 ? 'red' : 'orange'}>{money(value)}</Tag> },
+                ...(canViewCost ? [
+                  { title: t('details.inventory.varianceValue'), dataIndex: 'varianceValue', align: 'right' as const, render: (value: number | string) => <Text strong>{money(value)}</Text> },
+                ] : []),
+              ]}
+            />
+          ) : null}
           {data.metadata?.changedFields?.length ? (
             <Table<ChangedFieldLine>
               dataSource={data.metadata.changedFields}

@@ -144,14 +144,18 @@ const PurchaseRequestTable: React.FC = () => {
       key: 'department',
       render: (dept: string) => {
         const colors: Record<string, string> = {
+          'KINHDOANH_XK': 'gold',
           'KHO': 'blue',
+          'MUAHANG': 'green',
+          'VANHANH': 'purple',
           'SANXUAT': 'green',
           'MARKETING': 'orange',
           'HANHCHINH': 'purple',
           'KETOAN': 'magenta',
           'KYTHUAT': 'cyan'
         };
-        return <Tag color={colors[dept] || 'default'} style={{ borderRadius: '6px', fontWeight: 600 }}>{dept || 'N/A'}</Tag>;
+        const label = dept && t.has(`departments.${dept}`) ? t(`departments.${dept}`) : dept || 'N/A';
+        return <Tag color={colors[dept] || 'default'} style={{ borderRadius: '6px', fontWeight: 600 }}>{label}</Tag>;
       }
     },
     {

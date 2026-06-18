@@ -1,4 +1,10 @@
-import { BeforeInsert, Column, CreateDateColumn, Entity, PrimaryColumn } from 'typeorm';
+import {
+  BeforeInsert,
+  Column,
+  CreateDateColumn,
+  Entity,
+  PrimaryColumn,
+} from 'typeorm';
 import { createEntityId } from '@/common/ids/entity-id.util';
 
 @Entity('audit_logs')

@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, Repository } from 'typeorm';
 import Decimal from 'decimal.js';
@@ -108,7 +112,9 @@ export class CommercialInvoicesService {
     invoice: CommercialInvoice,
     action: CommercialInvoiceAuditAction,
     username: string,
-    extra: Partial<Omit<CommercialInvoiceAuditEvent, 'action' | 'username' | 'at'>> = {},
+    extra: Partial<
+      Omit<CommercialInvoiceAuditEvent, 'action' | 'username' | 'at'>
+    > = {},
   ) {
     invoice.auditTrail = [
       ...(Array.isArray(invoice.auditTrail) ? invoice.auditTrail : []),
@@ -121,7 +127,11 @@ export class CommercialInvoicesService {
     ];
   }
 
-  private parseDueDate(invoiceDate: Date, paymentTerms?: string | null, fallback?: string | Date | null) {
+  private parseDueDate(
+    invoiceDate: Date,
+    paymentTerms?: string | null,
+    fallback?: string | Date | null,
+  ) {
     if (fallback) return new Date(fallback);
 
     const match = String(paymentTerms || '').match(/(?:net\s*)?(\d{1,3})/i);
@@ -131,19 +141,30 @@ export class CommercialInvoicesService {
     return dueDate;
   }
 
-  private async generateInvoiceNumber(shipment: Shipment, manager: EntityManager) {
+  private async generateInvoiceNumber(
+    shipment: Shipment,
+    manager: EntityManager,
+  ) {
     for (let attempt = 0; attempt < 5; attempt += 1) {
-      const suffix = createOpaqueCode('ci_no').split('_').pop()?.toUpperCase() || Date.now().toString(36).toUpperCase();
+      const suffix =
+        createOpaqueCode('ci_no').split('_').pop()?.toUpperCase() ||
+        Date.now().toString(36).toUpperCase();
       const invoiceNumber = `CI-${shipment.shipmentNumber}-${suffix}`;
-      const existing = await manager.findOne(CommercialInvoice, { where: { invoiceNumber } });
+      const existing = await manager.findOne(CommercialInvoice, {
+        where: { invoiceNumber },
+      });
       if (!existing) return invoiceNumber;
     }
 
-    throw new BadRequestException('Cannot generate a unique Commercial Invoice number');
+    throw new BadRequestException(
+      'Cannot generate a unique Commercial Invoice number',
+    );
   }
 
   private async loadShipment(shipment_id: string, manager?: EntityManager) {
-    const repository = manager ? manager.getRepository(Shipment) : this.shipmentRepository;
+    const repository = manager
+      ? manager.getRepository(Shipment)
+      : this.shipmentRepository;
     const shipment = await repository.findOne({
       where: { _id: shipment_id },
       relations: [
@@ -156,11 +177,17 @@ export class CommercialInvoicesService {
     });
 
     if (!shipment?.salesContract) {
-      throw new NotFoundException('Shipment or linked sales contract was not found');
+      throw new NotFoundException(
+        'Shipment or linked sales contract was not found',
+      );
     }
 
-    if (!CONTRACT_STATUSES_ALLOWED_FOR_CI.includes(shipment.salesContract.status)) {
-      throw new BadRequestException('Sales contract must be confirmed before creating Commercial Invoice');
+    if (
+      !CONTRACT_STATUSES_ALLOWED_FOR_CI.includes(shipment.salesContract.status)
+    ) {
+      throw new BadRequestException(
+        'Sales contract must be confirmed before creating Commercial Invoice',
+      );
     }
 
     return shipment;
@@ -172,24 +199,46 @@ export class CommercialInvoicesService {
       const product = item.product || null;
       const quantity = Number(item.quantity || 0);
       const unitPrice = Number(item.unitPrice || 0);
-      const lineAmount = new Decimal(quantity).mul(unitPrice).toDecimalPlaces(2).toNumber();
+      const lineAmount = new Decimal(quantity)
+        .mul(unitPrice)
+        .toDecimalPlaces(2)
+        .toNumber();
       const piecesPerCarton = Number(product?.piecesPerCarton || 0);
-      const cartons = piecesPerCarton > 0 ? new Decimal(quantity).div(piecesPerCarton) : new Decimal(0);
-      const netWeight = cartons.greaterThan(0) && product?.netWeightPerCarton
-        ? cartons.mul(Number(product.netWeightPerCarton)).toDecimalPlaces(4).toNumber()
-        : null;
-      const grossWeight = cartons.greaterThan(0) && product?.grossWeightPerCarton
-        ? cartons.mul(Number(product.grossWeightPerCarton)).toDecimalPlaces(4).toNumber()
-        : null;
-      const cbm = cartons.greaterThan(0) && product?.cbmPerCarton
-        ? cartons.mul(Number(product.cbmPerCarton)).toDecimalPlaces(4).toNumber()
-        : null;
+      const cartons =
+        piecesPerCarton > 0
+          ? new Decimal(quantity).div(piecesPerCarton)
+          : new Decimal(0);
+      const netWeight =
+        cartons.greaterThan(0) && product?.netWeightPerCarton
+          ? cartons
+              .mul(Number(product.netWeightPerCarton))
+              .toDecimalPlaces(4)
+              .toNumber()
+          : null;
+      const grossWeight =
+        cartons.greaterThan(0) && product?.grossWeightPerCarton
+          ? cartons
+              .mul(Number(product.grossWeightPerCarton))
+              .toDecimalPlaces(4)
+              .toNumber()
+          : null;
+      const cbm =
+        cartons.greaterThan(0) && product?.cbmPerCarton
+          ? cartons
+              .mul(Number(product.cbmPerCarton))
+              .toDecimalPlaces(4)
+              .toNumber()
+          : null;
 
       return {
         salesContractItem_id: item._id,
         product_id: item.productId || null,
         sku: product?.sku || null,
-        description: product?.englishName || product?.vietnameseName || product?.sku || item.productId,
+        description:
+          product?.englishName ||
+          product?.vietnameseName ||
+          product?.sku ||
+          item.productId,
         hsCode: product?.hsCode || null,
         quantity,
         unit: product?.unitOfMeasure || 'PCS',
@@ -202,7 +251,10 @@ export class CommercialInvoicesService {
     });
   }
 
-  private buildSourceSnapshot(invoice: CommercialInvoice, shipment: Shipment): CommercialInvoiceSnapshot {
+  private buildSourceSnapshot(
+    invoice: CommercialInvoice,
+    shipment: Shipment,
+  ): CommercialInvoiceSnapshot {
     const contract = shipment.salesContract;
     const buyer = contract.buyer || null;
     const items = (invoice.items || []).map((item) => ({
@@ -222,7 +274,9 @@ export class CommercialInvoicesService {
       invoice_id: invoice._id,
       invoiceNumber: invoice.invoiceNumber,
       invoiceDate: this.toDateOnly(new Date(invoice.invoiceDate)),
-      dueDate: invoice.dueDate ? this.toDateOnly(new Date(invoice.dueDate)) : null,
+      dueDate: invoice.dueDate
+        ? this.toDateOnly(new Date(invoice.dueDate))
+        : null,
       shipment_id: shipment._id,
       shipmentNumber: shipment.shipmentNumber,
       salesContract_id: contract._id,
@@ -261,7 +315,11 @@ export class CommercialInvoicesService {
   ) {
     await manager.update(
       ExportDocument,
-      { shipmentId: shipment_id, documentType: DocumentType.COMMERCIAL_INVOICE, isCurrentVersion: true },
+      {
+        shipmentId: shipment_id,
+        documentType: DocumentType.COMMERCIAL_INVOICE,
+        isCurrentVersion: true,
+      },
       { isCurrentVersion: false },
     );
   }
@@ -272,7 +330,10 @@ export class CommercialInvoicesService {
     username: string,
     manager: EntityManager,
   ) {
-    await this.markPreviousCommercialInvoiceDocsHistorical(invoice.shipment_id, manager);
+    await this.markPreviousCommercialInvoiceDocsHistorical(
+      invoice.shipment_id,
+      manager,
+    );
     const existingCount = await manager.count(ExportDocument, {
       where: {
         shipmentId: invoice.shipment_id,
@@ -315,7 +376,11 @@ export class CommercialInvoicesService {
         },
       ],
       isGenerated: false,
-      fileName: `${DocumentType.COMMERCIAL_INVOICE}_${invoice.invoiceNumber}_v${versionNo}.pdf`.replace(/[^a-zA-Z0-9_.-]/g, '_'),
+      fileName:
+        `${DocumentType.COMMERCIAL_INVOICE}_${invoice.invoiceNumber}_v${versionNo}.pdf`.replace(
+          /[^a-zA-Z0-9_.-]/g,
+          '_',
+        ),
       fileUrl: '',
       issueDate: new Date(invoice.invoiceDate),
     });
@@ -324,16 +389,26 @@ export class CommercialInvoicesService {
   }
 
   private buildRevenueJournalItems(invoice: CommercialInvoice) {
-    const incotermConfig = invoice.incoterm ? INCOTERM_CONFIG[invoice.incoterm as keyof typeof INCOTERM_CONFIG] : null;
-    const isSellerLed = incotermConfig?.category === IncotermCategory.SELLER_PAYS_FREIGHT;
+    const incotermConfig = invoice.incoterm
+      ? INCOTERM_CONFIG[invoice.incoterm as keyof typeof INCOTERM_CONFIG]
+      : null;
+    const isSellerLed =
+      incotermConfig?.category === IncotermCategory.SELLER_PAYS_FREIGHT;
     const revenueAccount = isSellerLed ? '3387' : '511';
     const amountVnd = Number(invoice.totalAmountVnd || 0);
     if (amountVnd <= 0) {
-      throw new BadRequestException('Commercial Invoice total must be greater than zero before issuing');
+      throw new BadRequestException(
+        'Commercial Invoice total must be greater than zero before issuing',
+      );
     }
 
     return [
-      { accountCode: '131', debit: amountVnd, credit: 0, partnerId: invoice.buyer_id },
+      {
+        accountCode: '131',
+        debit: amountVnd,
+        credit: 0,
+        partnerId: invoice.buyer_id,
+      },
       { accountCode: revenueAccount, debit: 0, credit: amountVnd },
     ];
   }
@@ -353,10 +428,16 @@ export class CommercialInvoicesService {
       .skip(skip)
       .take(pageSize);
 
-    if (query.status) qb.andWhere('invoice.status = :status', { status: query.status });
-    if (query.shipment_id) qb.andWhere('invoice.shipment_id = :shipment_id', { shipment_id: query.shipment_id });
+    if (query.status)
+      qb.andWhere('invoice.status = :status', { status: query.status });
+    if (query.shipment_id)
+      qb.andWhere('invoice.shipment_id = :shipment_id', {
+        shipment_id: query.shipment_id,
+      });
     if (query.salesContract_id) {
-      qb.andWhere('invoice.salesContract_id = :salesContract_id', { salesContract_id: query.salesContract_id });
+      qb.andWhere('invoice.salesContract_id = :salesContract_id', {
+        salesContract_id: query.salesContract_id,
+      });
     }
     if (query.search) {
       qb.andWhere(
@@ -410,11 +491,19 @@ export class CommercialInvoicesService {
         lock: { mode: 'pessimistic_write' },
       });
       if (activeInvoice) {
-        throw new BadRequestException('Shipment already has an active Commercial Invoice');
+        throw new BadRequestException(
+          'Shipment already has an active Commercial Invoice',
+        );
       }
 
-      const invoiceDate = dto.invoiceDate ? new Date(dto.invoiceDate) : new Date();
-      const dueDate = this.parseDueDate(invoiceDate, shipment.salesContract.paymentTerms, dto.dueDate);
+      const invoiceDate = dto.invoiceDate
+        ? new Date(dto.invoiceDate)
+        : new Date();
+      const dueDate = this.parseDueDate(
+        invoiceDate,
+        shipment.salesContract.paymentTerms,
+        dto.dueDate,
+      );
       const itemDrafts = this.buildInvoiceItemDrafts(shipment);
       const subtotal = itemDrafts.reduce(
         (sum, item) => sum.plus(item.lineAmountForeign),
@@ -423,7 +512,9 @@ export class CommercialInvoicesService {
       const taxRate = new Decimal(dto.taxRatePercent || 0);
       const taxAmount = subtotal.mul(taxRate).div(100).toDecimalPlaces(2);
       const total = subtotal.plus(taxAmount).toDecimalPlaces(2);
-      const exchangeRate = new Decimal(shipment.salesContract.exchangeRate || 1);
+      const exchangeRate = new Decimal(
+        shipment.salesContract.exchangeRate || 1,
+      );
       const username = this.getActorUsername(user);
 
       const invoice = manager.create(CommercialInvoice, {
@@ -455,21 +546,31 @@ export class CommercialInvoicesService {
         cancellationReason: null,
         note: dto.note || null,
       });
-      this.appendAuditEvent(invoice, CommercialInvoiceAuditAction.CREATED, username, {
-        referenceType: 'SHIPMENT',
-        reference_id: shipment._id,
-      });
+      this.appendAuditEvent(
+        invoice,
+        CommercialInvoiceAuditAction.CREATED,
+        username,
+        {
+          referenceType: 'SHIPMENT',
+          reference_id: shipment._id,
+        },
+      );
 
       const savedInvoice = await manager.save(invoice);
-      const items = itemDrafts.map((item) => manager.create(CommercialInvoiceItem, {
-        ...item,
-        commercialInvoice_id: savedInvoice._id,
-      }));
+      const items = itemDrafts.map((item) =>
+        manager.create(CommercialInvoiceItem, {
+          ...item,
+          commercialInvoice_id: savedInvoice._id,
+        }),
+      );
       savedInvoice.items = await manager.save(items);
       savedInvoice.shipment = shipment;
       savedInvoice.salesContract = shipment.salesContract;
       savedInvoice.buyer = shipment.salesContract.buyer;
-      savedInvoice.sourceSnapshot = this.buildSourceSnapshot(savedInvoice, shipment);
+      savedInvoice.sourceSnapshot = this.buildSourceSnapshot(
+        savedInvoice,
+        shipment,
+      );
 
       return manager.save(savedInvoice);
     });
@@ -479,12 +580,13 @@ export class CommercialInvoicesService {
     return this.dataSource.transaction(async (manager) => {
       const invoice = await manager.findOne(CommercialInvoice, {
         where: { _id: recordId },
-        relations: ['items'],
         lock: { mode: 'pessimistic_write' },
       });
       if (!invoice) throw new NotFoundException('Commercial Invoice not found');
       if (invoice.status !== CommercialInvoiceStatus.DRAFT) {
-        throw new BadRequestException('Only draft Commercial Invoice can be issued');
+        throw new BadRequestException(
+          'Only draft Commercial Invoice can be issued',
+        );
       }
 
       const shipment = await this.loadShipment(invoice.shipment_id, manager);
@@ -493,7 +595,9 @@ export class CommercialInvoicesService {
         order: { _id: 'ASC' },
       });
       if (!invoice.items.length) {
-        throw new BadRequestException('Commercial Invoice must have at least one line');
+        throw new BadRequestException(
+          'Commercial Invoice must have at least one line',
+        );
       }
 
       if (dto.invoiceDate) invoice.invoiceDate = new Date(dto.invoiceDate);
@@ -516,22 +620,28 @@ export class CommercialInvoicesService {
         manager,
       );
 
-      const receivable = await this.accountReceivablesService.createFromCommercialInvoice(
-        invoice,
-        revenueJournal._id,
-        manager,
-        username,
-      );
+      const receivable =
+        await this.accountReceivablesService.createFromCommercialInvoice(
+          invoice,
+          revenueJournal._id,
+          manager,
+          username,
+        );
 
       invoice.accountReceivable_id = receivable._id;
       invoice.sourceSnapshot = {
         ...snapshot,
         accountReceivable_id: receivable._id,
       };
-      this.appendAuditEvent(invoice, CommercialInvoiceAuditAction.ACCOUNT_RECEIVABLE_CREATED, username, {
-        referenceType: 'ACCOUNT_RECEIVABLE',
-        reference_id: receivable._id,
-      });
+      this.appendAuditEvent(
+        invoice,
+        CommercialInvoiceAuditAction.ACCOUNT_RECEIVABLE_CREATED,
+        username,
+        {
+          referenceType: 'ACCOUNT_RECEIVABLE',
+          reference_id: receivable._id,
+        },
+      );
 
       const exportDocument = await this.createExportDocumentFromInvoice(
         invoice,
@@ -544,33 +654,57 @@ export class CommercialInvoicesService {
       invoice.status = CommercialInvoiceStatus.ISSUED;
       invoice.issuedByUsername = username;
       invoice.issuedAt = new Date();
-      this.appendAuditEvent(invoice, CommercialInvoiceAuditAction.EXPORT_DOCUMENT_CREATED, username, {
-        referenceType: 'EXPORT_DOCUMENT',
-        reference_id: exportDocument._id,
-      });
-      this.appendAuditEvent(invoice, CommercialInvoiceAuditAction.ISSUED, username, {
-        referenceType: 'JOURNAL_ENTRY',
-        reference_id: revenueJournal._id,
-      });
+      this.appendAuditEvent(
+        invoice,
+        CommercialInvoiceAuditAction.EXPORT_DOCUMENT_CREATED,
+        username,
+        {
+          referenceType: 'EXPORT_DOCUMENT',
+          reference_id: exportDocument._id,
+        },
+      );
+      this.appendAuditEvent(
+        invoice,
+        CommercialInvoiceAuditAction.ISSUED,
+        username,
+        {
+          referenceType: 'JOURNAL_ENTRY',
+          reference_id: revenueJournal._id,
+        },
+      );
 
       const saved = await manager.save(invoice);
       return manager.findOne(CommercialInvoice, {
         where: { _id: saved._id },
-        relations: ['buyer', 'salesContract', 'shipment', 'items', 'exportDocument'],
+        relations: [
+          'buyer',
+          'salesContract',
+          'shipment',
+          'items',
+          'exportDocument',
+        ],
       });
     });
   }
 
-  async cancel(recordId: string, dto: CancelCommercialInvoiceDto, user?: Actor) {
+  async cancel(
+    recordId: string,
+    dto: CancelCommercialInvoiceDto,
+    user?: Actor,
+  ) {
     const reason = dto.reason?.trim();
     if (!reason || reason.length < 3) {
       throw new BadRequestException('Cancellation reason is required');
     }
 
-    const invoice = await this.invoiceRepository.findOne({ where: { _id: recordId } });
+    const invoice = await this.invoiceRepository.findOne({
+      where: { _id: recordId },
+    });
     if (!invoice) throw new NotFoundException('Commercial Invoice not found');
     if (invoice.status !== CommercialInvoiceStatus.DRAFT) {
-      throw new BadRequestException('Only draft Commercial Invoice can be cancelled');
+      throw new BadRequestException(
+        'Only draft Commercial Invoice can be cancelled',
+      );
     }
 
     const username = this.getActorUsername(user);
@@ -578,9 +712,14 @@ export class CommercialInvoicesService {
     invoice.cancelledByUsername = username;
     invoice.cancelledAt = new Date();
     invoice.cancellationReason = reason;
-    this.appendAuditEvent(invoice, CommercialInvoiceAuditAction.CANCELLED, username, {
-      note: reason,
-    });
+    this.appendAuditEvent(
+      invoice,
+      CommercialInvoiceAuditAction.CANCELLED,
+      username,
+      {
+        note: reason,
+      },
+    );
 
     return this.invoiceRepository.save(invoice);
   }

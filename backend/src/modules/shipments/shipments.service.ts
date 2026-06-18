@@ -1,10 +1,17 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository, ILike } from 'typeorm';
 import { Shipment, ShipmentStatus } from './entities/shipment.entity';
 import { Container } from './entities/container.entity';
-import { ShipmentDocument, DocumentType } from './entities/shipment-document.entity';
+import {
+  ShipmentDocument,
+  DocumentType,
+} from './entities/shipment-document.entity';
 import { ProformaInvoice } from '../proforma-invoices/entities/proforma-invoice.entity';
 import { InventoryService } from '../inventory/inventory.service';
 import { CreateShipmentDto } from '@/modules/shipments/dto/create-shipment.dto';
@@ -17,6 +24,25 @@ import { AccountingService } from '../accounting/accounting.service';
 import { LogisticsAllocationService } from './logistics-allocation.service';
 import Decimal from 'decimal.js';
 import { createOpaqueCode } from '@/common/ids/entity-id.util';
+import { PortsService } from '../ports/ports.service';
+
+type ShipmentRouteInput = {
+  pol?: string | null;
+  pol_port_id?: string | null;
+  pod?: string | null;
+  pod_port_id?: string | null;
+};
+
+type ShipmentRoutePatchInput = ShipmentRouteInput & {
+  currentPol?: string | null;
+  currentPolPortId?: string | null;
+  currentPod?: string | null;
+  currentPodPortId?: string | null;
+  hasPol: boolean;
+  hasPolPortId: boolean;
+  hasPod: boolean;
+  hasPodPortId: boolean;
+};
 
 @Injectable()
 export class ShipmentsService {
@@ -35,27 +61,81 @@ export class ShipmentsService {
     private dataSource: DataSource,
     private eventEmitter: EventEmitter2,
     private logisticsAllocationService: LogisticsAllocationService,
+    private portsService: PortsService,
   ) {}
 
+  private async resolveShipmentPorts(
+    data: ShipmentRouteInput,
+  ): Promise<ShipmentRouteInput> {
+    const loading = await this.portsService.resolvePortSnapshot(
+      data.pol_port_id,
+      data.pol,
+    );
+    const discharge = await this.portsService.resolvePortSnapshot(
+      data.pod_port_id,
+      data.pod,
+    );
+
+    return {
+      pol_port_id: loading.port_id,
+      pol: loading.label,
+      pod_port_id: discharge.port_id,
+      pod: discharge.label,
+    };
+  }
+
+  private async resolveShipmentPortsForUpdate(
+    data: ShipmentRoutePatchInput,
+  ): Promise<ShipmentRouteInput> {
+    const loading = await this.portsService.resolvePortSnapshotPatch({
+      incomingPortRef: data.pol_port_id,
+      incomingLabel: data.pol,
+      currentPortRef: data.currentPolPortId,
+      currentLabel: data.currentPol,
+      hasIncomingPortRef: data.hasPolPortId,
+      hasIncomingLabel: data.hasPol,
+    });
+    const discharge = await this.portsService.resolvePortSnapshotPatch({
+      incomingPortRef: data.pod_port_id,
+      incomingLabel: data.pod,
+      currentPortRef: data.currentPodPortId,
+      currentLabel: data.currentPod,
+      hasIncomingPortRef: data.hasPodPortId,
+      hasIncomingLabel: data.hasPod,
+    });
+
+    return {
+      pol_port_id: loading.port_id,
+      pol: loading.label,
+      pod_port_id: discharge.port_id,
+      pod: discharge.label,
+    };
+  }
+
   async create(createShipmentDto: any, user: User) {
-    const { containers, proformaInvoiceId, ...shipmentData } = createShipmentDto;
+    const { containers, proformaInvoiceId, ...shipmentData } =
+      createShipmentDto;
     let { salesContractId } = shipmentData;
 
     // Logic: If creating from PI, find the linked Sales Contract
     if (!salesContractId && proformaInvoiceId) {
-      const pi = await this.piRepository.findOne({ 
+      const pi = await this.piRepository.findOne({
         where: { _id: proformaInvoiceId },
-        relations: ['salesContract']
+        relations: ['salesContract'],
       });
       if (!pi) throw new NotFoundException('Proforma Invoice not found');
       if (!pi.salesContractId) {
-        throw new Error('PI này chưa được chuyển đổi thành Hợp đồng (Sales Contract). Vui lòng duyệt hợp đồng trước khi lên lô.');
+        throw new Error(
+          'PI này chưa được chuyển đổi thành Hợp đồng (Sales Contract). Vui lòng duyệt hợp đồng trước khi lên lô.',
+        );
       }
       salesContractId = pi.salesContractId;
     }
 
     if (!salesContractId) {
-      throw new BadRequestException('Vui lòng cung cấp Sales Contract ID hoặc Proforma Invoice ID hợp lệ.');
+      throw new BadRequestException(
+        'Vui lòng cung cấp Sales Contract ID hoặc Proforma Invoice ID hợp lệ.',
+      );
     }
 
     const queryRunner = this.dataSource.createQueryRunner();
@@ -67,8 +147,18 @@ export class ShipmentsService {
       const suffix = createOpaqueCode('shp_no').split('_').pop()?.toUpperCase();
       const shipmentNumber = `SHP-${dateStr}-${suffix}`;
 
-      const contract = await queryRunner.manager.findOne('SalesContract', { where: { _id: salesContractId } }) as any;
-      
+      const contract = (await queryRunner.manager.findOne('SalesContract', {
+        where: { _id: salesContractId },
+      })) as any;
+      const routeData = await this.resolveShipmentPorts({
+        pol_port_id:
+          shipmentData.pol_port_id ?? contract?.pol_port_id ?? undefined,
+        pol: shipmentData.pol ?? contract?.pol ?? undefined,
+        pod_port_id:
+          shipmentData.pod_port_id ?? contract?.pod_port_id ?? undefined,
+        pod: shipmentData.pod ?? contract?.pod ?? undefined,
+      });
+
       const shipment = this.shipmentRepository.create({
         ...shipmentData,
         salesContractId,
@@ -76,32 +166,42 @@ export class ShipmentsService {
         createdByUsername: user.username,
         status: ShipmentStatus.BOOKED,
         // TECH LEAD INHERIT: Copy logistics info from contract if not provided
-        logisticsPartnerId: shipmentData.logisticsPartnerId || contract?.logisticsPartnerId,
+        logisticsPartnerId:
+          shipmentData.logisticsPartnerId || contract?.logisticsPartnerId,
         bookingNumber: shipmentData.bookingNumber || contract?.bookingNumber,
-        pol: shipmentData.pol || contract?.pol,
-        pod: shipmentData.pod || contract?.pod,
+        ...routeData,
         freightCost: shipmentData.freightCost || contract?.seaFreight || 0,
-        insuranceCost: shipmentData.insuranceCost || contract?.insuranceCost || 0,
-        truckingCostVnd: shipmentData.truckingCostVnd || contract?.domesticTransportCost || 0,
-        localChargesVnd: shipmentData.localChargesVnd || contract?.portCharges || 0,
+        insuranceCost:
+          shipmentData.insuranceCost || contract?.insuranceCost || 0,
+        truckingCostVnd:
+          shipmentData.truckingCostVnd || contract?.domesticTransportCost || 0,
+        localChargesVnd:
+          shipmentData.localChargesVnd || contract?.portCharges || 0,
         freightCurrency: contract?.currencyCode || 'USD',
         insuranceCurrency: contract?.currencyCode || 'USD',
       });
 
-      const savedShipment = await queryRunner.manager.save(shipment) as unknown as Shipment;
+      const savedShipment = (await queryRunner.manager.save(
+        shipment,
+      )) as unknown as Shipment;
 
       if (containers && containers.length > 0) {
-        const containerEntities = containers.map(c => this.containerRepository.create({
-          ...c,
-          shipmentId: savedShipment._id,
-        }));
+        const containerEntities = containers.map((c) =>
+          this.containerRepository.create({
+            ...c,
+            shipmentId: savedShipment._id,
+          }),
+        );
         await queryRunner.manager.save(containerEntities);
       }
 
       // TECH LEAD FIX: Sync Booking Number and ETD back to Sales Contract
       if (contract) {
         let contractUpdated = false;
-        if (shipmentData.bookingNumber && contract.bookingNumber !== shipmentData.bookingNumber) {
+        if (
+          shipmentData.bookingNumber &&
+          contract.bookingNumber !== shipmentData.bookingNumber
+        ) {
           contract.bookingNumber = shipmentData.bookingNumber;
           contractUpdated = true;
         }
@@ -129,8 +229,17 @@ export class ShipmentsService {
     const pageSize = +query.pageSize || 10;
     const skip = (current - 1) * pageSize;
 
-    const { current: _c, pageSize: _p, sort: _s, populate: _pop, search: _search, ...filters } = query;
-    ['current', 'pageSize', 'sort', 'populate', 'search'].forEach(key => delete filters[key]);
+    const {
+      current: _c,
+      pageSize: _p,
+      sort: _s,
+      populate: _pop,
+      search: _search,
+      ...filters
+    } = query;
+    ['current', 'pageSize', 'sort', 'populate', 'search'].forEach(
+      (key) => delete filters[key],
+    );
 
     // Enhanced search logic
     const where: any = { ...filters };
@@ -140,7 +249,13 @@ export class ShipmentsService {
 
     const [results, total] = await this.shipmentRepository.findAndCount({
       where,
-      relations: ['salesContract', 'salesContract.buyer', 'salesContract.proformaInvoice', 'logisticsPartner', 'createdBy'],
+      relations: [
+        'salesContract',
+        'salesContract.buyer',
+        'salesContract.proformaInvoice',
+        'logisticsPartner',
+        'createdBy',
+      ],
       order: { createdAt: 'DESC' },
       take: pageSize,
       skip: skip,
@@ -159,8 +274,12 @@ export class ShipmentsService {
 
   async getStats() {
     const total = await this.shipmentRepository.count();
-    const inTransit = await this.shipmentRepository.countBy({ status: ShipmentStatus.ON_BOARD });
-    const closed = await this.shipmentRepository.countBy({ status: ShipmentStatus.CLOSED });
+    const inTransit = await this.shipmentRepository.countBy({
+      status: ShipmentStatus.ON_BOARD,
+    });
+    const closed = await this.shipmentRepository.countBy({
+      status: ShipmentStatus.CLOSED,
+    });
 
     return {
       total,
@@ -172,7 +291,16 @@ export class ShipmentsService {
   async findOne(id: string) {
     const shipment = await this.shipmentRepository.findOne({
       where: { _id: id },
-      relations: ['salesContract', 'salesContract.buyer', 'salesContract.items', 'salesContract.items.product', 'salesContract.proformaInvoice', 'createdBy', 'containers', 'logisticsPartner'],
+      relations: [
+        'salesContract',
+        'salesContract.buyer',
+        'salesContract.items',
+        'salesContract.items.product',
+        'salesContract.proformaInvoice',
+        'createdBy',
+        'containers',
+        'logisticsPartner',
+      ],
     });
     if (!shipment) throw new NotFoundException('Shipment not found');
     return shipment;
@@ -180,18 +308,64 @@ export class ShipmentsService {
 
   async update(id: string, updateShipmentDto: UpdateShipmentDto) {
     const shipment = await this.findOne(id);
-    const updated = await this.shipmentRepository.save({ ...shipment, ...updateShipmentDto });
+    const hasPolPortId = Object.prototype.hasOwnProperty.call(
+      updateShipmentDto,
+      'pol_port_id',
+    );
+    const hasPol = Object.prototype.hasOwnProperty.call(
+      updateShipmentDto,
+      'pol',
+    );
+    const hasPodPortId = Object.prototype.hasOwnProperty.call(
+      updateShipmentDto,
+      'pod_port_id',
+    );
+    const hasPod = Object.prototype.hasOwnProperty.call(
+      updateShipmentDto,
+      'pod',
+    );
+    const routeData = await this.resolveShipmentPortsForUpdate({
+      pol_port_id: updateShipmentDto.pol_port_id,
+      pol: updateShipmentDto.pol,
+      pod_port_id: updateShipmentDto.pod_port_id,
+      pod: updateShipmentDto.pod,
+      currentPolPortId: shipment.pol_port_id,
+      currentPol: shipment.pol,
+      currentPodPortId: shipment.pod_port_id,
+      currentPod: shipment.pod,
+      hasPolPortId,
+      hasPol,
+      hasPodPortId,
+      hasPod,
+    });
+    const updated = await this.shipmentRepository.save({
+      ...shipment,
+      ...updateShipmentDto,
+      ...routeData,
+    });
 
     // TECH LEAD FIX: Sync Booking Number and ETD back to Sales Contract on update
-    if (shipment.salesContractId && (updateShipmentDto.bookingNumber !== undefined || updateShipmentDto.etd !== undefined)) {
-      const contract = await this.dataSource.manager.findOne('SalesContract', { where: { _id: shipment.salesContractId } }) as any;
+    if (
+      shipment.salesContractId &&
+      (updateShipmentDto.bookingNumber !== undefined ||
+        updateShipmentDto.etd !== undefined)
+    ) {
+      const contract = (await this.dataSource.manager.findOne('SalesContract', {
+        where: { _id: shipment.salesContractId },
+      })) as any;
       if (contract) {
         let contractUpdated = false;
-        if (updateShipmentDto.bookingNumber && contract.bookingNumber !== updateShipmentDto.bookingNumber) {
+        if (
+          updateShipmentDto.bookingNumber &&
+          contract.bookingNumber !== updateShipmentDto.bookingNumber
+        ) {
           contract.bookingNumber = updateShipmentDto.bookingNumber;
           contractUpdated = true;
         }
-        if (updateShipmentDto.etd && contract.deliveryDate !== updateShipmentDto.etd) {
+        if (
+          updateShipmentDto.etd &&
+          contract.deliveryDate !== updateShipmentDto.etd
+        ) {
           contract.deliveryDate = updateShipmentDto.etd;
           contractUpdated = true;
         }
@@ -200,17 +374,25 @@ export class ShipmentsService {
         }
       }
     }
-    
+
     // Nếu lô hàng đã lên tàu (ON_BOARD), việc cập nhật chi phí sẽ kích hoạt tính toán lại công nợ
     if (updated.status === ShipmentStatus.ON_BOARD) {
-      const costFields = ['freightCost', 'insuranceCost', 'localChargesVnd', 'truckingCostVnd', 'customsFeeVnd'];
-      const hasCostUpdate = Object.keys(updateShipmentDto).some(key => costFields.includes(key));
-      
+      const costFields = [
+        'freightCost',
+        'insuranceCost',
+        'localChargesVnd',
+        'truckingCostVnd',
+        'customsFeeVnd',
+      ];
+      const hasCostUpdate = Object.keys(updateShipmentDto).some((key) =>
+        costFields.includes(key),
+      );
+
       if (hasCostUpdate) {
         await this.allocateLogisticsCosts(id);
       }
     }
-    
+
     return updated;
   }
 
@@ -221,7 +403,9 @@ export class ShipmentsService {
     }
 
     if (!shipment.salesContract || !shipment.salesContract.items) {
-      throw new BadRequestException('Không tìm thấy thông tin sản phẩm trong hợp đồng để xuất kho.');
+      throw new BadRequestException(
+        'Không tìm thấy thông tin sản phẩm trong hợp đồng để xuất kho.',
+      );
     }
 
     return await this.dataSource.transaction(async (manager) => {
@@ -256,31 +440,45 @@ export class ShipmentsService {
     // 1. Payment Term contains "Prepayment" or "T/T Advance" (100%)
     // 2. Deposit Percent is 100%
     const isPrepaymentTerm =
-        (pi?.paymentTerms?.toLowerCase().includes('prepayment')) ||
-        (pi?.paymentTerms?.toLowerCase().includes('advance')) ||
-        (Number(pi?.depositPercent) === 100);
+      pi?.paymentTerms?.toLowerCase().includes('prepayment') ||
+      pi?.paymentTerms?.toLowerCase().includes('advance') ||
+      Number(pi?.depositPercent) === 100;
 
     if (isPrepaymentTerm && !pi?.isPaid) {
-        if (status === ShipmentStatus.LOADING || status === ShipmentStatus.ON_BOARD) {
-            throw new BadRequestException(
-                `CHẶN TÀI CHÍNH: Hợp đồng ${contract.contractNumber} áp dụng điều khoản TRẢ TRƯỚC 100%, ` +
-                `nhưng PI ${pi.piNumber} chưa được xác nhận thanh toán. Không thể giao hàng!`
-            );
-        }
+      if (
+        status === ShipmentStatus.LOADING ||
+        status === ShipmentStatus.ON_BOARD
+      ) {
+        throw new BadRequestException(
+          `CHẶN TÀI CHÍNH: Hợp đồng ${contract.contractNumber} áp dụng điều khoản TRẢ TRƯỚC 100%, ` +
+            `nhưng PI ${pi.piNumber} chưa được xác nhận thanh toán. Không thể giao hàng!`,
+        );
+      }
     }
 
     // TECH LEAD COMPLIANCE: Check for required documents before moving status
-    if (status === ShipmentStatus.ON_BOARD && contract?.incoterm === Incoterm.CIF) {
+    if (
+      status === ShipmentStatus.ON_BOARD &&
+      contract?.incoterm === Incoterm.CIF
+    ) {
       const docs = await this.getDocuments(id);
-      const hasInsurance = docs.some(d => d.documentType === DocumentType.CERTIFICATE_OF_ORIGIN || d.documentType === DocumentType.PHYTOSANITARY);
+      const hasInsurance = docs.some(
+        (d) =>
+          d.documentType === DocumentType.CERTIFICATE_OF_ORIGIN ||
+          d.documentType === DocumentType.PHYTOSANITARY,
+      );
       // NOTE: For this demo, let's say CIF needs any document uploaded to signify activity
       // Real ERP: docs.some(d => d.documentType === DocumentType.INSURANCE_POLICY)
     }
 
     shipment.status = status;
-    
+
     // Fix: Trigger accounting/debt recognition even if user skips ON_BOARD step
-    const triggerStatuses = [ShipmentStatus.ON_BOARD, ShipmentStatus.ARRIVED, ShipmentStatus.CLOSED];
+    const triggerStatuses = [
+      ShipmentStatus.ON_BOARD,
+      ShipmentStatus.ARRIVED,
+      ShipmentStatus.CLOSED,
+    ];
     if (triggerStatuses.includes(status) && contract?.status === 'CONFIRMED') {
       await this.salesContractService.shipContract(shipment.salesContractId);
       await this.allocateLogisticsCosts(id);
@@ -297,9 +495,17 @@ export class ShipmentsService {
           referenceType: 'SHIPMENT',
           referenceId: shipment._id,
           items: [
-            { accountCode: '3387', debit: Number(contract.totalAmountVnd), credit: 0 },
-            { accountCode: '511', debit: 0, credit: Number(contract.totalAmountVnd) }
-          ]
+            {
+              accountCode: '3387',
+              debit: Number(contract.totalAmountVnd),
+              credit: 0,
+            },
+            {
+              accountCode: '511',
+              debit: 0,
+              credit: Number(contract.totalAmountVnd),
+            },
+          ],
         });
       }
     }
@@ -313,13 +519,16 @@ export class ShipmentsService {
   }
 
   async getDocuments(shipmentId: string) {
-    return this.docRepository.find({ where: { shipmentId }, order: { documentType: 'ASC' } });
+    return this.docRepository.find({
+      where: { shipmentId },
+      order: { documentType: 'ASC' },
+    });
   }
 
   async getCommercialInvoiceData(id: string) {
     const shipment = await this.findOne(id);
     const sc = shipment.salesContract;
-    
+
     return {
       invoiceNumber: shipment.shipmentNumber,
       date: new Date(),
@@ -330,47 +539,62 @@ export class ShipmentsService {
       pol: shipment.pol,
       pod: shipment.pod,
       incoterms: sc.incoterm,
-      items: sc.items.map(item => ({
+      items: sc.items.map((item) => ({
         description: item.product.englishName || item.product.vietnameseName,
         hsCode: item.product.hsCode,
         quantity: item.quantity,
         unit: item.product.unitOfMeasure,
         price: item.unitPrice,
         amount: Number(item.quantity) * Number(item.unitPrice),
-        netWeight: Number(item.quantity) * Number(item.product.netWeightPerCarton || 0),
-        grossWeight: Number(item.quantity) * Number(item.product.grossWeightPerCarton || 0),
+        netWeight:
+          Number(item.quantity) * Number(item.product.netWeightPerCarton || 0),
+        grossWeight:
+          Number(item.quantity) *
+          Number(item.product.grossWeightPerCarton || 0),
         cbm: Number(item.quantity) * Number(item.product.cbmPerCarton || 0),
       })),
       totalAmount: sc.totalAmount,
-      currency: sc.currencyCode
+      currency: sc.currencyCode,
     };
   }
 
   async allocateLogisticsCosts(id: string) {
     const shipment = await this.shipmentRepository.findOne({
       where: { _id: id },
-      relations: ['salesContract', 'salesContract.items', 'salesContract.items.product'],
+      relations: [
+        'salesContract',
+        'salesContract.items',
+        'salesContract.items.product',
+      ],
     });
 
     if (!shipment) throw new NotFoundException('Shipment not found');
 
     // Clean up old logistics journal entries for this shipment to avoid duplicates
-    await this.accountingService.deleteJournalEntriesByReference('SHIPMENT', shipment._id, `Logistics Cost Allocation`);
+    await this.accountingService.deleteJournalEntriesByReference(
+      'SHIPMENT',
+      shipment._id,
+      `Logistics Cost Allocation`,
+    );
 
     await this.logisticsAllocationService.allocateCosts(id);
 
     const exRate = new Decimal(shipment.salesContract?.exchangeRate || 25000);
-    const totalFreightVnd = new Decimal(shipment.freightCost || 0).plus(shipment.insuranceCost || 0).times(exRate);
+    const totalFreightVnd = new Decimal(shipment.freightCost || 0)
+      .plus(shipment.insuranceCost || 0)
+      .times(exRate);
     const totalLocalVnd = new Decimal(shipment.localChargesVnd || 0)
       .plus(shipment.truckingCostVnd || 0)
       .plus(shipment.customsFeeVnd || 0);
-    
+
     const totalLogisticsVnd = totalFreightVnd.plus(totalLocalVnd);
     if (totalLogisticsVnd.isZero()) return;
 
     // TECH LEAD FIX: Ensure partner exists to avoid "floating" journal entries with null partnerId
     if (!shipment.logisticsPartnerId) {
-      throw new BadRequestException(`Lô hàng ${shipment.shipmentNumber} chưa chọn Đơn vị vận tải (Forwarder). Vui lòng chọn trước khi lưu chi phí.`);
+      throw new BadRequestException(
+        `Lô hàng ${shipment.shipmentNumber} chưa chọn Đơn vị vận tải (Forwarder). Vui lòng chọn trước khi lưu chi phí.`,
+      );
     }
 
     await this.accountingService.createJournalEntry({
@@ -379,8 +603,13 @@ export class ShipmentsService {
       referenceId: shipment._id,
       items: [
         { accountCode: '632', debit: totalLogisticsVnd.toNumber(), credit: 0 },
-        { accountCode: '331', debit: 0, credit: totalLogisticsVnd.toNumber(), partnerId: shipment.logisticsPartnerId }
-      ]
+        {
+          accountCode: '331',
+          debit: 0,
+          credit: totalLogisticsVnd.toNumber(),
+          partnerId: shipment.logisticsPartnerId,
+        },
+      ],
     });
   }
 
@@ -389,11 +618,17 @@ export class ShipmentsService {
       where: [
         { shipmentNumber: ILike(`%${number}%`) },
         { blNumber: ILike(`%${number}%`) },
-        { bookingNumber: ILike(`%${number}%`) }
+        { bookingNumber: ILike(`%${number}%`) },
       ],
-      relations: ['salesContract', 'salesContract.buyer', 'logisticsPartner', 'containers']
+      relations: [
+        'salesContract',
+        'salesContract.buyer',
+        'logisticsPartner',
+        'containers',
+      ],
     });
-    if (!shipment) throw new NotFoundException('Không tìm thấy thông tin vận đơn này.');
+    if (!shipment)
+      throw new NotFoundException('Không tìm thấy thông tin vận đơn này.');
     return {
       shipmentNumber: shipment.shipmentNumber,
       status: shipment.status,

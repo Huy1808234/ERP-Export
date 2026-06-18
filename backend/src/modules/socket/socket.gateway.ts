@@ -26,7 +26,9 @@ type NewInquiryNotificationEvent = {
     credentials: true,
   },
 })
-export class SocketGateway implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
+export class SocketGateway
+  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
+{
   @WebSocketServer() server: Server;
   private logger: Logger = new Logger('SocketGateway');
 
@@ -50,27 +52,56 @@ export class SocketGateway implements OnGatewayInit, OnGatewayConnection, OnGate
   handleNewInquiryEvent(payload: NewInquiryNotificationEvent) {
     this.logger.log(`📢 Internal event received: notification.new_inquiry`);
     this.logger.log(`📦 Payload: ${JSON.stringify(payload)}`);
-    
+
     if (this.server) {
       this.server.emit('new_inquiry', {
         ...payload,
         timestamp: new Date(),
       });
-      this.logger.log('🚀 Successfully broadcasted "new_inquiry" to all connected clients');
+      this.logger.log(
+        '🚀 Successfully broadcasted "new_inquiry" to all connected clients',
+      );
     } else {
       this.logger.error('❌ WebSocket Server instance is not available!');
     }
   }
 
+  @OnEvent('notification.new_system')
+  handleNewSystemNotification(payload: any) {
+    this.logger.log(`📢 Internal event received: notification.new_system`);
+    if (this.server) {
+      if (payload.userId) {
+        this.server.to(payload.userId).emit('new_system_notification', {
+          ...payload,
+          timestamp: new Date(),
+        });
+        this.logger.log(
+          `🚀 Sent system notification to room: ${payload.userId}`,
+        );
+      } else {
+        this.server.emit('new_system_notification', {
+          ...payload,
+          timestamp: new Date(),
+        });
+        this.logger.log('🚀 Broadcasted system notification to all clients');
+      }
+    }
+  }
+
   /**
-   * Broadcast updated unread count to all admin clients
-   * Triggered when an admin reads or clears notifications
+   * Send updated unread count to specific user room
    */
   @OnEvent('notification.unread_count')
-  handleUnreadCountUpdate(payload: { count: number }) {
-    this.logger.log(`📢 Unread count updated: ${payload.count}`);
+  handleUnreadCountUpdate(payload: { userId?: string; count: number }) {
+    this.logger.log(
+      `📢 Unread count updated for user ${payload.userId || 'all'}: ${payload.count}`,
+    );
     if (this.server) {
-      this.server.emit('unread_count', payload);
+      if (payload.userId) {
+        this.server.to(payload.userId).emit('unread_count', payload);
+      } else {
+        this.server.emit('unread_count', payload);
+      }
     }
   }
 
@@ -88,12 +119,24 @@ export class SocketGateway implements OnGatewayInit, OnGatewayConnection, OnGate
   @OnEvent('approval.workflow.requested')
   handleApprovalWorkflowRequested(payload: ApprovalWorkflowRequestedEvent) {
     this.logger.log(`Approval workflow requested: ${payload.requestId}`);
+    // Note: We keep this legacy broadcast event for backward compatibility,
+    // but the actual system notification is pushed to specific approver rooms via 'notification.new_system'.
     if (this.server) {
       this.server.emit('approval_required', {
         ...payload,
         timestamp: new Date(),
       });
     }
+  }
+
+  @SubscribeMessage('join')
+  handleJoin(client: Socket, payload: { userId: string }) {
+    if (payload && payload.userId) {
+      client.join(payload.userId);
+      this.logger.log(`👤 Client ${client.id} joined room: ${payload.userId}`);
+      return { status: 'joined', room: payload.userId };
+    }
+    return { status: 'error', message: 'userId is required' };
   }
 
   @SubscribeMessage('ping')

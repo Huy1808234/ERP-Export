@@ -8,7 +8,10 @@ import {
 } from '../approval-matrix/approval-workflow.events';
 import type { ApprovalWorkflowDecisionEvent } from '../approval-matrix/approval-workflow.events';
 import { ApprovalDocumentType } from '../approval-matrix/entities/approval-rule.entity';
-import { PurchaseOrder, PurchaseOrderStatus } from './entities/purchase-order.entity';
+import {
+  PurchaseOrder,
+  PurchaseOrderStatus,
+} from './entities/purchase-order.entity';
 
 @Injectable()
 export class PurchaseOrderApprovalListener {
@@ -21,7 +24,9 @@ export class PurchaseOrderApprovalListener {
   async handleApproved(payload: ApprovalWorkflowDecisionEvent) {
     if (payload.documentType !== ApprovalDocumentType.PURCHASE_ORDER) return;
 
-    const po = await this.poRepository.findOne({ where: { _id: payload.documentId } });
+    const po = await this.poRepository.findOne({
+      where: { _id: payload.documentId },
+    });
     if (!po || po.status !== PurchaseOrderStatus.PENDING_APPROVAL) return;
 
     po.status = PurchaseOrderStatus.APPROVED;
@@ -35,7 +40,9 @@ export class PurchaseOrderApprovalListener {
   async handleRejected(payload: ApprovalWorkflowDecisionEvent) {
     if (payload.documentType !== ApprovalDocumentType.PURCHASE_ORDER) return;
 
-    const po = await this.poRepository.findOne({ where: { _id: payload.documentId } });
+    const po = await this.poRepository.findOne({
+      where: { _id: payload.documentId },
+    });
     if (!po || po.status !== PurchaseOrderStatus.PENDING_APPROVAL) return;
 
     po.status = PurchaseOrderStatus.REJECTED;

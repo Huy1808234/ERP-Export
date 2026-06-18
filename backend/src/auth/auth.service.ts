@@ -4,15 +4,20 @@ import { ConfigService } from '@nestjs/config';
 import { createHash, randomBytes } from 'crypto';
 import { comparePasswordHelper, hashPasswordHelper } from '@/helpers/util';
 import { UsersService } from '@/modules/users/users.service';
-import { ChangePasswordAuthDto, CodeAuthDto, CreateAuthDto } from './dto/create-auth.dto';
+import {
+  ChangePasswordAuthDto,
+  CodeAuthDto,
+  CreateAuthDto,
+} from './dto/create-auth.dto';
 import type { User } from '@/modules/users/entities/user.entity';
 import type { AuthenticatedUser } from '@/common/types/authenticated-user.type';
 
 type AccessJwtPayload = {
+  _id?: string;
   username: string;
   sub: string;
   roleName?: string | null;
-  role: AuthenticatedUser['role'];
+  role?: AuthenticatedUser['role'];
   partnerId?: string | null;
 };
 
@@ -37,7 +42,10 @@ export class AuthService {
     private configService: ConfigService,
   ) {}
 
-  async validateUser(usernameOrEmail: string, pass: string): Promise<User | null> {
+  async validateUser(
+    usernameOrEmail: string,
+    pass: string,
+  ): Promise<User | null> {
     const user = usernameOrEmail.includes('@')
       ? await this.usersService.findByEmail(usernameOrEmail)
       : await this.usersService.findByUsername(usernameOrEmail);
@@ -55,11 +63,17 @@ export class AuthService {
   }
 
   private getAccessTokenExpiresIn(): JwtExpiresIn {
-    return this.configService.get<string>('JWT_ACCESS_TOKEN_EXPIRED', '15m') as JwtExpiresIn;
+    return this.configService.get<string>(
+      'JWT_ACCESS_TOKEN_EXPIRED',
+      '15m',
+    ) as JwtExpiresIn;
   }
 
   private getRefreshTokenExpiresIn(): JwtExpiresIn {
-    return this.configService.get<string>('JWT_REFRESH_TOKEN_EXPIRED', '8h') as JwtExpiresIn;
+    return this.configService.get<string>(
+      'JWT_REFRESH_TOKEN_EXPIRED',
+      '8h',
+    ) as JwtExpiresIn;
   }
 
   private getRefreshTokenSecret(): string {
@@ -71,10 +85,16 @@ export class AuthService {
 
   private buildAccessPayload(user: User): AccessJwtPayload {
     return {
+      _id: user._id,
       username: user.username,
       sub: user.username,
       roleName: user.roleName,
-      role: user.role,
+      role: user.role
+        ? {
+            _id: user.role._id,
+            name: user.role.name,
+          }
+        : null,
       partnerId: user.partnerId,
     };
   }
@@ -87,7 +107,9 @@ export class AuthService {
 
     return {
       accessToken,
-      accessTokenExpiresAt: decoded?.exp ? decoded.exp * 1000 : Date.now() + 15 * 60 * 1000,
+      accessTokenExpiresAt: decoded?.exp
+        ? decoded.exp * 1000
+        : Date.now() + 15 * 60 * 1000,
     };
   }
 
@@ -122,7 +144,10 @@ export class AuthService {
     return hashPasswordHelper(this.digestRefreshToken(refreshToken));
   }
 
-  private async compareRefreshToken(refreshToken: string, refreshTokenHash: string): Promise<boolean> {
+  private async compareRefreshToken(
+    refreshToken: string,
+    refreshTokenHash: string,
+  ): Promise<boolean> {
     const digestMatches = await comparePasswordHelper(
       this.digestRefreshToken(refreshToken),
       refreshTokenHash,
@@ -150,11 +175,16 @@ export class AuthService {
       user: {
         _id: user._id,
         username: user.username,
-        email: user.email,
         name: user.name,
         roleName: user.roleName,
-        role: user.role,
+        role: user.role
+          ? {
+              _id: user.role._id,
+              name: user.role.name,
+            }
+          : null,
         partnerId: user.partnerId,
+        email: user.email,
       },
       access_token: accessToken,
       access_token_expires_at: accessTokenExpiresAt,
@@ -182,7 +212,12 @@ export class AuthService {
     }
 
     const user = await this.usersService.findByUsername(payload.username);
-    if (!user || !user.isActive || !user.refreshTokenHash || !user.refreshTokenExpiresAt) {
+    if (
+      !user ||
+      !user.isActive ||
+      !user.refreshTokenHash ||
+      !user.refreshTokenExpiresAt
+    ) {
       throw new UnauthorizedException('Refresh session is not active');
     }
 
@@ -191,7 +226,10 @@ export class AuthService {
       throw new UnauthorizedException('Refresh token is expired');
     }
 
-    const isValidRefreshToken = await this.compareRefreshToken(refreshToken, user.refreshTokenHash);
+    const isValidRefreshToken = await this.compareRefreshToken(
+      refreshToken,
+      user.refreshTokenHash,
+    );
     if (!isValidRefreshToken) {
       await this.usersService.updateRefreshToken(user.username, null, null);
       throw new UnauthorizedException('Refresh token has been revoked');

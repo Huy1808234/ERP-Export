@@ -15,6 +15,7 @@ export type ApprovalWorkflowDecisionEvent = {
   actorUsername: string;
   reason?: string | null;
   metadata?: JsonRecord;
+  requesterUsername: string;
 };
 
 export type ApprovalWorkflowRequestedEvent = {

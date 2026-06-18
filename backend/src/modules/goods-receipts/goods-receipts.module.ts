@@ -11,22 +11,26 @@ import { InventoryModule } from '../inventory/inventory.module';
 import { PurchaseOrder } from '../purchase-orders/entities/purchase-order.entity';
 import { PurchaseOrderItem } from '../purchase-orders/entities/purchase-order-item.entity';
 import { Product } from '../products/entities/product.entity';
+import { VendorInvoice } from '../vendor-invoices/entities/vendor-invoice.entity';
+import { AccountingModule } from '../accounting/accounting.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([
-      GoodsReceipt, 
+      GoodsReceipt,
       GoodsReceiptItem,
       PurchaseOrder,
       PurchaseOrderItem,
-      Product
+      Product,
+      VendorInvoice,
     ]),
     PurchaseOrdersModule,
     ProductsModule,
-    InventoryModule
+    InventoryModule,
+    AccountingModule,
   ],
   controllers: [GoodsReceiptsController],
   providers: [GoodsReceiptsService],
-  exports: [GoodsReceiptsService]
+  exports: [GoodsReceiptsService],
 })
 export class GoodsReceiptsModule {}

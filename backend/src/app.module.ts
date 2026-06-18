@@ -4,6 +4,7 @@ import { AppService } from './app.service';
 import { UsersModule } from './modules/users/users.module';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import type { LoggerOptions } from 'typeorm';
 import { PartnersModule } from './modules/partners/partners.module';
 import { ProductsModule } from './modules/products/products.module';
 import { AuthModule } from './auth/auth.module';
@@ -52,16 +53,24 @@ import { VendorPriceHistoryModule } from './modules/vendor-price-history/vendor-
 import { ApprovalMatrixModule } from './modules/approval-matrix/approval-matrix.module';
 import { PortalModule } from './modules/portal/portal.module';
 import { SearchModule } from './modules/search/search.module';
-import { runIdentitySchemaPreflight } from './core/database-preflight';
+import { PortsModule } from './modules/ports/ports.module';
+import { CountriesModule } from './modules/countries/countries.module';
+import { DatabaseSeedService } from './core/database-seed.service';
+import { User } from './modules/users/entities/user.entity';
+import { Role } from './modules/roles/entities/role.entity';
+import { Permission } from './modules/roles/entities/permission.entity';
+import { RedisCacheModule } from './common/cache/redis-cache.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
     }),
+    RedisCacheModule,
     BullModule.forRootAsync({
       imports: [ConfigModule],
-      useFactory: async (configService: ConfigService) => ({
+      useFactory: (configService: ConfigService) => ({
         connection: {
           host: configService.get<string>('REDIS_HOST', '127.0.0.1'),
           port: configService.get<number>('REDIS_PORT', 6379),
@@ -69,7 +78,10 @@ import { runIdentitySchemaPreflight } from './core/database-preflight';
       }),
       inject: [ConfigService],
     }),
-    EventEmitterModule.forRoot(),
+    EventEmitterModule.forRoot({
+      global: true,
+      maxListeners: 50,
+    }),
     ScheduleModule.forRoot(),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
@@ -82,22 +94,32 @@ import { runIdentitySchemaPreflight } from './core/database-preflight';
           database: configService.get<string>('POSTGRES_DATABASE'),
         };
 
-        await runIdentitySchemaPreflight(databaseOptions);
         const synchronize =
-          configService.get<string>('TYPEORM_SYNCHRONIZE', 'false').toLowerCase() === 'true';
+          configService
+            .get<string>('TYPEORM_SYNCHRONIZE', 'false')
+            .toLowerCase() === 'true';
+
+        const logging: LoggerOptions =
+          configService
+            .get<string>('TYPEORM_LOGGING', 'false')
+            .toLowerCase() === 'true'
+            ? ['query', 'error', 'warn']
+            : ['error', 'warn'];
 
         return {
           type: 'postgres',
           ...databaseOptions,
           autoLoadEntities: true,
           synchronize,
+          logging,
         };
       },
       inject: [ConfigService],
     }),
+    TypeOrmModule.forFeature([User, Role, Permission]),
     MailerModule.forRootAsync({
       imports: [ConfigModule],
-      useFactory: async (configService: ConfigService) => ({
+      useFactory: (configService: ConfigService) => ({
         transport: {
           host: 'smtp.gmail.com',
           port: 465,
@@ -159,10 +181,14 @@ import { runIdentitySchemaPreflight } from './core/database-preflight';
     ApprovalMatrixModule,
     PortalModule,
     SearchModule,
+    PortsModule,
+    CountriesModule,
+    NotificationsModule,
   ],
   controllers: [AppController],
   providers: [
     AppService,
+    DatabaseSeedService,
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,
@@ -178,7 +204,7 @@ import { runIdentitySchemaPreflight } from './core/database-preflight';
     {
       provide: APP_INTERCEPTOR,
       useClass: TransformInterceptor,
-    }
+    },
   ],
 })
 export class AppModule {}

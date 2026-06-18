@@ -9,12 +9,36 @@ import { MailerService } from '@nestjs-modules/mailer';
 import { In, Repository } from 'typeorm';
 import { CodeAuthDto, ChangePasswordAuthDto } from '@/auth/dto/create-auth.dto';
 import { normalizeRoleName } from '@/common/auth/role-catalog';
-import { createOpaqueCode, normalizeUsername } from '@/common/ids/entity-id.util';
+import {
+  createOpaqueCode,
+  normalizeUsername,
+} from '@/common/ids/entity-id.util';
 import { hashPasswordHelper } from '@/helpers/util';
+import type { AuthenticatedUser } from '@/common/types/authenticated-user.type';
 import { Role } from '../roles/entities/role.entity';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { User } from './entities/user.entity';
+
+type UserListQuery = Record<string, unknown>;
+
+export type SafeUser = Omit<
+  User,
+  'password' | 'refreshTokenHash' | 'codeId' | 'codeExpired' | 'assignId'
+>;
+
+export interface UserListSummary {
+  total: number;
+  active: number;
+  admin: number;
+}
+
+export interface UserListResponse {
+  results: SafeUser[];
+  totalPages: number;
+  totalItems: number;
+  summary: UserListSummary;
+}
 
 @Injectable()
 export class UsersService {
@@ -26,8 +50,19 @@ export class UsersService {
     private mailerService: MailerService,
   ) {}
 
-  async isEmailExist(email: string) {
-    return this.userRepository.existsBy({ email });
+  async isEmailExist(email: string, excludeUserRef?: string) {
+    const existing = await this.userRepository.findOne({
+      where: { email: this.normalizeEmail(email) },
+      select: ['_id', 'username', 'email'],
+    });
+
+    if (!existing) {
+      return false;
+    }
+
+    return (
+      existing._id !== excludeUserRef && existing.username !== excludeUserRef
+    );
   }
 
   async isUsernameExist(username: string, excludeUserRef?: string) {
@@ -40,21 +75,86 @@ export class UsersService {
       return false;
     }
 
-    return existing._id !== excludeUserRef && existing.username !== excludeUserRef;
+    return (
+      existing._id !== excludeUserRef && existing.username !== excludeUserRef
+    );
   }
 
-  private async resolveRoleName(roleName?: string | null): Promise<string | null> {
+  private async resolveRoleName(
+    roleName?: string | null,
+  ): Promise<string | null> {
     if (!roleName) {
       return null;
     }
 
     const normalizedRoleName = normalizeRoleName(roleName);
-    const role = await this.roleRepository.findOne({ where: { name: normalizedRoleName } });
+    const role = await this.roleRepository.findOne({
+      where: { name: normalizedRoleName },
+    });
     if (!role) {
       throw new BadRequestException(`Role does not exist: ${roleName}`);
     }
 
     return role.name;
+  }
+
+  private normalizeEmail(email: string) {
+    return email.trim().toLowerCase();
+  }
+
+  private normalizeQueryText(value: unknown) {
+    const raw = Array.isArray(value) ? (value[0] as unknown) : value;
+    if (raw === undefined || raw === null) {
+      return undefined;
+    }
+
+    const text = String(raw).trim();
+    if (!text) {
+      return undefined;
+    }
+
+    const regexLikeValue = text.match(/^\/(.+)\/[a-z]*$/i);
+    return regexLikeValue?.[1] || text;
+  }
+
+  private normalizeQueryBoolean(value: unknown) {
+    const text = this.normalizeQueryText(value)?.toLowerCase();
+    if (text === undefined) {
+      return undefined;
+    }
+
+    if (['true', '1', 'active'].includes(text)) {
+      return true;
+    }
+
+    if (['false', '0', 'inactive'].includes(text)) {
+      return false;
+    }
+
+    throw new BadRequestException('Invalid user status filter');
+  }
+
+  private isAdminRole(roleName?: string | null) {
+    if (!roleName) {
+      return false;
+    }
+
+    return ['ADMIN', 'SUPER_ADMIN'].includes(normalizeRoleName(roleName));
+  }
+
+  private async assertUsernameAvailable(
+    username: string,
+    excludeUserRef?: string,
+  ) {
+    if (await this.isUsernameExist(username, excludeUserRef)) {
+      throw new BadRequestException(`Username already exists: ${username}`);
+    }
+  }
+
+  private async assertEmailAvailable(email: string, excludeUserRef?: string) {
+    if (await this.isEmailExist(email, excludeUserRef)) {
+      throw new BadRequestException(`Email already exists: ${email}`);
+    }
   }
 
   private async createAvailableUsername(seed: string, excludeUserRef?: string) {
@@ -70,31 +170,50 @@ export class UsersService {
     return username;
   }
 
-  private sanitizeUser(user: User | null) {
+  private sanitizeUser(user: User | null): SafeUser | null {
     if (!user) {
       return null;
     }
 
-    const { password, ...safeUser } = user;
-    return safeUser;
+    const {
+      password: _password,
+      refreshTokenHash: _refreshTokenHash,
+      codeId: _codeId,
+      codeExpired: _codeExpired,
+      ...safeUser
+    } = user;
+    return safeUser as SafeUser;
   }
 
   async create(createUserDto: CreateUserDto) {
-    const { name, email, password, phone, address, image, roleName, username, isActive } =
-      createUserDto;
+    const {
+      name,
+      email,
+      password,
+      phone,
+      address,
+      image,
+      roleName,
+      username,
+      isActive,
+    } = createUserDto;
 
-    if (await this.isEmailExist(email)) {
-      throw new BadRequestException(`Email already exists: ${email}`);
+    const normalizedEmail = this.normalizeEmail(email);
+    const safeUsername = normalizeUsername(username || '');
+    if (!safeUsername) {
+      throw new BadRequestException('Username is required');
     }
 
-    const safeUsername = await this.createAvailableUsername(username || email.split('@')[0] || name);
+    await this.assertEmailAvailable(normalizedEmail);
+    await this.assertUsernameAvailable(safeUsername);
+
     const resolvedRoleName = await this.resolveRoleName(roleName);
     const hashPassword = await hashPasswordHelper(password);
 
     const user = this.userRepository.create({
       name,
       username: safeUsername,
-      email,
+      email: normalizedEmail,
       password: hashPassword,
       phone,
       address,
@@ -111,51 +230,58 @@ export class UsersService {
     };
   }
 
-  async findAll(query: string, current: number, pageSize: number) {
-    const aqp = (await import('api-query-params')).default;
-    const { filter, sort } = aqp(query);
-    if (filter.current) delete filter.current;
-    if (filter.pageSize) delete filter.pageSize;
-    if (filter.limit) delete filter.limit;
-
-    if (!current) current = 1;
-    if (!pageSize) pageSize = 10;
-
-    const skip = (current - 1) * pageSize;
+  async findAll(
+    query: UserListQuery = {},
+    current?: number,
+    pageSize?: number,
+  ): Promise<UserListResponse> {
+    const page = Math.max(Number(current) || 1, 1);
+    const limit = Math.min(Math.max(Number(pageSize) || 10, 1), 100);
+    const skip = (page - 1) * limit;
+    const search = this.normalizeQueryText(query.search ?? query.name);
+    const roleName = this.normalizeQueryText(
+      query.roleName ?? query['role.name'],
+    );
+    const isActive = this.normalizeQueryBoolean(query.isActive);
 
     const queryBuilder = this.userRepository
       .createQueryBuilder('user')
       .leftJoinAndSelect('user.role', 'role')
       .leftJoinAndSelect('role.permissions', 'permissions');
 
-    for (const key in filter) {
-      const aliasKey = key.includes('.') ? key : `user.${key}`;
-      const paramKey = key.replace('.', '_');
-
-      if (filter[key] instanceof RegExp) {
-        queryBuilder.andWhere(`${aliasKey} ILIKE :${paramKey}`, {
-          [paramKey]: `%${filter[key].source}%`,
-        });
-      } else {
-        queryBuilder.andWhere(`${aliasKey} = :${paramKey}`, { [paramKey]: filter[key] });
-      }
+    if (search) {
+      queryBuilder.andWhere(
+        '(user.name ILIKE :search OR user.username ILIKE :search OR user.email ILIKE :search OR user.phone ILIKE :search)',
+        { search: `%${search}%` },
+      );
     }
 
-    if (sort) {
-      for (const key in sort) {
-        queryBuilder.addOrderBy(`user.${key}`, (sort as any)[key] === 1 ? 'ASC' : 'DESC');
-      }
-    } else {
-      queryBuilder.addOrderBy('user.createdAt', 'DESC');
+    if (roleName) {
+      queryBuilder.andWhere('user.roleName = :roleName', {
+        roleName: normalizeRoleName(roleName),
+      });
     }
 
-    queryBuilder.skip(skip).take(pageSize);
+    if (isActive !== undefined) {
+      queryBuilder.andWhere('user.isActive = :isActive', { isActive });
+    }
+
+    queryBuilder.orderBy('user.createdAt', 'DESC').skip(skip).take(limit);
 
     const [resultsRaw, totalItems] = await queryBuilder.getManyAndCount();
-    const totalPages = Math.ceil(totalItems / pageSize);
-    const results = resultsRaw.map((user) => this.sanitizeUser(user));
+    const totalPages = Math.ceil(totalItems / limit);
+    const results = resultsRaw
+      .map((user) => this.sanitizeUser(user))
+      .filter((user): user is SafeUser => user !== null);
+    const summary: UserListSummary = {
+      total: await this.userRepository.count(),
+      active: await this.userRepository.count({ where: { isActive: true } }),
+      admin: await this.userRepository.count({
+        where: { roleName: In(['ADMIN', 'SUPER_ADMIN']) },
+      }),
+    };
 
-    return { results, totalPages, totalItems };
+    return { results, totalPages, totalItems, summary };
   }
 
   async findOne(userRef: string) {
@@ -216,14 +342,42 @@ export class UsersService {
       throw new NotFoundException('User does not exist');
     }
 
-    const updateData: Partial<User> = { ...updateUserDto };
+    const { username, email, roleName, isActive, ...editableFields } =
+      updateUserDto;
+    const updateData: Partial<User> = { ...editableFields };
 
-    if (updateUserDto.username && updateUserDto.username !== user.username) {
-      updateData.username = await this.createAvailableUsername(updateUserDto.username, user._id);
+    if (
+      username !== undefined &&
+      normalizeUsername(username) !== user.username
+    ) {
+      throw new BadRequestException(
+        'Username cannot be changed after creation',
+      );
+    }
+
+    if (email !== undefined) {
+      const normalizedEmail = this.normalizeEmail(email);
+      await this.assertEmailAvailable(normalizedEmail, user._id);
+      updateData.email = normalizedEmail;
     }
 
     if (Object.prototype.hasOwnProperty.call(updateUserDto, 'roleName')) {
-      updateData.roleName = await this.resolveRoleName(updateUserDto.roleName);
+      updateData.roleName = await this.resolveRoleName(roleName);
+    }
+
+    if (isActive !== undefined) {
+      if (!isActive && user.isActive) {
+        throw new BadRequestException(
+          'Use the deactivate endpoint to disable a user account',
+        );
+      }
+
+      updateData.isActive = isActive;
+      if (isActive && !user.isActive) {
+        updateData.deactivatedAt = null;
+        updateData.deactivatedByUsername = null;
+        updateData.deactivationReason = null;
+      }
     }
 
     await this.userRepository.update({ _id: user._id }, updateData);
@@ -238,47 +392,164 @@ export class UsersService {
     };
   }
 
-  async remove(userRef: string) {
+  private async assertCanDeactivate(users: User[], actor?: AuthenticatedUser) {
+    const actorUsername = actor?.username;
+    if (!actorUsername) {
+      throw new BadRequestException('Missing actor username');
+    }
+
+    if (users.some((user) => user.username === actorUsername)) {
+      throw new BadRequestException('You cannot deactivate your own account');
+    }
+
+    const activeAdminCount = await this.userRepository.count({
+      where: { roleName: In(['ADMIN', 'SUPER_ADMIN']), isActive: true },
+    });
+    const activeAdminTargets = users.filter(
+      (user) => user.isActive && this.isAdminRole(user.roleName),
+    ).length;
+
+    if (activeAdminTargets > 0 && activeAdminCount - activeAdminTargets < 1) {
+      throw new BadRequestException(
+        'Cannot deactivate the last active admin account',
+      );
+    }
+  }
+
+  async deactivate(userRef: string, reason: string, actor?: AuthenticatedUser) {
+    const reasonText = reason?.trim();
+    if (!reasonText || reasonText.length < 3) {
+      throw new BadRequestException('Deactivation reason is required');
+    }
+
     const user = await this.userRepository.findOne({
       where: [{ _id: userRef }, { username: userRef }],
-      select: ['_id', 'username'],
+      relations: ['role', 'role.permissions'],
     });
 
     if (!user) {
       throw new NotFoundException(`User not found: ${userRef}`);
     }
 
-    const result = await this.userRepository.delete({ _id: user._id });
+    await this.assertCanDeactivate([user], actor);
+
+    if (!user.isActive) {
+      return {
+        message: 'User is already inactive',
+        data: this.sanitizeUser(user),
+      };
+    }
+
+    await this.userRepository.update(
+      { _id: user._id },
+      {
+        isActive: false,
+        deactivatedAt: new Date(),
+        deactivatedByUsername: actor?.username || 'system',
+        deactivationReason: reasonText,
+        refreshTokenHash: null,
+        refreshTokenExpiresAt: null,
+      },
+    );
+
+    const deactivatedUser = await this.userRepository.findOne({
+      where: { _id: user._id },
+      relations: ['role', 'role.permissions'],
+    });
 
     return {
-      message: 'User deleted successfully',
-      deletedCount: result.affected,
+      message: 'User deactivated successfully',
+      data: this.sanitizeUser(deactivatedUser),
     };
   }
 
-  async bulkRemove(userRefs: string[]) {
-    const result = await this.userRepository.delete({ _id: In(userRefs) });
+  async bulkDeactivate(
+    userRefs: string[],
+    reason: string,
+    actor?: AuthenticatedUser,
+  ) {
+    const reasonText = reason?.trim();
+    if (!reasonText || reasonText.length < 3) {
+      throw new BadRequestException('Deactivation reason is required');
+    }
+
+    const uniqueRefs = Array.from(
+      new Set(userRefs.map((ref) => ref.trim()).filter(Boolean)),
+    );
+    if (uniqueRefs.length === 0) {
+      throw new BadRequestException('No users selected');
+    }
+
+    const users = await this.userRepository.find({
+      where: [{ _id: In(uniqueRefs) }, { username: In(uniqueRefs) }],
+      relations: ['role', 'role.permissions'],
+    });
+    const foundRefs = new Set(
+      users.flatMap((user) => [user._id, user.username]),
+    );
+    const missingRefs = uniqueRefs.filter((ref) => !foundRefs.has(ref));
+    if (missingRefs.length > 0) {
+      throw new NotFoundException(`Users not found: ${missingRefs.join(', ')}`);
+    }
+
+    await this.assertCanDeactivate(users, actor);
+
+    const activeUsers = users.filter((user) => user.isActive);
+    if (activeUsers.length === 0) {
+      return {
+        message: 'No active users to deactivate',
+        deactivatedCount: 0,
+      };
+    }
+
+    const result = await this.userRepository.update(
+      { _id: In(activeUsers.map((user) => user._id)) },
+      {
+        isActive: false,
+        deactivatedAt: new Date(),
+        deactivatedByUsername: actor?.username || 'system',
+        deactivationReason: reasonText,
+        refreshTokenHash: null,
+        refreshTokenExpiresAt: null,
+      },
+    );
+
     return {
-      message: `Deleted ${result.affected} users successfully`,
-      deletedCount: result.affected,
+      message: `Deactivated ${result.affected || 0} users successfully`,
+      deactivatedCount: result.affected || 0,
     };
+  }
+
+  remove(): never {
+    throw new BadRequestException(
+      'Physical user deletion is disabled. Use deactivate instead.',
+    );
+  }
+
+  bulkRemove(): never {
+    throw new BadRequestException(
+      'Physical user deletion is disabled. Use bulkDeactivate instead.',
+    );
   }
 
   async handleRegister(createUserDto: CreateUserDto) {
     const { name, email, password, username } = createUserDto;
+    const normalizedEmail = this.normalizeEmail(email);
 
-    if (await this.isEmailExist(email)) {
-      throw new BadRequestException(`Email already exists: ${email}`);
+    if (await this.isEmailExist(normalizedEmail)) {
+      throw new BadRequestException(`Email already exists: ${normalizedEmail}`);
     }
 
     const hashPassword = await hashPasswordHelper(password);
     const codeId = createOpaqueCode('activation');
-    const safeUsername = await this.createAvailableUsername(username || email.split('@')[0] || name);
+    const safeUsername = await this.createAvailableUsername(
+      username || normalizedEmail.split('@')[0] || name,
+    );
 
     const user = this.userRepository.create({
       name,
       username: safeUsername,
-      email,
+      email: normalizedEmail,
       password: hashPassword,
       isActive: false,
       codeId,
@@ -297,7 +568,8 @@ export class UsersService {
         },
       });
     } catch (error) {
-      console.error('Failed to send activation email:', error.message);
+      const message = error instanceof Error ? error.message : String(error);
+      console.error('Failed to send activation email:', message);
     }
 
     return {
@@ -346,7 +618,7 @@ export class UsersService {
       },
     );
 
-    this.mailerService.sendMail({
+    void this.mailerService.sendMail({
       to: user.email,
       subject: 'Activate your Mini ERP account',
       template: 'register',
@@ -374,7 +646,7 @@ export class UsersService {
       },
     );
 
-    this.mailerService.sendMail({
+    void this.mailerService.sendMail({
       to: user.email,
       subject: 'Mini ERP password reset code',
       template: 'forgot-password',

@@ -29,7 +29,10 @@ import { SETTING_KEYS } from '../settings/settings.keys';
 import { ApprovalMatrixService } from '../approval-matrix/approval-matrix.service';
 import { ApprovalDocumentType } from '../approval-matrix/entities/approval-rule.entity';
 import { GoodsReceipt } from '../goods-receipts/entities/goods-receipt.entity';
-import { VendorInvoice, VendorInvoiceStatus } from '../vendor-invoices/entities/vendor-invoice.entity';
+import {
+  VendorInvoice,
+  VendorInvoiceStatus,
+} from '../vendor-invoices/entities/vendor-invoice.entity';
 import { VendorInvoiceItem } from '../vendor-invoices/entities/vendor-invoice-item.entity';
 import { CancelPurchaseOrderDto } from './dto/cancel-purchase-order.dto';
 import { SendPurchaseOrderDto } from './dto/send-purchase-order.dto';
@@ -134,20 +137,28 @@ export class PurchaseOrdersService implements OnModuleInit {
       for (const dup of duplicates) {
         const records = await queryRunner.query(
           `SELECT "_id", "deletedAt" FROM "purchase_orders" WHERE "poNumber" = $1 ORDER BY "createdAt" ASC`,
-          [dup.poNumber]
+          [dup.poNumber],
         );
         // Keep the first live record, rename all others
         let kept = false;
         for (const rec of records) {
-          if (!rec.deletedAt && !kept) { kept = true; continue; }
+          if (!rec.deletedAt && !kept) {
+            kept = true;
+            continue;
+          }
           const newNum = `${dup.poNumber}-ARCHIVED-${Date.now()}`;
-          await queryRunner.query(`UPDATE "purchase_orders" SET "poNumber" = $1 WHERE "_id" = $2`, [newNum, rec._id]);
+          await queryRunner.query(
+            `UPDATE "purchase_orders" SET "poNumber" = $1 WHERE "_id" = $2`,
+            [newNum, rec._id],
+          );
           console.warn(`[PO] Renamed duplicate: ${dup.poNumber} -> ${newNum}`);
         }
       }
 
       // Step 2: Drop the old global unique constraint (blocks on soft-deleted rows)
-      await queryRunner.query(`ALTER TABLE "purchase_orders" DROP CONSTRAINT IF EXISTS "UQ_2e0fc7a6605393a9bd691cdcebe"`);
+      await queryRunner.query(
+        `ALTER TABLE "purchase_orders" DROP CONSTRAINT IF EXISTS "UQ_2e0fc7a6605393a9bd691cdcebe"`,
+      );
 
       // Step 3: Create a partial unique index for active, non-deleted PO numbers.
       await queryRunner.query(`
@@ -174,7 +185,9 @@ export class PurchaseOrdersService implements OnModuleInit {
 
     try {
       // Lock table to serialize concurrent PO creation
-      await queryRunner.query('LOCK TABLE "purchase_orders" IN SHARE ROW EXCLUSIVE MODE');
+      await queryRunner.query(
+        'LOCK TABLE "purchase_orders" IN SHARE ROW EXCLUSIVE MODE',
+      );
 
       const date = new Date();
       const dateStr = date.toISOString().slice(0, 10).replace(/-/g, '');
@@ -182,7 +195,7 @@ export class PurchaseOrdersService implements OnModuleInit {
       // Query ALL records for today (including soft-deleted) to get the true max sequence
       const todayPos = await queryRunner.query(
         `SELECT "poNumber" FROM "purchase_orders" WHERE "poNumber" LIKE $1`,
-        [`PO-${dateStr}-%`]
+        [`PO-${dateStr}-%`],
       );
 
       let nextSeq = 1;
@@ -204,15 +217,12 @@ export class PurchaseOrdersService implements OnModuleInit {
       while (true) {
         const existing = await queryRunner.query(
           `SELECT "_id" FROM "purchase_orders" WHERE "poNumber" = $1 LIMIT 1`,
-          [poNumber]
+          [poNumber],
         );
         if (existing.length === 0) break;
         nextSeq++;
         poNumber = `PO-${dateStr}-${nextSeq.toString().padStart(4, '0')}`;
       }
-
-      console.log('[PO] Creating with number:', poNumber);
-
 
       // 2. Calculate Totals
       let subTotal = 0;
@@ -255,16 +265,18 @@ export class PurchaseOrdersService implements OnModuleInit {
 
       // 5. Update PR status
       if (purchaseRequestId) {
-        await queryRunner.manager.update(PurchaseRequest, { _id: purchaseRequestId }, {
-          status: PurchaseRequestStatus.COMPLETED,
-        });
+        await queryRunner.manager.update(
+          PurchaseRequest,
+          { _id: purchaseRequestId },
+          {
+            status: PurchaseRequestStatus.COMPLETED,
+          },
+        );
       }
 
       await queryRunner.commitTransaction();
-      console.log('--- PO CREATED SUCCESSFULLY ---', poNumber);
       return savedPo;
     } catch (err) {
-      console.error('--- PO CREATION FAILED ---', err);
       await queryRunner.rollbackTransaction();
       throw new BadRequestException(err.message);
     } finally {
@@ -272,7 +284,10 @@ export class PurchaseOrdersService implements OnModuleInit {
     }
   }
 
-  async createFromPR(body: { purchaseRequestId: string; vendorId?: string }, user: IUser) {
+  async createFromPR(
+    body: { purchaseRequestId: string; vendorId?: string },
+    user: IUser,
+  ) {
     const { purchaseRequestId, vendorId } = body;
 
     // 1. Get PR with items
@@ -283,7 +298,9 @@ export class PurchaseOrdersService implements OnModuleInit {
 
     if (!pr) throw new NotFoundException('Purchase Request not found');
     if (pr.status !== PurchaseRequestStatus.APPROVED) {
-      throw new BadRequestException('Purchase Request must be APPROVED to create a PO');
+      throw new BadRequestException(
+        'Purchase Request must be APPROVED to create a PO',
+      );
     }
 
     // 2. Determine Vendor
@@ -302,15 +319,18 @@ export class PurchaseOrdersService implements OnModuleInit {
 
     if (!finalVendorId) {
       // Fallback: Pick the first active supplier if none provided
-      const defaultVendor = await this.partnerRepository.findOne({ 
-        where: { partnerType: PartnerType.SUPPLIER, isActive: true } 
+      const defaultVendor = await this.partnerRepository.findOne({
+        where: { partnerType: PartnerType.SUPPLIER, isActive: true },
       });
-      if (!defaultVendor) throw new BadRequestException('No vendor found to assign to PO. Please specify a vendorId.');
+      if (!defaultVendor)
+        throw new BadRequestException(
+          'No vendor found to assign to PO. Please specify a vendorId.',
+        );
       finalVendorId = defaultVendor._id;
     }
 
     // 3. Map PR items to PO items DTO
-    const poItems = pr.items.map(item => ({
+    const poItems = pr.items.map((item) => ({
       productId: item.productId,
       quantity: item.quantity,
       unitPrice: item.estimatedPrice || 0,
@@ -318,14 +338,20 @@ export class PurchaseOrdersService implements OnModuleInit {
     }));
 
     // 4. Reuse the existing create logic
-    return this.create({
-      purchaseRequestId,
-      vendorId: finalVendorId,
-      orderDate: new Date().toISOString(),
-      expectedDeliveryDate: pr.expectedDate?.toISOString() || pr.requiredDate?.toISOString() || null,
-      items: poItems,
-      currency: 'VND',
-    } as CreatePurchaseOrderDto, user);
+    return this.create(
+      {
+        purchaseRequestId,
+        vendorId: finalVendorId,
+        orderDate: new Date().toISOString(),
+        expectedDeliveryDate:
+          pr.expectedDate?.toISOString() ||
+          pr.requiredDate?.toISOString() ||
+          null,
+        items: poItems,
+        currency: 'VND',
+      } as CreatePurchaseOrderDto,
+      user,
+    );
   }
 
   async findAll(currentPage: number, limit: number, qs: string) {
@@ -334,7 +360,8 @@ export class PurchaseOrdersService implements OnModuleInit {
     delete filter.current;
     delete filter.pageSize;
 
-    const page = Number.isFinite(currentPage) && currentPage > 0 ? currentPage : 1;
+    const page =
+      Number.isFinite(currentPage) && currentPage > 0 ? currentPage : 1;
     const defaultLimit = Number.isFinite(limit) && limit > 0 ? limit : 10;
     const offset = (page - 1) * defaultLimit;
 
@@ -344,7 +371,11 @@ export class PurchaseOrdersService implements OnModuleInit {
         : ['items', 'items.product', 'vendor', 'createdBy', 'purchaseRequest'];
 
     // Xử lý lọc nhiều trạng thái (comma-separated)
-    if (filter.status && typeof filter.status === 'string' && filter.status.includes(',')) {
+    if (
+      filter.status &&
+      typeof filter.status === 'string' &&
+      filter.status.includes(',')
+    ) {
       const { In } = require('typeorm');
       filter.status = In(filter.status.split(','));
     }
@@ -359,7 +390,10 @@ export class PurchaseOrdersService implements OnModuleInit {
 
     const results = result.map((po) => {
       if (Number(po.totalAmount) === 0 && po.items) {
-        const calculatedTotal = po.items.reduce((sum, item) => sum + Number(item.totalAmount || 0), 0);
+        const calculatedTotal = po.items.reduce(
+          (sum, item) => sum + Number(item.totalAmount || 0),
+          0,
+        );
         return { ...po, totalAmount: calculatedTotal };
       }
       return po;
@@ -391,7 +425,10 @@ export class PurchaseOrdersService implements OnModuleInit {
     return po;
   }
 
-  async update(purchaseOrderRef: string, updatePurchaseOrderDto: UpdatePurchaseOrderDto) {
+  async update(
+    purchaseOrderRef: string,
+    updatePurchaseOrderDto: UpdatePurchaseOrderDto,
+  ) {
     const po = await this.findOne(purchaseOrderRef);
     if (po.status !== PurchaseOrderStatus.DRAFT) {
       throw new BadRequestException('Only DRAFT POs can be updated');
@@ -415,8 +452,13 @@ export class PurchaseOrdersService implements OnModuleInit {
       throw new BadRequestException('PO is already pending approval');
     }
 
-    if (po.status !== PurchaseOrderStatus.DRAFT && po.status !== PurchaseOrderStatus.REJECTED) {
-      throw new BadRequestException('PO must be in DRAFT or REJECTED status before submit/send');
+    if (
+      po.status !== PurchaseOrderStatus.DRAFT &&
+      po.status !== PurchaseOrderStatus.REJECTED
+    ) {
+      throw new BadRequestException(
+        'PO must be in DRAFT or REJECTED status before submit/send',
+      );
     }
 
     const amountVnd = await this.currenciesService.convertToBase(
@@ -445,9 +487,7 @@ export class PurchaseOrdersService implements OnModuleInit {
         return this.poRepository.save(po);
       }
 
-      throw new BadRequestException(
-        PO_NO_APPROVAL_RULE_CONFIRMATION_REQUIRED,
-      );
+      throw new BadRequestException(PO_NO_APPROVAL_RULE_CONFIRMATION_REQUIRED);
     }
 
     // PO approval is delegated to the generic approval matrix. Keeping the PO
@@ -486,24 +526,35 @@ export class PurchaseOrdersService implements OnModuleInit {
 
   async softDelete(purchaseOrderRef: string) {
     // Kiểm tra các chứng từ liên quan trước khi cho phép xóa mềm
-    const grCount = await this.dataSource.getRepository('goods_receipts').count({ where: { purchaseOrderId: purchaseOrderRef } });
+    const grCount = await this.dataSource
+      .getRepository('goods_receipts')
+      .count({ where: { purchaseOrderId: purchaseOrderRef } });
     if (grCount > 0) {
-      throw new BadRequestException('Không thể xóa đơn đặt hàng đã có phiếu nhập kho (GRN). Vui lòng kiểm tra lại.');
+      throw new BadRequestException(
+        'Không thể xóa đơn đặt hàng đã có phiếu nhập kho (GRN). Vui lòng kiểm tra lại.',
+      );
     }
 
-    const invCount = await this.dataSource.getRepository('vendor_invoices').count({ where: { purchaseOrderId: purchaseOrderRef } });
+    const invCount = await this.dataSource
+      .getRepository('vendor_invoices')
+      .count({ where: { purchaseOrderId: purchaseOrderRef } });
     if (invCount > 0) {
-      throw new BadRequestException('Không thể xóa đơn đặt hàng đã có hóa đơn nhà cung cấp. Vui lòng kiểm tra lại.');
+      throw new BadRequestException(
+        'Không thể xóa đơn đặt hàng đã có hóa đơn nhà cung cấp. Vui lòng kiểm tra lại.',
+      );
     }
 
     return this.poRepository.softDelete({ _id: purchaseOrderRef });
   }
 
-  async cancel(purchaseOrderRef: string, dto: CancelPurchaseOrderDto, user: IUser) {
+  async cancel(
+    purchaseOrderRef: string,
+    dto: CancelPurchaseOrderDto,
+    user: IUser,
+  ) {
     return this.dataSource.transaction(async (manager) => {
       const po = await manager.findOne(PurchaseOrder, {
         where: { _id: purchaseOrderRef },
-        relations: ['items'],
         lock: { mode: 'pessimistic_write' },
       });
       if (!po) throw new NotFoundException('Purchase Order not found');
@@ -517,7 +568,13 @@ export class PurchaseOrdersService implements OnModuleInit {
       const receiptCount = await manager.count(GoodsReceipt, {
         where: { purchaseOrderId: purchaseOrderRef },
       });
-      if (receiptCount > 0 || po.items.some((item) => Number(item.receivedQuantity || 0) > 0)) {
+      po.items = await manager.find(PurchaseOrderItem, {
+        where: { purchaseOrderId: po._id },
+      });
+      if (
+        receiptCount > 0 ||
+        po.items.some((item) => Number(item.receivedQuantity || 0) > 0)
+      ) {
         throw new BadRequestException(
           'PO da co GRN/received quantity; xu ly bang purchase return/claim thay vi cancel',
         );
@@ -526,11 +583,17 @@ export class PurchaseOrdersService implements OnModuleInit {
       const activeInvoiceCount = await manager
         .getRepository(VendorInvoice)
         .createQueryBuilder('invoice')
-        .where('invoice."purchaseOrderId" = :purchaseOrderId', { purchaseOrderId: purchaseOrderRef })
-        .andWhere('invoice.status != :status', { status: VendorInvoiceStatus.CANCELLED })
+        .where('invoice."purchaseOrderId" = :purchaseOrderId', {
+          purchaseOrderId: purchaseOrderRef,
+        })
+        .andWhere('invoice.status != :status', {
+          status: VendorInvoiceStatus.CANCELLED,
+        })
         .getCount();
       if (activeInvoiceCount > 0) {
-        throw new BadRequestException('PO da co vendor invoice; khong duoc huy truc tiep');
+        throw new BadRequestException(
+          'PO da co vendor invoice; khong duoc huy truc tiep',
+        );
       }
 
       const fromStatus = po.status;
@@ -579,7 +642,10 @@ export class PurchaseOrdersService implements OnModuleInit {
       productId: string,
       purchaseOrderItem_id?: string | null,
     ) => {
-      if (purchaseOrderItem_id && po.items.some((item) => item._id === purchaseOrderItem_id)) {
+      if (
+        purchaseOrderItem_id &&
+        po.items.some((item) => item._id === purchaseOrderItem_id)
+      ) {
         return purchaseOrderItem_id;
       }
       const candidates = poItemsByProduct.get(productId) || [];
@@ -590,11 +656,16 @@ export class PurchaseOrdersService implements OnModuleInit {
     const rejectedMap = new Map<string, number>();
     grns.forEach((gr) => {
       gr.items.forEach((item) => {
-        const lineKey = resolveLineKey(item.productId, item.purchaseOrderItem_id);
+        const lineKey = resolveLineKey(
+          item.productId,
+          item.purchaseOrderItem_id,
+        );
         if (!lineKey) return;
         receivedMap.set(
           lineKey,
-          (receivedMap.get(lineKey) || 0) + Number(item.quantityReceived) - Number(item.quantityRejected || 0),
+          (receivedMap.get(lineKey) || 0) +
+            Number(item.quantityReceived) -
+            Number(item.quantityRejected || 0),
         );
         rejectedMap.set(
           lineKey,
@@ -607,9 +678,15 @@ export class PurchaseOrdersService implements OnModuleInit {
     invoices.forEach((invoice) => {
       if (invoice.status === VendorInvoiceStatus.CANCELLED) return;
       invoice.items?.forEach((item: VendorInvoiceItem) => {
-        const lineKey = resolveLineKey(item.productId, item.purchaseOrderItem_id);
+        const lineKey = resolveLineKey(
+          item.productId,
+          item.purchaseOrderItem_id,
+        );
         if (!lineKey) return;
-        invoicedMap.set(lineKey, (invoicedMap.get(lineKey) || 0) + Number(item.quantity));
+        invoicedMap.set(
+          lineKey,
+          (invoicedMap.get(lineKey) || 0) + Number(item.quantity),
+        );
       });
     });
 
@@ -647,36 +724,50 @@ export class PurchaseOrdersService implements OnModuleInit {
       varianceAmount: Number(po.totalAmount) - totalInvoicedAmount,
       lines: matchingLines,
       documents: {
-        grns: grns.map(g => ({ _id: g._id, number: g.grNumber, date: g.receivedDate })),
-        invoices: invoices.map(i => ({ _id: i._id, number: i.invoiceNumber, date: i.invoiceDate, amount: i.totalAmount }))
-      }
+        grns: grns.map((g) => ({
+          _id: g._id,
+          number: g.grNumber,
+          date: g.receivedDate,
+        })),
+        invoices: invoices.map((i) => ({
+          _id: i._id,
+          number: i.invoiceNumber,
+          date: i.invoiceDate,
+          amount: i.totalAmount,
+        })),
+      },
     };
   }
 
   async getStats() {
     const total = await this.poRepository.count();
-    
+
     const pending = await this.poRepository.count({
       where: [
         { status: PurchaseOrderStatus.DRAFT },
         { status: PurchaseOrderStatus.PENDING_APPROVAL },
         { status: PurchaseOrderStatus.APPROVED },
         { status: PurchaseOrderStatus.SENT },
-        { status: PurchaseOrderStatus.PARTIAL_RECEIPT }
-      ]
+        { status: PurchaseOrderStatus.PARTIAL_RECEIPT },
+      ],
     });
 
-    const pos = await this.poRepository.find({ select: ['totalAmount', 'currency'] });
+    const pos = await this.poRepository.find({
+      select: ['totalAmount', 'currency'],
+    });
     let totalVndValue = 0;
     for (const po of pos) {
-      const vndAmount = await this.currenciesService.convertToBase(Number(po.totalAmount), po.currency);
+      const vndAmount = await this.currenciesService.convertToBase(
+        Number(po.totalAmount),
+        po.currency,
+      );
       totalVndValue += vndAmount;
     }
-    
+
     return {
       total,
       pending,
-      value: totalVndValue
+      value: totalVndValue,
     };
   }
 }

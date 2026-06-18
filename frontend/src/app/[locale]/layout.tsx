@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
-import { AntdRegistry } from '@ant-design/nextjs-registry';
-import { NextIntlClientProvider } from 'next-intl';
-import { getMessages } from 'next-intl/server';
-import { notFound } from 'next/navigation';
+import { AntdRegistry } from "@ant-design/nextjs-registry";
+import { NextIntlClientProvider } from "next-intl";
+import { getMessages } from "next-intl/server";
+import { notFound } from "next/navigation";
 
-import '@/app/globals.css';
+import "@/app/globals.css";
 import NextAuthWrapper from "@/providers/next-auth-provider";
 import { ThemeProvider } from "@/context/theme.context";
+import { routing, type AppLocale } from "@/i18n/routing";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -18,30 +19,27 @@ export const metadata: Metadata = {
 
 export default async function RootLayout({
   children,
-  params
+  params,
 }: {
   children: React.ReactNode;
   params: Promise<{ locale: string }>;
 }) {
   const { locale } = await params;
-  const messages = await getMessages(); // Lấy các câu từ điển ra
 
-  // Bảo vệ hệ thống: Nếu locale không phải en/vi thì văng ra 404 ngay
-  const locales = ['en', 'vi'];
-  if (!locales.includes(locale)) {
+  if (!routing.locales.includes(locale as AppLocale)) {
     notFound();
   }
 
+  const appLocale = locale as AppLocale;
+  const messages = await getMessages();
+
   return (
-    //  Gán lang động theo locale để trình duyệt hiểu ngôn ngữ đang dùng
-    <html lang={locale} suppressHydrationWarning data-scroll-behavior="smooth">
+    <html lang={appLocale} suppressHydrationWarning data-scroll-behavior="smooth">
       <body className={inter.className} suppressHydrationWarning>
-        <NextIntlClientProvider locale={locale} messages={messages}>
+        <NextIntlClientProvider locale={appLocale} messages={messages}>
           <AntdRegistry>
             <ThemeProvider>
-              <NextAuthWrapper>
-                {children}
-              </NextAuthWrapper>
+              <NextAuthWrapper>{children}</NextAuthWrapper>
             </ThemeProvider>
           </AntdRegistry>
         </NextIntlClientProvider>

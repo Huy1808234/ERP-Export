@@ -10,108 +10,52 @@ import {
     SunOutlined,
 } from '@ant-design/icons';
 import { Badge, Button, Empty, Input, Layout, Popover, Space, Spin, Tag, Tooltip, Typography, theme } from 'antd';
-import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import LocaleSwitcher from './locale.switcher';
+import { useSession } from 'next-auth/react';
 import { useTranslations } from 'next-intl';
+import { useRouter } from '@/i18n/routing';
+import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import {
+    buildSearchableModuleResults,
+    type SearchableModuleResult,
+} from '@/config/searchable-modules';
 import { useTheme } from '@/context/theme.context';
-import { usePathname, useRouter } from 'next/navigation';
 import { useNotifications, type AppNotification } from '@/hooks/useNotifications';
 import { searchService, type GlobalSearchResult } from '@/services/search.service';
+import type { IAuthSessionUser } from '@/types/next-auth';
+import LocaleSwitcher from './locale.switcher';
+import AdminNotificationPanel from './admin.notification';
 
 const { Text } = Typography;
 
-type HeaderSearchResult = GlobalSearchResult | {
-    _id: string;
-    type: 'MENU';
-    title: string;
-    subtitle: string | null;
-    status: string | null;
-    targetHref: string;
-    updatedAt: null;
-    matchedFields: string[];
-};
+type HeaderSearchResult = GlobalSearchResult | SearchableModuleResult;
 
-const SEARCHABLE_MENUS: HeaderSearchResult[] = [
-    {
-        _id: 'menu-product',
-        type: 'MENU',
-        title: 'Danh mục sản phẩm',
-        subtitle: 'Product Catalog / SKU / HS code',
-        status: null,
-        targetHref: '/dashboard/product',
-        updatedAt: null,
-        matchedFields: ['sản phẩm', 'san pham', 'product', 'sku', 'hs code'],
-    },
-    {
-        _id: 'menu-partners',
-        type: 'MENU',
-        title: 'Đối tác toàn cầu',
-        subtitle: 'Customers, vendors, buyers',
-        status: null,
-        targetHref: '/dashboard/partners',
-        updatedAt: null,
-        matchedFields: ['đối tác', 'doi tac', 'partner', 'buyer', 'vendor', 'khách hàng'],
-    },
-    {
-        _id: 'menu-quotation',
-        type: 'MENU',
-        title: 'Báo giá bán hàng',
-        subtitle: 'Quotation',
-        status: null,
-        targetHref: '/dashboard/quotation',
-        updatedAt: null,
-        matchedFields: ['báo giá', 'bao gia', 'quotation', 'quote'],
-    },
-    {
-        _id: 'menu-pi',
-        type: 'MENU',
-        title: 'Hóa đơn chiếu lệ',
-        subtitle: 'Proforma Invoice',
-        status: null,
-        targetHref: '/dashboard/proforma-invoice',
-        updatedAt: null,
-        matchedFields: ['pi', 'proforma', 'hóa đơn chiếu lệ', 'hoa don chieu le'],
-    },
-    {
-        _id: 'menu-shipment',
-        type: 'MENU',
-        title: 'Logistics toàn cầu',
-        subtitle: 'Shipment',
-        status: null,
-        targetHref: '/dashboard/shipment',
-        updatedAt: null,
-        matchedFields: ['shipment', 'logistics', 'lô hàng', 'lo hang'],
-    },
-    {
-        _id: 'menu-inventory',
-        type: 'MENU',
-        title: 'Tồn kho Real-time',
-        subtitle: 'Inventory',
-        status: null,
-        targetHref: '/dashboard/inventory',
-        updatedAt: null,
-        matchedFields: ['inventory', 'kho', 'tồn kho', 'ton kho'],
-    },
-];
+const SEARCH_RESULT_LIMIT = 20;
 
-function normalizeSearchText(value: string): string {
-    return value
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .replace(/đ/g, 'd')
-        .replace(/Đ/g, 'D')
-        .toLowerCase()
-        .trim();
+function getSearchRoleName(user?: IAuthSessionUser | null): string | null {
+    return user?.role?.name || user?.roleName || null;
+}
+
+function parseInternalHref(targetHref: string): string | { pathname: string; query: Record<string, string> } {
+    const queryStartIndex = targetHref.indexOf('?');
+    if (queryStartIndex === -1) return targetHref;
+
+    const pathname = targetHref.slice(0, queryStartIndex) || '/';
+    const queryString = targetHref.slice(queryStartIndex + 1);
+    return {
+        pathname,
+        query: Object.fromEntries(new URLSearchParams(queryString)),
+    };
 }
 
 const AdminHeader = () => {
     const { token } = theme.useToken();
     const { isDark, setThemeMode } = useTheme();
     const t = useTranslations('Header');
+    const tSidebar = useTranslations('Sidebar');
     const { Header } = Layout;
     const { collapseMenu, setCollapseMenu } = useContext(AdminContext)!;
     const router = useRouter();
-    const pathname = usePathname();
+    const { data: session } = useSession();
     const [searchText, setSearchText] = useState('');
     const [searchResults, setSearchResults] = useState<HeaderSearchResult[]>([]);
     const [searchLoading, setSearchLoading] = useState(false);
@@ -123,6 +67,7 @@ const AdminHeader = () => {
         markAsRead,
         markAllAsRead,
         clearNewFlag,
+        refreshNotifications,
     } = useNotifications();
 
     const toggleTheme = () => {
@@ -130,14 +75,22 @@ const AdminHeader = () => {
     };
 
     const safeHeaderText = useCallback((key: string, fallback: string) => {
-        try {
-            return t(key);
-        } catch {
-            return fallback;
-        }
+        return t.has(key) ? t(key) : fallback;
     }, [t]);
 
-    const locale = useMemo(() => pathname.split('/').filter(Boolean)[0] || 'vi', [pathname]);
+    const safeSidebarText = useCallback((key: string, fallback: string) => {
+        return tSidebar.has(key) ? tSidebar(key) : fallback;
+    }, [tSidebar]);
+
+    const roleName = useMemo(() => getSearchRoleName(session?.user), [session?.user]);
+
+    const getMenuResults = useCallback((keyword: string) => (
+        buildSearchableModuleResults({
+            keyword,
+            roleName,
+            translateTitle: safeSidebarText,
+        })
+    ), [roleName, safeSidebarText]);
 
     useEffect(() => {
         const keyword = searchText.trim();
@@ -151,25 +104,13 @@ const AdminHeader = () => {
         setSearchLoading(true);
         const timeoutId = window.setTimeout(async () => {
             try {
-                const normalizedKeyword = normalizeSearchText(keyword);
-                const menuResults = SEARCHABLE_MENUS.filter((item) =>
-                    [item.title, item.subtitle || '', ...item.matchedFields]
-                        .map(normalizeSearchText)
-                        .some((value) => value.includes(normalizedKeyword)),
-                );
-                const response = await searchService.globalSearch(keyword, 12);
+                const menuResults = getMenuResults(keyword);
+                const response = await searchService.globalSearch(keyword, SEARCH_RESULT_LIMIT);
                 if (!isActive) return;
-                setSearchResults([...menuResults, ...(response.data?.results || [])].slice(0, 12));
+                setSearchResults([...menuResults, ...(response.data?.results || [])].slice(0, SEARCH_RESULT_LIMIT));
             } catch {
                 if (!isActive) return;
-                const normalizedKeyword = normalizeSearchText(keyword);
-                setSearchResults(
-                    SEARCHABLE_MENUS.filter((item) =>
-                        [item.title, item.subtitle || '', ...item.matchedFields]
-                            .map(normalizeSearchText)
-                            .some((value) => value.includes(normalizedKeyword)),
-                    ),
-                );
+                setSearchResults(getMenuResults(keyword));
             } finally {
                 if (isActive) setSearchLoading(false);
             }
@@ -179,21 +120,21 @@ const AdminHeader = () => {
             isActive = false;
             window.clearTimeout(timeoutId);
         };
-    }, [searchText]);
+    }, [getMenuResults, searchText]);
 
     const openNotification = (notification: AppNotification) => {
         markAsRead(notification.id);
         if (!notification.targetHref) return;
 
-        router.push(`/${locale}${notification.targetHref}`);
+        router.push(parseInternalHref(notification.targetHref));
     };
 
     const openSearchResult = useCallback((result: HeaderSearchResult) => {
         setSearchOpen(false);
         setSearchText('');
         setSearchResults([]);
-        router.push(`/${locale}${result.targetHref}`);
-    }, [locale, router]);
+        router.push(parseInternalHref(result.targetHref));
+    }, [router]);
 
     const menuSearchResults = searchResults.filter((result) => result.type === 'MENU');
     const recordSearchResults = searchResults.filter((result) => result.type !== 'MENU');
@@ -213,6 +154,18 @@ const AdminHeader = () => {
             EXPORT_DOCUMENT: safeHeaderText('searchTypeExportDocument', 'Export document'),
             ACCOUNT_RECEIVABLE: safeHeaderText('searchTypeAr', 'AR'),
             ACCOUNT_PAYABLE: safeHeaderText('searchTypeAp', 'AP'),
+            INQUIRY: safeHeaderText('searchTypeInquiry', 'Inquiry'),
+            PRICING_POLICY: safeHeaderText('searchTypePricingPolicy', 'Pricing policy'),
+            GOODS_RECEIPT: safeHeaderText('searchTypeGoodsReceipt', 'GRN'),
+            VENDOR_INVOICE: safeHeaderText('searchTypeVendorInvoice', 'Vendor invoice'),
+            PURCHASE_RETURN: safeHeaderText('searchTypePurchaseReturn', 'Purchase return'),
+            INVENTORY_COUNT: safeHeaderText('searchTypeInventoryCount', 'Inventory count'),
+            EXPORT_DELIVERY: safeHeaderText('searchTypeExportDelivery', 'Export delivery'),
+            CUSTOMER_RETURN: safeHeaderText('searchTypeCustomerReturn', 'Customer return'),
+            LETTER_OF_CREDIT: safeHeaderText('searchTypeLc', 'L/C'),
+            COLLECTION_ORDER: safeHeaderText('searchTypeCollection', 'Collection'),
+            TRADE_FINANCE_TRANSACTION: safeHeaderText('searchTypePayment', 'Payment'),
+            JOURNAL_ENTRY: safeHeaderText('searchTypeJournal', 'Journal'),
         };
 
         return labels[type] || String(type).replace(/_/g, ' ');
@@ -257,44 +210,18 @@ const AdminHeader = () => {
     };
 
     const notificationPanel = (
-        <div style={{ width: 340, maxWidth: 'calc(100vw - 48px)' }}>
-            <Space align="center" style={{ width: '100%', justifyContent: 'space-between', marginBottom: 8 }}>
-                <Text strong>{t('notifications')}</Text>
-                <Button type="link" size="small" onClick={markAllAsRead} disabled={!notifications.length}>
-                    {t('markAllRead')}
-                </Button>
-            </Space>
-            {notifications.length === 0 ? (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('noNotifications')} />
-            ) : (
-                <div>
-                    {notifications.slice(0, 8).map((notification) => (
-                        <div
-                            key={notification.id}
-                            onClick={() => openNotification(notification)}
-                            style={{
-                                cursor: notification.targetHref ? 'pointer' : 'default',
-                                padding: '10px 4px',
-                                borderBottom: `1px solid ${token.colorBorderSecondary}`,
-                            }}
-                        >
-                            <Space size={6} wrap>
-                                <Text strong>{notification.title}</Text>
-                                <Badge color={notification.kind === 'APPROVAL' ? 'blue' : 'green'} />
-                            </Space>
-                            <Space orientation="vertical" size={0} style={{ display: 'flex', marginTop: 4 }}>
-                                <Text type="secondary">{notification.body}</Text>
-                                {notification.documentNumber ? <Text code>{notification.documentNumber}</Text> : null}
-                            </Space>
-                        </div>
-                    ))}
-                </div>
-            )}
-        </div>
+        <AdminNotificationPanel
+            notifications={notifications}
+            unreadCount={unreadCount}
+            onOpenNotification={openNotification}
+            onMarkAllAsRead={markAllAsRead}
+            onRefresh={refreshNotifications}
+            locale="vi"
+        />
     );
 
     const searchPanel = (
-        <div style={{ width: 420, maxWidth: 'calc(100vw - 48px)' }}>
+        <div style={{ width: 460, maxWidth: 'calc(100vw - 48px)', maxHeight: '70vh', overflowY: 'auto' }}>
             {searchLoading ? (
                 <div style={{ padding: 24, textAlign: 'center' }}>
                     <Spin size="small" />

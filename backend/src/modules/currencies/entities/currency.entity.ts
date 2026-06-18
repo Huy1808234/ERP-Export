@@ -1,4 +1,12 @@
-import { BeforeInsert, Column, CreateDateColumn, Entity, OneToMany, PrimaryColumn, UpdateDateColumn } from 'typeorm';
+import {
+  BeforeInsert,
+  Column,
+  CreateDateColumn,
+  Entity,
+  OneToMany,
+  PrimaryColumn,
+  UpdateDateColumn,
+} from 'typeorm';
 import { ExchangeRate } from './exchange-rate.entity';
 import { createEntityId } from '@/common/ids/entity-id.util';
 
@@ -29,7 +37,7 @@ export class Currency {
   @Column({ default: true })
   isActive: boolean;
 
-  @OneToMany(() => ExchangeRate, rate => rate.currency)
+  @OneToMany(() => ExchangeRate, (rate) => rate.currency)
   exchangeRates: ExchangeRate[];
 
   @CreateDateColumn()

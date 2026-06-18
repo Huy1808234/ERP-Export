@@ -1,10 +1,38 @@
-import { BeforeInsert, Column, CreateDateColumn, DeleteDateColumn, Entity, PrimaryColumn, UpdateDateColumn } from 'typeorm';
+import {
+  BeforeInsert,
+  Column,
+  CreateDateColumn,
+  DeleteDateColumn,
+  Entity,
+  PrimaryColumn,
+  UpdateDateColumn,
+} from 'typeorm';
 import { ColumnNumericTransformer } from '@/helpers/typeorm.util';
 import { createEntityId } from '@/common/ids/entity-id.util';
-export enum PartnerType { CUSTOMER = 'CUSTOMER', SUPPLIER = 'SUPPLIER', LOGISTICS = 'LOGISTICS' }
-export enum BuyerRegion { EU = 'EU', US = 'US', ASEAN = 'ASEAN', APAC = 'APAC', MIDDLE_EAST = 'MIDDLE_EAST', OTHER = 'OTHER' }
-export enum BuyerPaymentTerm { TT = 'T/T', LC = 'L/C', DP = 'D/P', DA = 'D/A' }
-export enum BuyerRiskLevel { LOW = 'LOW', MEDIUM = 'MEDIUM', HIGH = 'HIGH' }
+export enum PartnerType {
+  CUSTOMER = 'CUSTOMER',
+  SUPPLIER = 'SUPPLIER',
+  LOGISTICS = 'LOGISTICS',
+}
+export enum BuyerRegion {
+  EU = 'EU',
+  US = 'US',
+  ASEAN = 'ASEAN',
+  APAC = 'APAC',
+  MIDDLE_EAST = 'MIDDLE_EAST',
+  OTHER = 'OTHER',
+}
+export enum BuyerPaymentTerm {
+  TT = 'T/T',
+  LC = 'L/C',
+  DP = 'D/P',
+  DA = 'D/A',
+}
+export enum BuyerRiskLevel {
+  LOW = 'LOW',
+  MEDIUM = 'MEDIUM',
+  HIGH = 'HIGH',
+}
 
 @Entity('partners')
 export class Partner {
@@ -27,6 +55,9 @@ export class Partner {
   @Column({ type: 'enum', enum: BuyerRegion, nullable: true })
   region: BuyerRegion | null;
 
+  @Column({ type: 'varchar', length: 2, nullable: true })
+  countryCode: string | null;
+
   @Column({ type: 'varchar', nullable: true })
   country: string | null;
 
@@ -48,11 +79,23 @@ export class Partner {
   @Column({ type: 'varchar', nullable: true })
   defaultCurrency: string | null;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, nullable: true, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    nullable: true,
+    transformer: new ColumnNumericTransformer(),
+  })
   creditLimit: number | null;
 
   // Bắt buộc theo Prompt 1: Quản lý công nợ và phân loại rủi ro
-  @Column({ type: 'numeric', precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   currentDebt: number;
 
   @Column({ type: 'enum', enum: BuyerRiskLevel, default: BuyerRiskLevel.LOW })
@@ -88,25 +131,61 @@ export class Partner {
   @Column({ type: 'varchar', nullable: true })
   vendorPaymentTerm: string | null;
 
-  @Column({ type: 'numeric', precision: 5, scale: 2, nullable: true, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 5,
+    scale: 2,
+    nullable: true,
+    transformer: new ColumnNumericTransformer(),
+  })
   qualityScore: number | null;
 
-  @Column({ type: 'numeric', precision: 5, scale: 2, nullable: true, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 5,
+    scale: 2,
+    nullable: true,
+    transformer: new ColumnNumericTransformer(),
+  })
   deliveryScore: number | null;
 
-  @Column({ type: 'numeric', precision: 5, scale: 2, nullable: true, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 5,
+    scale: 2,
+    nullable: true,
+    transformer: new ColumnNumericTransformer(),
+  })
   priceScore: number | null;
 
-  @Column({ type: 'numeric', precision: 5, scale: 2, nullable: true, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 5,
+    scale: 2,
+    nullable: true,
+    transformer: new ColumnNumericTransformer(),
+  })
   vendorOverallScore: number | null;
 
   @Column({ type: 'varchar', nullable: true })
   vendorGrade: string | null;
 
-  @Column({ type: 'numeric', precision: 5, scale: 2, nullable: true, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 5,
+    scale: 2,
+    nullable: true,
+    transformer: new ColumnNumericTransformer(),
+  })
   vendorOnTimeDeliveryRate: number | null;
 
-  @Column({ type: 'numeric', precision: 5, scale: 2, nullable: true, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 5,
+    scale: 2,
+    nullable: true,
+    transformer: new ColumnNumericTransformer(),
+  })
   vendorDefectRate: number | null;
 
   @Column({ type: 'integer', default: 0 })
@@ -121,7 +200,13 @@ export class Partner {
   @Column({ type: 'timestamp', nullable: true })
   vendorScoreUpdatedAt: Date | null;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, nullable: true, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    nullable: true,
+    transformer: new ColumnNumericTransformer(),
+  })
   apBalance: number | null;
 
   @Column({ type: 'timestamp', nullable: true })
@@ -142,4 +227,3 @@ export class Partner {
   @DeleteDateColumn({ nullable: true })
   deletedAt: Date | null;
 }
-

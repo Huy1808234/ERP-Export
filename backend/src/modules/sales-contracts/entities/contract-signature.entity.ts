@@ -32,8 +32,10 @@ export class ContractSignature {
   @Column({ type: 'varchar', length: 40 })
   contractId: string;
 
-  @ManyToOne(() => SalesContract, (contract) => contract.signatures, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'contractId' })
+  @ManyToOne(() => SalesContract, (contract) => contract.signatures, {
+    onDelete: 'CASCADE',
+  })
+  @JoinColumn({ name: 'contractId', referencedColumnName: '_id' })
   contract: SalesContract;
 
   @Column({ type: 'varchar' })

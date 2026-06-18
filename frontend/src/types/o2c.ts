@@ -49,7 +49,9 @@ export interface IQuotation {
   incotermLocation?: string;
   currency: string;
   portOfLoading?: string;
+  portOfLoading_port_id?: string | null;
   portOfDischarge?: string;
+  portOfDischarge_port_id?: string | null;
   paymentTerms?: string;
   expiryDate?: string;
   subTotal: number;
@@ -112,7 +114,9 @@ export interface ISalesContract {
   totalAmount: number;
   totalAmountVnd: number;
   pol?: string;
+  pol_port_id?: string | null;
   pod?: string;
+  pod_port_id?: string | null;
   bookingNumber?: string;
   seaFreight: number;
   insuranceCost: number;
@@ -143,7 +147,9 @@ export interface IShipment {
   bookingNumber?: string;
   vesselName?: string;
   pol?: string;
+  pol_port_id?: string | null;
   pod?: string;
+  pod_port_id?: string | null;
   etd?: string;
   eta?: string;
   containers?: IContainer[];

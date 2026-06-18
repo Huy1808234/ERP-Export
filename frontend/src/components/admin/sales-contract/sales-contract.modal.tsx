@@ -9,6 +9,8 @@ import { useTranslations } from 'next-intl';
 import { INCOTERMS_KEYS } from '@/constants/o2c';
 import { useMemo } from 'react';
 import { getAccessToken } from '@/lib/auth-token';
+import PortSelect from '@/components/admin/ports/PortSelect';
+import { normalizeCountryCode } from '@/constants/geo';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -29,6 +31,9 @@ const SalesContractModal: React.FC<Props> = ({ open, onCancel, onSuccess }) => {
   const [items, setItems] = useState<any[]>([{}]); // Danh sách sản phẩm trong HĐ
   const [currencyRates, setCurrencyRates] = useState<Record<string, number>>({});
   const [proformaInvoices, setProformaInvoices] = useState<any[]>([]);
+  const watchedPol = Form.useWatch('pol', form);
+  const watchedPod = Form.useWatch('pod', form);
+  const watchedBuyerId = Form.useWatch('buyerId', form);
   
   const tInc = useTranslations('Incoterms');
   const incotermOptions = useMemo(() => {
@@ -39,6 +44,10 @@ const SalesContractModal: React.FC<Props> = ({ open, onCancel, onSuccess }) => {
   }, [tInc]);
 
   const watchedCurrency = Form.useWatch('currencyCode', form) || 'USD';
+  const selectedBuyerCountryCode = useMemo(() => {
+    const buyer = partners.find((partner) => partner._id === watchedBuyerId);
+    return normalizeCountryCode(buyer?.country);
+  }, [partners, watchedBuyerId]);
 
   useEffect(() => {
     if (open) {
@@ -121,11 +130,14 @@ const SalesContractModal: React.FC<Props> = ({ open, onCancel, onSuccess }) => {
       buyerId: selected.customerId,
       incoterm: selected.incoterm,
       pol: selected.portOfLoading,
+      pol_port_id: selected.portOfLoading_port_id,
       pod: selected.portOfDischarge,
+      pod_port_id: selected.portOfDischarge_port_id,
       currencyCode: selected.currency,
       exchangeRate: selected.exchangeRate,
       domesticTransportCost: selected.logisticsFee || 0,
       notes: selected.note,
+      paymentTerms: selected.paymentTerms,
     });
 
     if (selected.items && selected.items.length > 0) {
@@ -191,6 +203,7 @@ const SalesContractModal: React.FC<Props> = ({ open, onCancel, onSuccess }) => {
       const currentSession = await getSession();
       const payload = {
         ...values,
+        deliveryDate: values.deliveryDate ? values.deliveryDate.toISOString() : null,
         items: validItems.map(i => ({
           productId: i.productId,
           quantity: i.quantity,
@@ -252,6 +265,7 @@ const SalesContractModal: React.FC<Props> = ({ open, onCancel, onSuccess }) => {
                 className="rounded-lg" 
                 showSearch 
                 optionFilterProp="label"
+                onChange={() => form.setFieldsValue({ pod: undefined, pod_port_id: undefined })}
                 options={partners.filter(p => p.partnerType === 'CUSTOMER').map(p => ({ value: p._id, label: p.name }))}
               />
             </Form.Item>
@@ -280,6 +294,24 @@ const SalesContractModal: React.FC<Props> = ({ open, onCancel, onSuccess }) => {
           </Col>
         </Row>
 
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item name="paymentTerms" label={t('modal.paymentTerms')}>
+              <Select placeholder={t('modal.paymentTermsPlaceholder')}>
+                <Option value="T/T">T/T</Option>
+                <Option value="L/C">L/C</Option>
+                <Option value="D/P">D/P</Option>
+                <Option value="D/A">D/A</Option>
+              </Select>
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item name="deliveryDate" label={t('modal.deliveryDate')}>
+              <DatePicker style={{ width: '100%' }} placeholder={t('modal.deliveryDatePlaceholder')} />
+            </Form.Item>
+          </Col>
+        </Row>
+
         <Divider titlePlacement="left"><Text className="text-slate-500 uppercase text-xs font-bold">{t('modal.logisticsDivider')}</Text></Divider>
         <Row gutter={16}>
           <Col span={12}>
@@ -301,13 +333,38 @@ const SalesContractModal: React.FC<Props> = ({ open, onCancel, onSuccess }) => {
         </Row>
         <Row gutter={16}>
           <Col span={12}>
-            <Form.Item name="pol" label={t('modal.pol')}>
-              <Input placeholder={t('modal.polPlaceholder')} />
+            <Form.Item name="pol" hidden>
+              <Input />
+            </Form.Item>
+            <Form.Item name="pol_port_id" label={t('modal.pol')}>
+              <PortSelect
+                placeholder={t('modal.polPlaceholder')}
+                legacyText={watchedPol}
+                afterChange={(value) => {
+                  form.setFieldsValue({
+                    pol_port_id: value ?? null,
+                    pol: null,
+                  });
+                }}
+              />
             </Form.Item>
           </Col>
           <Col span={12}>
-            <Form.Item name="pod" label={t('modal.pod')}>
-              <Input placeholder={t('modal.podPlaceholder')} />
+            <Form.Item name="pod" hidden>
+              <Input />
+            </Form.Item>
+            <Form.Item name="pod_port_id" label={t('modal.pod')}>
+              <PortSelect
+                placeholder={t('modal.podPlaceholder')}
+                countryCode={selectedBuyerCountryCode}
+                legacyText={watchedPod}
+                afterChange={(value) => {
+                  form.setFieldsValue({
+                    pod_port_id: value ?? null,
+                    pod: null,
+                  });
+                }}
+              />
             </Form.Item>
           </Col>
         </Row>

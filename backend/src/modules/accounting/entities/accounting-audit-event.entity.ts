@@ -1,9 +1,19 @@
-import { BeforeInsert, Column, CreateDateColumn, Entity, Index, PrimaryColumn } from 'typeorm';
+import {
+  BeforeInsert,
+  Column,
+  CreateDateColumn,
+  Entity,
+  Index,
+  PrimaryColumn,
+} from 'typeorm';
 import { createEntityId } from '@/common/ids/entity-id.util';
 
 @Entity('accounting_audit_events')
 @Index('idx_accounting_audit_events_entity', ['entityType', 'entityId'])
-@Index('idx_accounting_audit_events_reference', ['referenceType', 'referenceId'])
+@Index('idx_accounting_audit_events_reference', [
+  'referenceType',
+  'referenceId',
+])
 @Index('idx_accounting_audit_events_hash', ['eventHash'], { unique: true })
 export class AccountingAuditEvent {
   @PrimaryColumn({ type: 'varchar', length: 40, name: '_id' })

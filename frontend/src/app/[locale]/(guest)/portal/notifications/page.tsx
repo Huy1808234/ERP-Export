@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { App, Avatar, Button, Card, List, Space, Tag, Typography } from 'antd';
+import { App, Avatar, Button, Card, Space, Tag, Typography, Empty, Spin } from 'antd';
 import {
   BellOutlined,
   CheckCircleOutlined,
@@ -119,32 +119,32 @@ export default function NotificationsPage() {
         </Space>
       </div>
 
-      <List
-        loading={loading}
-        itemLayout="horizontal"
-        dataSource={rows}
-        locale={{ emptyText: 'No portal notifications yet' }}
-        renderItem={(item) => (
-          <Card
-            hoverable
-            style={{
-              marginBottom: 12,
-              borderLeft: item.readAt ? '1px solid #f1f5f9' : '4px solid #2563eb',
-              background: item.readAt ? '#fff' : '#f8fafc',
-            }}
-            styles={{ body: { padding: '16px 24px' } }}
-            onClick={() => !item.readAt && markRead(item._id)}
-          >
-            <List.Item style={{ padding: 0, border: 'none' }}>
-              <List.Item.Meta
-                avatar={<Avatar icon={iconByType[item.type]} style={{ backgroundColor: '#f8fafc' }} />}
-                title={(
-                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: '40px 0' }}>
+          <Spin size="large" />
+        </div>
+      ) : rows.length === 0 ? (
+        <Empty description="No portal notifications yet" style={{ padding: '32px 0' }} />
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {rows.map((item) => (
+            <Card
+              key={item._id}
+              hoverable
+              style={{
+                borderLeft: item.readAt ? '1px solid #f1f5f9' : '4px solid #2563eb',
+                background: item.readAt ? '#fff' : '#f8fafc',
+              }}
+              styles={{ body: { padding: '16px 24px' } }}
+              onClick={() => !item.readAt && markRead(item._id)}
+            >
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
+                <Avatar icon={iconByType[item.type]} style={{ backgroundColor: '#f8fafc', flexShrink: 0 }} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 4 }}>
                     <Text strong>{item.title}</Text>
-                    <Text type="secondary" style={{ fontSize: 12 }}>{dayjs(item.createdAt).format('DD/MM/YYYY HH:mm')}</Text>
+                    <Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>{dayjs(item.createdAt).format('DD/MM/YYYY HH:mm')}</Text>
                   </div>
-                )}
-                description={(
                   <div>
                     <Text type="secondary">{item.description}</Text>
                     <div style={{ marginTop: 8 }}>
@@ -155,12 +155,12 @@ export default function NotificationsPage() {
                       </Space>
                     </div>
                   </div>
-                )}
-              />
-            </List.Item>
-          </Card>
-        )}
-      />
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
     </Space>
   );
 }

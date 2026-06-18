@@ -48,6 +48,18 @@
     "searchTypeExportDocument": "Export document",
     "searchTypeAr": "AR",
     "searchTypeAp": "AP",
+    "searchTypeInquiry": "Inquiry",
+    "searchTypePricingPolicy": "Pricing policy",
+    "searchTypeGoodsReceipt": "Goods receipt",
+    "searchTypeVendorInvoice": "Vendor invoice",
+    "searchTypePurchaseReturn": "Purchase return",
+    "searchTypeInventoryCount": "Inventory count",
+    "searchTypeExportDelivery": "Export delivery",
+    "searchTypeCustomerReturn": "Customer return",
+    "searchTypeLc": "L/C",
+    "searchTypeCollection": "Collection",
+    "searchTypePayment": "Payment",
+    "searchTypeJournal": "Journal",
     "role": "System Role",
     "lightMode": "Light mode",
     "darkMode": "Dark mode"
@@ -74,7 +86,7 @@
       "inventoryReturns": "Customer Returns",
       "inquiries": "Market Inquiries",
       "quotations": "Sales Quotations",
-    "pricingPolicies": "Pricing Policies",
+      "pricingPolicies": "Pricing Policies",
       "proformaInvoices": "Proforma Invoices",
       "salesContracts": "Export Contracts",
       "purchaseRequests": "PR Requests",
@@ -86,17 +98,21 @@
       "purchaseExceptions": "P2P/QC Exceptions",
       "threeWayMatching": "3-Way Matching",
       "shipments": "Global Logistics",
+      "ports": "Sea Ports",
       "exportDocuments": "Export Documents",
       "lc": "Trade Finance (L/C)",
       "collections": "Collections (D/P, D/A)",
       "paymentTT": "Payment (T/T)",
       "accountReceivables": "Buyer Receivables",
+      "accountPayables": "Vendor Payables",
       "finance": "Accounting & Tax",
       "users": "Team Management",
+      "rolePermissions": "Permissions",
+      "countries": "Countries",
       "settings": "Settings",
       "systemSettings": "System Settings",
       "currencies": "FX Management",
-      "exportDeliveries": "Export Delivery",
+      "exportDeliveries": "Export Deliveries",
       "commercialInvoices": "Commercial Invoices"
     }
   },
@@ -140,7 +156,780 @@
     "approvals": "Smart Approvals",
     "currencies": "FX Management",
     "pricing-policies": "Pricing Policies",
-    "commercial-invoices": "Commercial Invoices"
+    "commercial-invoices": "Commercial Invoices",
+    "approval-matrix": "Approval Matrix",
+    "counts": "Inventory Counts",
+    "export-deliveries": "Export Deliveries",
+    "returns": "Customer Returns",
+    "matching": "3-Way Matching",
+    "document": "Export Documents",
+    "account-receivables": "Buyer Receivables",
+    "account-payables": "Vendor Payables"
+  },
+  "Ports": {
+    "title": "Sea Port Management",
+    "description": "Standardize POL/POD data for quotations, contracts, shipments, and export documents",
+    "actions": {
+      "reload": "Reload",
+      "create": "Add Sea Port",
+      "createFirst": "Add first sea port",
+      "edit": "Edit",
+      "deactivate": "Deactivate",
+      "activate": "Reactivate",
+      "cancel": "Cancel",
+      "save": "Save",
+      "reset": "Reset",
+      "resetFilters": "Reset filters"
+    },
+    "units": {
+      "ports": "ports",
+      "countries": "countries"
+    },
+    "stats": {
+      "filteredTotal": "Filtered total",
+      "activeOnPage": "Active on this page",
+      "inactiveOnPage": "Inactive on this page",
+      "countriesOnPage": "Countries on this page"
+    },
+    "filters": {
+      "searchPlaceholder": "Search code, port name, city...",
+      "country": "Country",
+      "type": "Port type",
+      "status": "Status"
+    },
+    "countries": {
+      "VN": "Vietnam",
+      "US": "United States",
+      "JP": "Japan",
+      "NL": "Netherlands",
+      "SG": "Singapore"
+    },
+    "types": {
+      "SEA": "Sea port",
+      "INLAND": "ICD / inland depot",
+      "AIR": "Cargo airport"
+    },
+    "status": {
+      "active": "Active",
+      "inactive": "Inactive"
+    },
+    "table": {
+      "code": "Port code (UN/LOCODE)",
+      "name": "Port name",
+      "country": "Country",
+      "type": "Type",
+      "status": "Status",
+      "actions": "Actions"
+    },
+    "messages": {
+      "sessionNotReadyDescription": "The login session is not ready yet. Please sign in again if the problem persists.",
+      "sessionNotReady": "Login session is not ready",
+      "loadError": "Could not load sea port data",
+      "createSuccess": "Sea port created",
+      "updateSuccess": "Sea port updated",
+      "saveError": "Could not save sea port",
+      "activateSuccess": "Sea port reactivated",
+      "activateError": "Could not reactivate sea port",
+      "deactivateSuccess": "Sea port deactivated",
+      "deactivateError": "Could not deactivate sea port"
+    },
+    "confirm": {
+      "deactivateTitle": "Deactivate this sea port?",
+      "deactivateContent": "{port} will no longer appear in new business dropdowns. Existing documents will keep their port snapshot."
+    },
+    "empty": {
+      "noMatch": "No sea ports match the current filters",
+      "noPorts": "No sea ports yet"
+    },
+    "labels": {
+      "lastLoadedAt": "Last synced at: {time}",
+      "masterDataHint": "Port data is used as master data for POL/POD.",
+      "formHint": "The UN/LOCODE is used to standardize POL/POD across quotations, contracts, shipments, and export documents."
+    },
+    "modal": {
+      "createTitle": "Add sea port",
+      "editTitle": "Edit sea port"
+    },
+    "form": {
+      "code": "UN/LOCODE",
+      "countryCode": "Country code",
+      "type": "Port type",
+      "name": "English / standard name",
+      "localName": "Internal display name",
+      "city": "City",
+      "country": "Country",
+      "timezone": "Timezone",
+      "aliases": "Search aliases",
+      "notes": "Notes",
+      "active": "Active"
+    },
+    "placeholders": {
+      "code": "e.g. VNSGN",
+      "countryCode": "VN",
+      "name": "Port of Singapore",
+      "localName": "Cat Lai Port (HCMC)",
+      "city": "Ho Chi Minh City",
+      "country": "Vietnam",
+      "timezone": "Asia/Ho_Chi_Minh",
+      "aliases": "Cat Lai, Sai Gon, Ho Chi Minh Port",
+      "notes": "Internal notes about terminal, operating conditions, or routing..."
+    },
+    "validation": {
+      "codeRequired": "Enter the port code",
+      "codePattern": "Use a code like VNSGN or USLAX.",
+      "countryCodeRequired": "Select a country code",
+      "countryCodeLength": "Country code must be 2 characters",
+      "typeRequired": "Select a port type",
+      "nameRequired": "Enter the port name",
+      "countryRequired": "Enter the country"
+    },
+    "select": {
+      "placeholder": "Select sea port",
+      "sessionNotReady": "Login session is not ready",
+      "loadError": "Could not load ports",
+      "loading": "Loading...",
+      "notFound": "No matching ports",
+      "legacy": "Keeping legacy value"
+    }
+  },
+  "Countries": {
+    "title": "Country Management",
+    "description": "Manage country codes, names, translations, and market regions (master data)",
+    "actions": {
+      "reload": "Reload",
+      "create": "Add Country",
+      "createFirst": "Add first country",
+      "edit": "Edit",
+      "deactivate": "Deactivate",
+      "activate": "Reactivate",
+      "cancel": "Cancel",
+      "save": "Save",
+      "reset": "Reset",
+      "resetFilters": "Reset filters"
+    },
+    "units": {
+      "countries": "countries"
+    },
+    "stats": {
+      "filteredTotal": "Filtered total",
+      "activeOnPage": "Active on this page",
+      "inactiveOnPage": "Inactive on this page"
+    },
+    "filters": {
+      "searchPlaceholder": "Search code, EN name, VI name...",
+      "region": "Market region",
+      "status": "Status"
+    },
+    "regions": {
+      "ASEAN": "Southeast Asia (ASEAN)",
+      "EU": "Europe (EU)",
+      "US": "United States (US)",
+      "APAC": "Asia Pacific (APAC)",
+      "MIDDLE_EAST": "Middle East",
+      "OTHER": "Other Region (OTHER)"
+    },
+    "status": {
+      "active": "Active",
+      "inactive": "Inactive"
+    },
+    "table": {
+      "code": "Country Code",
+      "name": "English Name",
+      "nameVi": "Vietnamese Name",
+      "region": "Market Region",
+      "aliases": "Aliases",
+      "status": "Status",
+      "actions": "Actions"
+    },
+    "messages": {
+      "sessionNotReadyDescription": "The login session is not ready yet. Please sign in again.",
+      "sessionNotReady": "Login session is not ready",
+      "loadError": "Could not load country data",
+      "createSuccess": "Country created",
+      "updateSuccess": "Country updated",
+      "saveError": "Could not save country",
+      "activateSuccess": "Country reactivated",
+      "activateError": "Could not reactivate country",
+      "deactivateSuccess": "Country deactivated",
+      "deactivateError": "Could not deactivate country"
+    },
+    "confirm": {
+      "deactivateTitle": "Deactivate this country?",
+      "deactivateContent": "{country} will no longer appear in new business dropdowns."
+    },
+    "empty": {
+      "noMatch": "No countries match the current filters",
+      "noCountries": "No countries yet"
+    },
+    "labels": {
+      "lastLoadedAt": "Last synced at: {time}",
+      "masterDataHint": "Country data is used as master data."
+    },
+    "modal": {
+      "createTitle": "Add Country",
+      "editTitle": "Edit Country"
+    },
+    "form": {
+      "code": "Country Code (2 chars)",
+      "name": "English Name",
+      "nameVi": "Vietnamese Name",
+      "region": "Market Region",
+      "aliases": "Search Aliases",
+      "active": "Active"
+    },
+    "placeholders": {
+      "code": "e.g. VN, US, JP",
+      "name": "Vietnam",
+      "nameVi": "Việt Nam",
+      "aliases": "VIETNAM, VIET NAM, VN",
+      "region": "Select market region"
+    },
+    "validation": {
+      "codeRequired": "Enter country code",
+      "codeLength": "Country code must be exactly 2 characters",
+      "nameRequired": "Enter English name",
+      "nameViRequired": "Enter Vietnamese name",
+      "regionRequired": "Select market region"
+    }
+  },
+  "AccountReceivables": {
+    "title": "Buyer Receivables",
+    "description": "Track export A/R by issued Commercial Invoice, T/T allocations, aging, and DSO.",
+    "actions": {
+      "reload": "Reload",
+      "openCommercialInvoices": "Commercial Invoices"
+    },
+    "units": {
+      "days": "days"
+    },
+    "stats": {
+      "openAr": "Open A/R",
+      "dsoWindow": "{days}-day DSO",
+      "over90": "Overdue > 90 days",
+      "totalAging": "Total aging"
+    },
+    "aging": {
+      "title": "A/R Aging",
+      "current": "Current",
+      "days30": "1-30",
+      "days60": "31-60",
+      "days90": "61-90",
+      "over90": ">90"
+    },
+    "table": {
+      "title": "Receivables",
+      "invoiceContract": "Invoice / Contract",
+      "buyer": "Buyer",
+      "amount": "Amount",
+      "paid": "Collected",
+      "dueDate": "Due date",
+      "status": "Status",
+      "createdBy": "Created by",
+      "invoiceDate": "Invoice: {date}",
+      "searchPlaceholder": "Search invoice, buyer, contract"
+    },
+    "payments": {
+      "transaction": "Transaction",
+      "foreignAmount": "Foreign amount",
+      "exchangeRate": "Exchange rate",
+      "allocatedAt": "Allocated at",
+      "allocatedBy": "Handled by"
+    },
+    "status": {
+      "UNPAID": "Unpaid",
+      "PARTIAL": "Partially collected",
+      "PAID": "Paid",
+      "OVERDUE": "Overdue",
+      "CANCELLED": "Cancelled"
+    },
+    "allocationStages": {
+      "ADVANCE": "T/T Advance",
+      "BALANCE": "T/T Balance",
+      "COLLECTION": "D/P D/A",
+      "MANUAL": "Manual"
+    },
+    "empty": {
+      "noReceivables": "No receivables yet",
+      "noPayments": "No payment allocations"
+    },
+    "fallback": {
+      "commercialInvoice": "Commercial Invoice",
+      "manual": "Manual",
+      "system": "system"
+    }
+  },
+  "AccountPayables": {
+    "title": "Vendor Payables",
+    "description": "Track A/P, group payment batches, and post vendor cash settlements.",
+    "actions": {
+      "reload": "Reload",
+      "searchPlaceholder": "Search invoice or vendor",
+      "approvePayment": "Approve payment",
+      "recordPayment": "Record payment",
+      "createBatch": "Create payment batch",
+      "submit": "Submit",
+      "approve": "Approve",
+      "reject": "Reject",
+      "record": "Record",
+      "cancel": "Cancel",
+      "confirm": "Confirm",
+      "reversePayment": "Reverse payment",
+      "viewProof": "View proof",
+      "viewFile": "View file",
+      "uploadProof": "Upload proof",
+      "markPaidAndAudit": "Record payment & create audit"
+    },
+    "tabs": {
+      "payables": "A/P",
+      "batches": "Payment batches",
+      "settlementAudit": "Settlement audit"
+    },
+    "columns": {
+      "invoice": "Invoice",
+      "amount": "Amount",
+      "dueDate": "Due date",
+      "status": "Status",
+      "approvedBy": "Approved by",
+      "actions": "Actions",
+      "batch": "Batch",
+      "totalPayment": "Total payment",
+      "approvalFlow": "Approval flow",
+      "settlementAmount": "Settlement amount",
+      "bank": "Bank",
+      "settledBy": "Paid by",
+      "invoiceVendor": "Invoice / Vendor",
+      "currentAp": "Current A/P",
+      "settled": "Settled",
+      "reversed": "Reversed",
+      "netSettlement": "Net settlement",
+      "latest": "Latest",
+      "paymentAmount": "Payment amount",
+      "remainingAmount": "Remaining",
+      "reversalStatus": "Reversal status"
+    },
+    "labels": {
+      "remaining": "Remaining: {amount}",
+      "approvedForPayment": "Approved for payment",
+      "waitingPaymentApproval": "Waiting payment approval",
+      "createdBy": "Created by {username}",
+      "submittedBy": "Submitted: {username}",
+      "levelOneBy": "Level 1: {username}",
+      "finalBy": "Final: {username}",
+      "reversalFrom": "Reversal of {audit}",
+      "reversedAt": "Reversed {date}",
+      "effective": "Effective"
+    },
+    "selection": {
+      "summary": "Selected {count} lines, total {amount}"
+    },
+    "modal": {
+      "recordPaymentTitle": "Record A/P payment",
+      "markPaidTitle": "Record A/P batch payment",
+      "createBatchTitle": "Create A/P payment batch"
+    },
+    "form": {
+      "paymentAmount": "Payment amount",
+      "note": "Notes",
+      "paymentNotePlaceholder": "Payment order, bank proof, internal notes...",
+      "paymentDate": "Payment date",
+      "bankTransferAt": "Bank transfer time",
+      "paymentMethod": "Payment method",
+      "exchangeRate": "Exchange rate",
+      "bankReference": "Bank reference",
+      "bankReferencePlaceholder": "Bank transaction code or payment order number",
+      "bankProofUrl": "Bank proof file",
+      "settlementNote": "Settlement notes",
+      "settlementNotePlaceholder": "Transfer content, settled invoices, control notes...",
+      "accountingNote": "Accounting notes",
+      "accountingNotePlaceholder": "Additional notes saved on the batch",
+      "plannedPaymentDate": "Planned payment date",
+      "batchBankReferencePlaceholder": "Payment order / bank transaction number",
+      "batchNotePlaceholder": "Payment reason, invoice group, approval notes..."
+    },
+    "validation": {
+      "paymentAmount": "Enter the payment amount",
+      "paymentDate": "Select the payment date",
+      "bankTransferAt": "Select the bank transfer time",
+      "paymentMethod": "Enter the payment method",
+      "bankReference": "Enter the bank transaction/payment order number"
+    },
+    "messages": {
+      "approveSuccess": "A/P payment approved",
+      "approveError": "Could not approve this A/P",
+      "paymentSuccess": "A/P payment recorded",
+      "paymentError": "Could not record the payment",
+      "selectOpenPayable": "Select at least one open payable to create a batch",
+      "sameCurrencyOnly": "A batch can only include payables in the same currency",
+      "batchCreateSuccess": "A/P payment batch created",
+      "batchCreateError": "Could not create the payment batch",
+      "uploadSuccess": "Uploaded {file}",
+      "uploadError": "Payment proof upload failed",
+      "missingAccessToken": "Missing access token",
+      "markPaidSuccess": "Batch payment recorded and settlement audit created",
+      "markPaidError": "Could not record the batch payment",
+      "reverseSuccess": "Payment reversed and audit reversal recorded",
+      "reverseError": "Could not reverse the payment",
+      "batchWorkflowSuccess": "Payment batch updated",
+      "batchWorkflowError": "Could not update the payment batch"
+    },
+    "confirm": {
+      "reverseTitle": "Reverse A/P payment?",
+      "reverseContent": "{invoice} - {amount}. The system will decrease paidAmount, reopen A/P if needed, and create a reversal journal.",
+      "submitBatchTitle": "Submit this payment batch?",
+      "approveBatchTitle": "Approve this payment batch?",
+      "rejectBatchTitle": "Reject this payment batch?"
+    },
+    "status": {
+      "UNPAID": "Unpaid",
+      "PARTIAL": "Partially paid",
+      "PAID": "Paid",
+      "VOID": "Voided"
+    },
+    "batchStatus": {
+      "DRAFT": "Draft",
+      "SUBMITTED": "Pending approval",
+      "APPROVED_LEVEL_1": "Level 1 approved",
+      "APPROVED": "Approved for payment",
+      "REJECTED": "Rejected",
+      "PAID": "Paid",
+      "CANCELLED": "Cancelled"
+    },
+    "empty": {
+      "noData": "No data",
+      "noFile": "No file"
+    }
+  },
+  "PurchaseExceptions": {
+    "title": "P2P / QC Exceptions",
+    "description": "Track short receipts, QC rejects, quarantine, purchase returns, and vendor claim/backorder follow-up.",
+    "actions": {
+      "reload": "Reload",
+      "createQc": "Create QC exception",
+      "waitingGrn": "Waiting for GRN",
+      "sendClaim": "Send claim",
+      "cancel": "Cancel",
+      "resolve": "Resolve"
+    },
+    "units": {
+      "unit": "units",
+      "claim": "claims",
+      "line": "lines"
+    },
+    "stats": {
+      "openExceptions": "Open exceptions",
+      "rejectedQuantity": "Rejected quantity",
+      "sentClaims": "Claims sent to vendors",
+      "pendingSources": "Pending QC sources",
+      "backorderQuantity": "Replacement/backorder",
+      "overdueReplacement": "Overdue replacements"
+    },
+    "sections": {
+      "overview": "Handling overview",
+      "vendorBackorder": "Vendor claim/backorder",
+      "productBackorder": "Product backorder",
+      "pendingSources": "Source exceptions to process",
+      "activeClaims": "Active QC exceptions / claims"
+    },
+    "empty": {
+      "noVendor": "No vendor needs follow-up",
+      "noProduct": "No product backorder",
+      "noCandidates": "No GRN/PO source needs a QC exception",
+      "noExceptions": "No active QC exception"
+    },
+    "alerts": {
+      "openTitle": "{count} open exceptions",
+      "openDescription": "Purchasing must follow vendor claims; Accounting should only post AP for valid received inventory.",
+      "clearTitle": "No open P2P/QC exceptions",
+      "clearDescription": "If data still looks missing, check GRNs without item lines or POs that have not received goods yet."
+    },
+    "vendorTable": {
+      "vendor": "Vendor",
+      "open": "Open",
+      "claim": "Claim",
+      "backorder": "Backorder"
+    },
+    "productTable": {
+      "sku": "SKU",
+      "product": "Product",
+      "open": "Open",
+      "backorder": "Backorder"
+    },
+    "candidateTable": {
+      "source": "Source",
+      "product": "Product",
+      "vendor": "Vendor",
+      "quantity": "Quantity",
+      "reason": "Reason",
+      "actions": "Actions"
+    },
+    "exceptionTable": {
+      "qc": "QC / Defect",
+      "source": "PO / GRN / Vendor",
+      "quantity": "Quantity",
+      "claim": "Return / Claim",
+      "settlement": "Settlement",
+      "notes": "QC notes",
+      "actions": "Actions"
+    },
+    "labels": {
+      "ordered": "Ordered",
+      "received": "Received",
+      "rejected": "Rejected",
+      "backorder": "Backorder",
+      "noReturn": "No return yet",
+      "sentBy": "Sent by {username} on {date}",
+      "credit": "Credit",
+      "replacementDue": "Replacement due"
+    },
+    "sourceTypes": {
+      "GRN_REJECTED_LINE": "GRN reject",
+      "PO_SHORT_RECEIPT": "PO short receipt"
+    },
+    "results": {
+      "PASSED": "Passed",
+      "FAILED": "Failed",
+      "CONDITIONAL": "Conditional"
+    },
+    "exceptionStatus": {
+      "NONE": "None",
+      "QUARANTINED": "Quarantined",
+      "RETURN_CREATED": "Return created",
+      "CLAIM_OPEN": "Claim open",
+      "CLOSED": "Closed"
+    },
+    "claimStatus": {
+      "NONE": "None",
+      "OPEN": "Open",
+      "SENT": "Sent",
+      "RESOLVED": "Resolved",
+      "CANCELLED": "Cancelled"
+    },
+    "resolutionTypes": {
+      "NONE": "Unresolved",
+      "REPLACEMENT": "Replacement",
+      "CREDIT_NOTE": "Credit note / AP deduction",
+      "ACCEPT_AS_IS": "Accept as-is",
+      "CANCELLED": "Claim cancelled",
+      "OTHER": "Other"
+    },
+    "confirm": {
+      "resolveTitle": "Open the resolution form for this exception?",
+      "openForm": "Open form"
+    },
+    "modal": {
+      "createTitle": "Create QC exception from GRN",
+      "createOk": "Create exception",
+      "resolveTitle": "Resolve exception {number}",
+      "resolveOk": "Resolve exception"
+    },
+    "form": {
+      "defaultBackorderAction": "Track backorder / request vendor replacement",
+      "defaultRejectAction": "Return, replacement, or credit note",
+      "defaultResolutionNote": "Vendor confirmed credit/replacement",
+      "grnLine": "Goods receipt line",
+      "selectGrnLine": "Select GRN line",
+      "selectedLineDescription": "{sku} {product} | Received {received} | Current rejected {rejected}",
+      "qcResult": "QC result",
+      "receivedQuantity": "Received quantity",
+      "rejectedQuantity": "Rejected quantity",
+      "defectRate": "Defect %",
+      "correctiveAction": "Corrective action",
+      "correctiveActionPlaceholder": "Return, replacement, credit note...",
+      "inspectorNotes": "QC notes",
+      "inspectorNotesPlaceholder": "Describe the defect, wrong specification, or inspection record...",
+      "resolutionType": "Settlement type",
+      "creditAmount": "Credit amount",
+      "replacementDueDate": "Replacement due date",
+      "resolutionNote": "Resolution result",
+      "resolutionNotePlaceholder": "Vendor delivered replacement / credit note / accepted claim..."
+    },
+    "validation": {
+      "selectGrnLine": "Select the GRN line to inspect",
+      "rejectedQuantity": "Enter rejected quantity",
+      "inspectorNotes": "Enter rejection reason",
+      "resolutionType": "Select a settlement type",
+      "resolutionNote": "Enter resolution result"
+    },
+    "messages": {
+      "createSuccess": "QC exception created and linked with purchase return/claim",
+      "createError": "Could not create QC exception",
+      "claimNote": "Sent from exception board for {number}",
+      "claimSuccess": "Claim sent to vendor",
+      "claimError": "Could not send claim",
+      "resolveSuccess": "Exception resolved",
+      "resolveError": "Could not close exception"
+    }
+  },
+  "VendorEvaluations": {
+    "title": "Vendor Scorecards",
+    "description": "Supplier and logistics performance scorecards, approval workflow, and upcoming A/P risk alerts.",
+    "actions": {
+      "reload": "Reload",
+      "create": "Create evaluation",
+      "details": "Details",
+      "submit": "Submit",
+      "approve": "Approve",
+      "reject": "Reject",
+      "cancel": "Cancel",
+      "searchPlaceholder": "Search vendor or notes"
+    },
+    "stats": {
+      "vendorCount": "Total vendors",
+      "evaluatedVendors": "Evaluated",
+      "avgScore": "Average score",
+      "submittedCount": "Pending approval",
+      "dueSoonCount": "A/P due soon",
+      "overdueCount": "Overdue A/P",
+      "onTimePoGrn": "On-time PO/GRN",
+      "claimQc": "Vendor claims/QC",
+      "latestScore": "Latest score",
+      "scoreTrend": "Score trend",
+      "grnOnTimeLate": "GRN on-time/late",
+      "openClaims": "Open claims",
+      "remainingAp": "Remaining A/P",
+      "openSent": "Open/Sent"
+    },
+    "sections": {
+      "scorecard": "Vendor scorecards",
+      "apAlerts": "A/P due/overdue alerts",
+      "workflow": "Evaluation workflow",
+      "scoreTrend": "6-month score trend",
+      "claimAging": "Claim aging",
+      "claimHistory": "Claim/rejection history",
+      "poGrnDrilldown": "PO/GRN on-time drilldown",
+      "vendorOpenAp": "Vendor open A/P"
+    },
+    "columns": {
+      "month": "Month",
+      "total": "Total",
+      "componentScores": "Q/D/P",
+      "onTime": "On-time",
+      "defect": "Defect",
+      "poGrn": "PO/GRN",
+      "deliveryDate": "Delivery date",
+      "onTimeStatus": "On-time",
+      "quantityQc": "Qty/QC",
+      "status": "Status",
+      "claimQc": "Claim/QC",
+      "source": "Source",
+      "aging": "Aging",
+      "defectQuantity": "Defect qty",
+      "resolution": "Resolution",
+      "vendor": "Vendor",
+      "totalScore": "Total score",
+      "quality": "Quality",
+      "delivery": "Delivery",
+      "price": "Price",
+      "kpiPoGrn": "PO/GRN KPI",
+      "drilldown": "Drilldown",
+      "evaluationProfile": "Evaluation profile",
+      "score": "Score",
+      "actor": "Owner",
+      "actions": "Actions",
+      "apInvoice": "A/P invoice",
+      "remainingAmount": "Remaining",
+      "dueDate": "Due date"
+    },
+    "labels": {
+      "expectedDate": "Expected: {date}",
+      "receivedDate": "Received: {date}",
+      "unmeasured": "Not measured",
+      "onTime": "On time",
+      "lateDays": "{days} days late",
+      "receivedQuantity": "Received: {quantity}",
+      "rejectedAndIssue": "Rejected: {rejected} | Issues: {issue}",
+      "days": "{days} days",
+      "rejectedQuantity": "Rejected: {quantity}",
+      "backorderQuantity": "Backorder: {quantity}",
+      "noScore": "No score",
+      "noApprovedScore": "No approved score",
+      "viewMonth": "View month",
+      "onTimeValue": "On-time: {value}%",
+      "defectValue": "Defect: {value}%",
+      "claimCount": "Claims: {count}",
+      "rejectCount": "Rejected: {count}",
+      "onTimeDefect": "On-time {onTime}% | Defect {defect}%",
+      "approvedBy": "Approved: {username}",
+      "overdueDays": "Overdue {days} days",
+      "dueInDays": "Due in {days} days",
+      "bucket0To7": "0-7 days: {count}",
+      "bucket8To14": "8-14 days: {count}",
+      "bucket15To30": "15-30 days: {count}",
+      "bucketOver30": ">30 days: {count}",
+      "resolvedCancelled": "Resolved: {resolved} | Cancelled: {cancelled}"
+    },
+    "fallback": {
+      "noGrn": "No GRN yet"
+    },
+    "empty": {
+      "noData": "No data",
+      "noScorecardDetail": "No vendor scorecard detail yet"
+    },
+    "alerts": {
+      "overdueTitle": "{count} overdue A/P invoices",
+      "overdueDescription": "Accounting and Purchasing should verify payment terms, approval status, and vendor follow-up.",
+      "oldClaimTitle": "Oldest open claim is {days} days old",
+      "oldClaimDescription": "Purchasing/QC should follow up with the vendor to avoid late credit notes, replacements, or purchase returns.",
+      "workflowHintTitle": "Scorecards update only after approval",
+      "workflowHintDescription": "A saved evaluation starts as Draft. Submit it, then an ADMIN/MANAGER must approve it before the official vendor score is synced."
+    },
+    "confirm": {
+      "approveTitle": "Approve this evaluation?",
+      "rejectTitle": "Reject this evaluation?"
+    },
+    "modal": {
+      "createTitle": "Create vendor evaluation",
+      "save": "Save evaluation"
+    },
+    "form": {
+      "vendor": "Vendor",
+      "vendorPlaceholder": "Select supplier/logistics partner",
+      "periodStart": "From date",
+      "periodEnd": "To date",
+      "evaluationMonth": "Evaluation month",
+      "qualityScore": "Quality",
+      "deliveryScore": "Delivery",
+      "priceScore": "Price",
+      "communicationScore": "Communication",
+      "onTimeRate": "On-time %",
+      "defectRate": "Defect %",
+      "note": "Notes",
+      "notePlaceholder": "Quality, delivery, price, incidents, and follow-up notes..."
+    },
+    "validation": {
+      "vendor": "Select a vendor",
+      "month": "Select an evaluation month",
+      "score": "Enter a score"
+    },
+    "messages": {
+      "createSuccess": "Evaluation draft saved. Open Evaluation workflow to submit it.",
+      "createError": "Could not create vendor evaluation",
+      "workflowSuccess": "Evaluation workflow updated",
+      "submitSuccess": "Evaluation submitted. The scorecard will update after approval.",
+      "approveSuccess": "Evaluation approved and vendor scorecard updated.",
+      "rejectSuccess": "Evaluation rejected.",
+      "workflowError": "Could not update evaluation workflow",
+      "detailError": "Could not load vendor scorecard"
+    },
+    "status": {
+      "DRAFT": "Draft",
+      "SUBMITTED": "Pending approval",
+      "APPROVED": "Approved",
+      "REJECTED": "Rejected"
+    },
+    "apStatus": {
+      "UNPAID": "Unpaid",
+      "PARTIAL": "Partial",
+      "PAID": "Paid",
+      "OVERDUE": "Overdue",
+      "CANCELLED": "Cancelled"
+    },
+    "format": {
+      "percent": "{value}%"
+    },
+    "drawer": {
+      "titleWithVendor": "Vendor scorecard - {vendor}"
+    }
   },
   "Auth": {
     "login": {
@@ -353,7 +1142,7 @@
       "risk": "RISK & EVALUATION",
       "status": "STATUS",
       "actions": "ACTIONS",
-      "history": "View Change Log",
+      "history": "View Related Documents",
       "searchPlaceholder": "Search by name, tax code...",
       "advancedFilter": "Advanced Filters",
       "selectedCount": "{count} partners selected",
@@ -372,7 +1161,8 @@
       "allStatus": "All status",
       "country": "Country/National",
       "taxCode": "Tax Code",
-      "historyTitle": "Partner Change History"
+      "historyTitle": "Related Documents & Transaction History",
+      "countryCode": "Country Code"
     },
     "types": {
       "customer": "Customer",
@@ -399,6 +1189,23 @@
       "noAssessment": "No assessment yet"
     },
     "history": {
+      "subtitle": "Recent ERP documents linked to this partner. Audit changes are tracked separately.",
+      "lastActivity": "Last activity",
+      "searchPlaceholder": "Search document number, status, currency...",
+      "periodAll": "All time",
+      "period30Days": "Last 30 days",
+      "periodThisYear": "This year",
+      "noMatch": "No document matches the current filters",
+      "viewAll": "View all",
+      "openDetail": "Open",
+      "recentSummary": "Showing {shown}/{total} most recent records",
+      "filteredSummary": "Showing {shown}/{loaded} loaded records after filters",
+      "createPurchaseOrder": "Create PO",
+      "createVendorInvoice": "Record invoice",
+      "purchaseOrderRef": "PO",
+      "createShipment": "Create shipment",
+      "createQuotation": "Create quotation",
+      "createPI": "Create PI",
       "shipments": "Completed Shipments",
       "noShipments": "No shipment data available",
       "payables": "Accounts Payable",
@@ -591,13 +1398,17 @@
       "orderStatusLabel": "Order Status:",
       "printTitle": "PURCHASE ORDER",
       "poNumberLabel": "PO No.",
+      "orderInfoTitle": "Order information",
       "vendorLabel": "Vendor",
+      "addressLabel": "Address",
       "phoneLabel": "Phone",
       "orderDateLabel": "Order Date",
       "expectedDeliveryLabel": "Expected Delivery (Est.)",
       "currencyLabel": "Currency",
       "prRefLabel": "PR Reference",
       "itemsTitle": "Line Items Detail",
+      "lineCountLabel": "Line count",
+      "receiptProgressLabel": "Receipt progress",
       "subtotalLabel": "Subtotal (Excl. Tax)",
       "vatLabel": "VAT Tax",
       "totalLabel": "Total Amount",
@@ -693,11 +1504,14 @@
       }
     },
     "departments": {
+      "KINHDOANH_XK": "Export Sales",
       "KHO": "Warehouse",
       "SANXUAT": "Production",
-      "MARKETING": "Marketing / Sales",
+      "MUAHANG": "Purchasing",
+      "VANHANH": "Operations / Admin",
+      "MARKETING": "Marketing",
       "HANHCHINH": "HR / Admin",
-      "KETOAN": "Accounting",
+      "KETOAN": "Accounting / Finance",
       "KYTHUAT": "Technical / IT",
       "NEW": " (New)"
     },
@@ -859,7 +1673,14 @@
       "CANCELLED": "Cancelled"
     },
     "tooltips": {
-      "viewDetail": "View details"
+      "viewDetail": "View details",
+      "reverse": "Reverse goods receipt"
+    },
+    "reverseModal": {
+      "title": "Reverse {grnNumber}",
+      "reasonPlaceholder": "Enter the reversal reason",
+      "okText": "Reverse GRN",
+      "cancelText": "Cancel"
     },
     "notifications": {
       "fetchPODetailError": "Error loading PO details",
@@ -872,11 +1693,18 @@
       "businessError": "Business error",
       "businessErrorDesc": "Cannot create goods receipt",
       "systemError": "System error",
-      "systemErrorDesc": "Please check your connection"
+      "systemErrorDesc": "Please check your connection",
+      "reverseReasonRequired": "Please enter a reversal reason",
+      "reverseSuccess": "Goods receipt reversed successfully",
+      "reverseFailed": "Could not reverse goods receipt",
+      "reverseCompletedOnlyError": "Only completed GRNs can be reversed",
+      "reverseActiveVendorInvoiceError": "This PO already has an active vendor invoice. Cancel or credit the invoice before reversing the GRN."
     },
     "poSelect": {
       "modalTitle": "Select Purchase Order for Receipt",
       "searchPlaceholder": "Search by PO number (e.g. PO-2026...)",
+      "dateFromPlaceholder": "From date",
+      "dateToPlaceholder": "To date",
       "columns": {
         "poNumber": "PO NO.",
         "vendor": "VENDOR",
@@ -995,9 +1823,13 @@
     "poSelect": {
       "modalTitle": "Select Purchase Order for Invoice",
       "searchPlaceholder": "Search by PO number...",
+      "dateFromPlaceholder": "From date",
+      "dateToPlaceholder": "To date",
+      "emptyEligible": "No received purchase orders remain eligible for invoicing",
       "columns": {
         "poNumber": "PO NO.",
         "vendor": "VENDOR",
+        "date": "ORDER DATE",
         "status": "STATUS",
         "actions": "ACTIONS"
       },
@@ -1014,10 +1846,17 @@
         "returnDate": "RETURN DATE",
         "poNumber": "RELATED PO NO.",
         "reason": "REASON",
-        "actions": "ACTIONS"
+        "actions": "ACTIONS",
+        "status": "STATUS"
       },
       "tooltips": {
-        "viewDetail": "View details"
+        "viewDetail": "View details",
+        "submit": "Submit",
+        "send": "Send to vendor",
+        "credited": "Mark credited",
+        "replaced": "Mark replaced",
+        "close": "Close",
+        "cancel": "Cancel"
       }
     },
     "modal": {
@@ -1027,22 +1866,55 @@
         "returnDate": "Return Date",
         "reason": "Reason for return",
         "reasonPlaceholder": "e.g. Defective goods, incorrect specification...",
+        "purchaseOrder": "Received PO",
+        "purchaseOrderPlaceholder": "Select a PO with received goods",
+        "vendor": "Vendor: {vendor}",
         "itemsDivider": "Returned Items List",
         "product": "Product",
         "productPlaceholder": "Select product",
         "quantity": "Qty",
         "unit": "Unit",
+        "receivedHint": "Received: {quantity}",
         "addLineBtn": "Add returned item"
       },
       "rules": {
+        "purchaseOrderRequired": "Please select PO",
         "productRequired": "Please select product",
         "qtyRequired": "Qty",
+        "qtyMax": "Cannot exceed received qty: {max}",
         "unitRequired": "Unit"
       }
     },
     "notifications": {
       "createSuccess": "Return note created successfully",
-      "createError": "Error creating return note"
+      "createError": "Error creating return note",
+      "submitted": "Purchase return submitted",
+      "sent": "Purchase return sent",
+      "credited": "Purchase return credited",
+      "replaced": "Purchase return replaced",
+      "closed": "Purchase return closed",
+      "cancelPrompt": "Cancel {id}",
+      "cancelReason": "Reason",
+      "cancelReasonRequired": "Reason is required",
+      "cancelled": "Purchase return cancelled"
+    },
+    "detail": {
+      "status": "Status",
+      "po": "PO",
+      "reason": "Reason",
+      "product": "Product",
+      "sku": "SKU",
+      "qty": "Qty",
+      "unit": "Unit"
+    },
+    "status": {
+      "DRAFT": "DRAFT",
+      "PENDING_VENDOR": "PENDING VENDOR",
+      "SENT": "SENT",
+      "CREDITED": "CREDITED",
+      "REPLACED": "REPLACED",
+      "CLOSED": "CLOSED",
+      "CANCELLED": "CANCELLED"
     }
   },
   "ThreeWayMatching": {
@@ -1251,7 +2123,9 @@
       "SALES_DISPATCH": "Export Dispatch",
       "ADJUSTMENT": "Inventory Adjustment",
       "RETURN": "Returned Goods",
-      "REJECTION": "Rejected / Supplier Return"
+      "REJECTION": "Rejected / Supplier Return",
+      "RESERVE": "Reserved",
+      "RELEASE": "Released"
     },
     "drawer": {
       "title": "Stock Card Details",
@@ -1261,7 +2135,16 @@
       "lot": "Lot: {lot}",
       "systemUser": "System",
       "balance": "Balance",
-      "empty": "No transaction history for this product"
+      "empty": "No transaction history for this product",
+      "filters": {
+        "searchPlaceholder": "Search reference, lot, note...",
+        "transactionTypePlaceholder": "Transaction type",
+        "startDatePlaceholder": "From date",
+        "endDatePlaceholder": "To date"
+      },
+      "showing": "Showing {count}/{total} rows",
+      "loadMore": "Load more",
+      "noFilterResults": "No matching ledger rows"
     }
   },
   "ProductTable": {
@@ -1362,15 +2245,44 @@
     "title": "Pricing Policy",
     "description": "Manage price lists by market, buyer, incoterm, and quantity tier",
     "searchPlaceholder": "Search SKU, product, buyer, country",
+    "historySearchPlaceholder": "Search SKU, buyer, document number, or incoterm",
     "actions": {
       "reload": "Reload",
       "create": "Create Price List",
+      "edit": "Edit",
+      "deactivate": "Deactivate",
+      "test": "Check price",
+      "resolve": "Calculate price",
+      "reset": "Reset",
       "save": "Save",
       "cancel": "Cancel"
     },
     "messages": {
       "createSuccess": "Pricing policy created",
-      "createError": "Could not create pricing policy"
+      "updateSuccess": "Pricing policy updated",
+      "deactivateSuccess": "Pricing policy deactivated",
+      "resolveSuccess": "Price resolved",
+      "createError": "Could not create pricing policy",
+      "saveError": "Could not save pricing policy",
+      "validationError": "Please check required fields before saving",
+      "deactivateError": "Could not deactivate pricing policy",
+      "resolveError": "Could not find a matching price"
+    },
+    "summary": {
+      "total": "Total policies",
+      "visibleActive": "Active on page",
+      "visibleBuyer": "Buyer policies",
+      "history": "Price history"
+    },
+    "filters": {
+      "incoterm": "Incoterm",
+      "currency": "Currency",
+      "status": "Status",
+      "effectiveOn": "Effective on"
+    },
+    "confirmDeactivate": {
+      "title": "Deactivate price list?",
+      "content": "This policy will no longer be selected for new price resolution, while document history stays intact."
     },
     "tabs": {
       "policies": "Price List",
@@ -1385,13 +2297,18 @@
       "marketBuyer": "Market / Buyer",
       "globalPolicy": "Global policy",
       "allMarkets": "All markets",
+      "route": "Port route",
+      "allRoutes": "All routes",
       "incoterm": "Incoterm",
       "tier": "Tier",
       "infinity": "∞",
       "price": "Price",
+      "derivation": "Cost derivation",
+      "noDerivation": "No derivation",
       "effective": "Effective",
       "unlimited": "Unlimited",
-      "status": "Status"
+      "status": "Status",
+      "actions": "Actions"
     },
     "historyTable": {
       "product": "Product",
@@ -1404,7 +2321,8 @@
       "createdBy": "Created By"
     },
     "modal": {
-      "title": "Create pricing policy"
+      "title": "Create pricing policy",
+      "editTitle": "Edit pricing policy"
     },
     "form": {
       "product": "Product",
@@ -1412,16 +2330,53 @@
       "buyer": "Specific buyer",
       "buyerPlaceholder": "Leave blank to apply by market/global",
       "region": "Region",
+      "countryCode": "Country Code",
       "country": "Country",
+      "originPort": "Port of Loading (POL)",
+      "destinationPort": "Port of Discharge (POD)",
       "incoterm": "Incoterm",
       "currency": "Currency",
       "unitPrice": "Unit price",
       "minQuantity": "Min qty",
       "maxQuantity": "Max qty",
+      "derivationCosts": "Incoterm derivation costs",
+      "inlandCostPerUnit": "Origin inland / unit",
+      "portChargePerUnit": "Origin port / unit",
+      "freightCostPerUnit": "Freight / unit",
+      "insuranceCostPerUnit": "Insurance / unit",
+      "destinationDeliveryCostPerUnit": "Destination delivery / unit",
+      "customsCostPerUnit": "DDP customs/duty / unit",
+      "derivationHint": "The {incoterm} unit price is applied directly for {incoterm}. Only enabled costs are used to derive to a higher Incoterm when no exact policy exists; unused costs are reset to 0 to avoid double charging.",
       "effectiveFrom": "Effective from",
       "effectiveTo": "Effective to",
       "active": "Active",
       "note": "Note"
+    },
+    "resolver": {
+      "title": "Check applied price",
+      "priceDate": "Price date",
+      "result": "Resolved result",
+      "source": "Price source",
+      "price": "Applied price",
+      "unitPrice": "Applied unit price",
+      "quantity": "Resolved quantity",
+      "estimatedAmount": "Estimated line amount",
+      "policy": "Source policy",
+      "route": "Port route",
+      "productDefaultSource": "Product default price",
+      "productDefaultWarningTitle": "No matching pricing policy found",
+      "productDefaultWarningDesc": "Quantity {quantity} is outside active pricing policies for the selected product, buyer, Incoterm, currency, and price date. The system is using the product default price."
+    },
+    "breakdown": {
+      "component": "Component",
+      "amount": "Amount",
+      "base": "Base price",
+      "inland": "Inland",
+      "port": "Port",
+      "freight": "Freight",
+      "insurance": "Insurance",
+      "destinationDelivery": "Destination delivery",
+      "customs": "DDP customs/duty"
     }
   },
   "PaymentTerms": {
@@ -1533,6 +2488,8 @@
       "submitApproval": "Submit approval",
       "sendSignature": "Send signature",
       "buyerSign": "Buyer sign",
+      "resendSignature": "Resend link",
+      "revokeSignature": "Revoke link",
       "internalSign": "Internal sign",
       "ship": "SHIP OUT",
       "view": "Detail",
@@ -1542,12 +2499,18 @@
       "fetchError": "Cannot load contract list",
       "submitApprovalSuccess": "Sales contract submitted to approval workflow",
       "sendSignatureSuccess": "Sales contract moved to pending buyer signature",
+      "resendSignatureSuccess": "Buyer signing link resent",
+      "revokeSignatureSuccess": "Signing link revoked and contract returned to approved status",
       "buyerSignSuccess": "Buyer signed the sales contract",
       "internalSignSuccess": "Internal signature completed and contract confirmed",
       "confirmSuccess": "Approved and stock reserved successfully",
       "shipSuccess": "Shipment confirmed successfully",
       "actionFailed": "Action failed",
+      "portalLinkCopied": "Portal link copied. Delivery: {delivery}",
+      "portalLinkFallback": "Portal link: {url}",
+      "noActiveSignatureInvitation": "No active buyer signing link found",
       "submitApprovalTitle": "Submit this sales contract to approval matrix?",
+      "revokeSignatureTitle": "Revoke the current buyer signing link?",
       "confirmTitle": "System will automatically RESERVE stock. Are you sure?",
       "shipTitle": "Confirm shipment for this order?",
       "confirmOk": "Approve Now",
@@ -1575,6 +2538,10 @@
       "incoterm": "Incoterms",
       "currency": "Currency",
       "rate": "Exchange Rate",
+      "paymentTerms": "Payment Terms",
+      "paymentTermsPlaceholder": "Select payment terms",
+      "deliveryDate": "Delivery Date",
+      "deliveryDatePlaceholder": "Select delivery date",
       "logisticsDivider": "Logistics Costs (Auto-calculated based on Incoterm)",
       "transport": "Domestic Transport",
       "port": "Port Charges (THC...)",
@@ -1754,7 +2721,8 @@
       "cancel": "Cancel",
       "sections": {
         "bankInfo": "Bank Information",
-        "datesDocuments": "Dates & Documents"
+        "datesDocuments": "Dates & Documents",
+        "attachments": "L/C Original Documents"
       },
       "fields": {
         "lcNumber": "L/C No.",
@@ -1767,8 +2735,11 @@
         "issueDate": "Issue Date",
         "expiryDate": "Expiry Date",
         "latestShipmentDate": "Latest Shipment Date",
+        "presentationDeadline": "Presentation Deadline",
         "descriptionOfGoods": "Description of Goods",
-        "documentsRequired": "Documents Required"
+        "documentsRequired": "Documents Required",
+        "additionalConditions": "Additional Conditions",
+        "attachmentUrl": "L/C Attachment"
       },
       "placeholders": {
         "lcNumber": "Enter L/C reference",
@@ -1776,7 +2747,9 @@
         "issuingBank": "Buyer-side bank name",
         "advisingBank": "Seller-side bank name",
         "descriptionOfGoods": "Detailed description according to the L/C...",
-        "documentsRequired": "Bill of lading, commercial invoice, C/O..."
+        "documentsRequired": "Bill of lading, commercial invoice, C/O...",
+        "additionalConditions": "Tolerance, partial shipment, transshipment, bank clauses...",
+        "attachmentUrl": "Enter attachment URL or upload..."
       },
       "lcTypes": {
         "AT_SIGHT": "At Sight",
@@ -1784,12 +2757,22 @@
         "USANCE": "Usance"
       },
       "validation": {
-        "lcNumber": "Please enter L/C number"
+        "lcNumber": "Please enter L/C number",
+        "expiryAfterIssue": "Expiry date must be on or after issue date",
+        "shipmentBeforeExpiry": "Latest shipment date must be on or before expiry date",
+        "presentationBeforeExpiry": "Presentation deadline must be on or before expiry date"
       },
       "notifications": {
         "createSuccess": "L/C created successfully",
         "updateSuccess": "L/C updated successfully",
-        "error": "An error occurred"
+        "error": "An error occurred",
+        "uploadSuccess": "Upload attachment successfully",
+        "uploadFailed": "Upload attachment failed"
+      },
+      "upload": {
+        "uploadAttachment": "Upload L/C Doc",
+        "acceptFormats": "Accept scan PDF or image files (PNG/JPG)",
+        "filePlaceholder": "No file attached"
       }
     }
   },
@@ -1861,7 +2844,24 @@
     "description": "Manage general journals, ledgers, and automated financial reports",
     "actions": {
       "refresh": "Refresh",
-      "closePeriod": "Close Period"
+      "closePeriod": "Close Period",
+      "advancedFilters": "Advanced filters",
+      "exportExcel": "Export Excel",
+      "traceLedger": "Trace ledger detail",
+      "viewDebtors": "View customer debtors",
+      "viewCreditors": "View vendor payables",
+      "openPeriod": "Open period",
+      "runRevaluation": "Run revaluation",
+      "createDossier": "Create dossier",
+      "exportCsv": "Export CSV",
+      "policy": "Policy",
+      "close": "Close",
+      "reopen": "Reopen",
+      "requestLock": "Request lock",
+      "submit": "Submit",
+      "approve": "Approve",
+      "reject": "Reject",
+      "receiveMoney": "Receive money"
     },
     "summary": {
       "revenue": "Total Revenue",
@@ -1871,10 +2871,19 @@
     },
     "tabs": {
       "journal": "General Journal",
-      "reports": "Financial Reports"
+      "reports": "Financial Reports",
+      "workflows": "Accounting Workflow",
+      "pl": "Profit & Loss (P&L)",
+      "balanceSheet": "Balance Sheet",
+      "cashFlow": "Cash Flow",
+      "aging": "Aging & Receivables/Payables"
     },
     "filters": {
       "searchPlaceholder": "Search by description or code..."
+    },
+    "alerts": {
+      "costHiddenTitle": "COGS and profit indicators are hidden",
+      "costHiddenDescription": "This account does not have read:cost_fields permission, so COGS, expenses, and profit KPIs are hidden in admin."
     },
     "journalHint": "All journal entries are generated automatically from inventory and sales operations",
     "table": {
@@ -1883,6 +2892,271 @@
       "entryDetails": "ACCOUNTING DETAILS (DEBIT / CREDIT)",
       "reference": "REFERENCE",
       "status": "STATUS"
+    },
+    "empty": {
+      "noJournal": "No journal entries"
+    },
+    "reports": {
+      "loading": "Preparing financial reports...",
+      "hiddenByPermission": "Hidden by permission",
+      "noCostPermission": "Margin and inventory-turnover ratios are hidden by permission",
+      "kpi": {
+        "netRevenue": "Net revenue",
+        "comparedPreviousPeriod": "vs previous period",
+        "netProfit": "Net profit",
+        "netCashFlow": "Net cash flow",
+        "positiveCashFlow": "Positive cash flow",
+        "negativeCashFlow": "Negative cash flow",
+        "customerReceivables": "Customer receivables",
+        "customerDebtTotal": "Total customer outstanding"
+      },
+      "sections": {
+        "financialTrend": "Financial Trend",
+        "financialTrendDescription": "Analyze revenue and profit movement across periods",
+        "performanceRatios": "Performance Ratios",
+        "plDetail": "Profit & Loss Details"
+      },
+      "chart": {
+        "revenue": "Revenue",
+        "profit": "Profit"
+      },
+      "ratios": {
+        "grossMargin": "Gross margin",
+        "netMargin": "Net margin",
+        "inventoryTurnover": "Inventory turnover",
+        "turnoverValue": "{value} times",
+        "currentRatio": "Current ratio",
+        "currentRatioValue": "{value}"
+      },
+      "plRows": {
+        "revenue": "Revenue from sales and services",
+        "deductions": "Revenue deductions",
+        "netRevenue": "Net revenue",
+        "cogs": "Cost of goods sold",
+        "grossProfit": "Gross profit from sales",
+        "operatingExpenses": "Selling and administrative expenses",
+        "operatingNetProfit": "Net profit from operating activities",
+        "hiddenCost": "COGS, expenses, and profit"
+      },
+      "columns": {
+        "metric": "METRIC",
+        "currentPeriod": "CURRENT PERIOD (VND)",
+        "previousPeriod": "PREVIOUS PERIOD (VND)",
+        "changePercent": "% Change",
+        "details": "DETAILS",
+        "account": "Account",
+        "balance": "Balance",
+        "date": "Posting Date",
+        "reference": "Reference / Document",
+        "debit": "Debit",
+        "credit": "Credit"
+      },
+      "actions": {
+        "drilldown": "View drilldown details"
+      },
+      "balanceSheet": {
+        "assetStructure": "Asset Structure",
+        "capitalStructure": "Capital Structure",
+        "assets": "ASSETS",
+        "liabilitiesEquity": "LIABILITIES & EQUITY",
+        "totalAssets": "TOTAL ASSETS",
+        "totalLiabilitiesEquity": "TOTAL LIABILITIES & EQUITY"
+      },
+      "cashFlow": {
+        "operatingCashFlow": "Operating Cash Flow",
+        "inflow": "Cash in",
+        "outflow": "Cash out",
+        "netCashFlow": "Net cash flow",
+        "summary": "Cash Flow Summary",
+        "salesCollections": "Collections from sales",
+        "vendorPayments": "Payments to vendors"
+      },
+      "aging": {
+        "arTitle": "Accounts Receivable Aging",
+        "apTitle": "Accounts Payable Aging",
+        "current": "Current",
+        "days30": "1-30 days",
+        "days60": "31-60 days",
+        "days90": "61-90 days",
+        "over90": "> 90 days",
+        "over60": "> 60 days"
+      },
+      "agingDetails": {
+        "arTitle": "Customer debtor list",
+        "apTitle": "Vendor payable list",
+        "searchPlaceholder": "Search partner, invoice, document...",
+        "summary": "{partners} partners / {items} open documents / {amount}",
+        "noData": "No matching open debt",
+        "loadError": "Cannot load aging detail list",
+        "customer": "Customer",
+        "vendor": "Vendor",
+        "partner": "Partner",
+        "partnerCount": "Partners",
+        "partnerTotal": "Total {total} partners",
+        "itemCount": "Documents",
+        "totalOpen": "Open balance",
+        "overdueTotal": "Total overdue",
+        "earliestDueDate": "Earliest due date",
+        "worstOverdue": "Worst overdue",
+        "daysOverdue": "{days} days",
+        "notOverdue": "Current",
+        "document": "Document",
+        "reference": "Reference",
+        "issueDate": "Issue date",
+        "dueDate": "Due date",
+        "currency": "Currency",
+        "originalAmount": "Original amount",
+        "paidAmount": "Paid amount",
+        "remaining": "Remaining",
+        "bucket": "Aging",
+        "status": "Status",
+        "openFullModule": "Open detail module",
+        "exportedAt": "Exported at",
+        "exportFilePrefix": "Aging_Details"
+      },
+      "export": {
+        "plTitle": "PROFIT AND LOSS REPORT",
+        "balanceSheetTitle": "BALANCE SHEET",
+        "fromDate": "From date",
+        "toDate": "To date",
+        "metric": "Metric",
+        "currentPeriod": "Current period (VND)",
+        "previousPeriod": "Previous period (VND)",
+        "account": "Account",
+        "balance": "Balance (VND)",
+        "filePrefix": "Financial_Report",
+        "rows": {
+          "revenue": "Revenue",
+          "cogs": "Cost of goods sold",
+          "expenses": "Expenses",
+          "netProfit": "Net profit"
+        }
+      }
+    },
+    "workflows": {
+      "messages": {
+        "updated": "Accounting workflow updated",
+        "exportTaxError": "Cannot export tax report"
+      },
+      "defaults": {
+        "closeNote": "Closed after production close policy checklist",
+        "lockReason": "Final accounting lock after management review",
+        "rejectReason": "Not eligible for VAT refund",
+        "reopenReason": "Adjust figures after period close"
+      },
+      "cards": {
+        "accountingPeriod": "Accounting Period",
+        "fxRevaluation": "FX Revaluation",
+        "vatRefundDossier": "VAT Refund Dossier"
+      },
+      "form": {
+        "periodRange": "Period range",
+        "revaluationDate": "Period-end date",
+        "currency": "Currency",
+        "closingRate": "Closing rate",
+        "postJournal": "Post journal now",
+        "taxPeriod": "Tax period",
+        "exportRevenue": "Export revenue",
+        "refundAmount": "Refund amount"
+      },
+      "validation": {
+        "periodRange": "Select an accounting period",
+        "revaluationDate": "Select the period-end date",
+        "currency": "Enter the currency",
+        "closingRate": "Enter the closing rate",
+        "taxPeriod": "Select a tax period"
+      },
+      "taxReport": {
+        "title": "Production-grade tax report",
+        "inputVat": "Input VAT",
+        "outputVat": "Output VAT",
+        "refundableVat": "Refundable VAT",
+        "exportRevenue": "Export revenue",
+        "customsTraced": "Customs traced: {count}",
+        "coTraced": "C/O traced: {count}",
+        "refundDossiers": "VAT refund dossiers: {count}",
+        "reconciliationWarnings": "Reconciliation warnings: {count}",
+        "warnings": {
+          "noAccountingPeriod": "No accounting period is configured for this tax report range.",
+          "missingCustoms": "Export revenue exists but no customs declaration was traced for this tax period.",
+          "missingCo": "Export revenue exists but no C/O document was traced for this tax period.",
+          "missingRefundDossier": "Refundable VAT exists but no submitted/approved/paid VAT refund dossier overlaps this period.",
+          "missingVatReference": "VAT line {entry} is missing reference."
+        }
+      },
+      "sections": {
+        "periodList": "Accounting Periods",
+        "frozenTaxRuns": "Frozen Tax Report Runs",
+        "closePackets": "Accounting Close Packets",
+        "fxRevaluations": "Unrealized FX Revaluations",
+        "vatRefundWorkflow": "Export VAT Refund Workflow",
+        "immutableAudit": "Immutable Accounting Audit"
+      },
+      "columns": {
+        "start": "Start",
+        "end": "End",
+        "status": "Status",
+        "closedBy": "Closed by",
+        "reopenCount": "Reopen",
+        "periodHash": "Period hash",
+        "reopenedBy": "Reopened by",
+        "actions": "Actions",
+        "run": "Run",
+        "period": "Period",
+        "by": "By",
+        "warnings": "Warnings",
+        "reportHash": "Report hash",
+        "runHash": "Run hash",
+        "packet": "Packet",
+        "journals": "Journals",
+        "failed": "Failed",
+        "packetHash": "Packet hash",
+        "source": "Source",
+        "currency": "Currency",
+        "openFcy": "Open FCY",
+        "gainLossVnd": "Gain/Loss VND",
+        "dossier": "Dossier",
+        "event": "Event",
+        "entity": "Entity",
+        "user": "User",
+        "at": "At",
+        "hash": "Hash"
+      },
+      "approval": {
+        "reopenPending": "Reopen pending",
+        "lockPending": "Lock pending"
+      },
+      "status": {
+        "OPEN": "Open",
+        "CLOSED": "Closed",
+        "LOCKED": "Locked",
+        "DRAFT": "Draft",
+        "SUBMITTED": "Submitted",
+        "APPROVED": "Approved",
+        "PAID": "Paid",
+        "REJECTED": "Rejected",
+        "POSTED": "Posted",
+        "PASSED": "Passed",
+        "WARNING": "Warning",
+        "FAILED": "Failed"
+      },
+      "closePolicy": {
+        "title": "Accounting Close Policy",
+        "ready": "Ready to close",
+        "failed": "Close policy failed",
+        "summary": "Failed: {failed} | Warnings: {warnings} | Closing lines: {lines}",
+        "totalDebit": "Total debit",
+        "totalCredit": "Total credit",
+        "policyHash": "Policy hash",
+        "check": "Check",
+        "details": "Details",
+        "loading": "Loading close policy..."
+      },
+      "reopen": {
+        "title": "Reopen accounting period",
+        "description": "The reopen reason will be stored in the accounting period audit trail.",
+        "placeholder": "Enter the reopen reason"
+      }
     }
   },
   "UserManagement": {
@@ -1896,12 +3170,12 @@
     "actions": {
       "create": "Create New User",
       "edit": "Edit",
-      "delete": "Delete",
-      "deleteAll": "Delete All",
-      "bulkDelete": "Bulk Delete"
+      "delete": "Deactivate",
+      "deleteAll": "Deactivate All",
+      "bulkDelete": "Bulk Deactivate"
     },
     "filters": {
-      "searchPlaceholder": "Search name or email...",
+      "searchPlaceholder": "Search name, username, email or phone...",
       "rolePlaceholder": "Role",
       "statusPlaceholder": "Status"
     },
@@ -1919,17 +3193,158 @@
     "messages": {
       "missingTokenTitle": "Internal Error",
       "missingTokenDescription": "Could not find access token.",
-      "deleteSuccess": "User deleted successfully",
+      "deleteSuccess": "User deactivated successfully",
       "bulkSuccess": "Action completed successfully",
       "error": "Error"
     },
     "confirm": {
-      "deleteTitle": "Delete this user?",
-      "bulkDeleteTitle": "Delete {count} users?",
+      "deleteTitle": "Deactivate this user?",
+      "bulkDeleteTitle": "Deactivate {count} users?",
       "cancel": "Cancel"
     },
     "selection": "Selected {count} items",
     "pagination": "{start}-{end} of {total} users"
+  },
+  "RolePermissions": {
+    "tabs": {
+      "users": "Users",
+      "permissions": "Roles & Permissions"
+    },
+    "title": "Roles & Permissions",
+    "description": "Manage each role's business access by module",
+    "filters": {
+      "searchPlaceholder": "Search business permission or module...",
+      "roleSearchPlaceholder": "Search roles..."
+    },
+    "sections": {
+      "roleList": "Roles",
+      "permissionGroups": "Permission groups"
+    },
+    "labels": {
+      "assignedCount": "{count}/{total} permissions assigned",
+      "appliedToRoles": "{count}/{total} roles",
+      "visibleCount": "{count} visible permissions",
+      "totalPermissions": "{count} total permissions",
+      "roleCount": "{count} roles",
+      "unsavedChanges": "Unsaved changes",
+      "noDescription": "No description"
+    },
+    "actions": {
+      "reload": "Reload",
+      "save": "Save changes",
+      "reset": "Reset",
+      "grantVisibleRole": "Grant visible",
+      "clearVisibleRole": "Clear visible",
+      "grantPermissionToAllRoles": "Grant this permission to all roles",
+      "clearPermissionFromAllRoles": "Remove this permission from all roles"
+    },
+    "actionTypes": {
+      "view": "View",
+      "createEdit": "Create / Edit",
+      "edit": "Edit",
+      "manage": "Manage",
+      "fullAccess": "Full access",
+      "custom": "Custom"
+    },
+    "modules": {
+      "system": "System Administration",
+      "accounting": "Accounting & Tax",
+      "exportDocuments": "Export Documents",
+      "salesContracts": "Sales Contracts",
+      "sensitiveFields": "Sensitive Data",
+      "general": "Other Permissions"
+    },
+    "permissions": {
+      "readAll": {
+        "title": "View all modules",
+        "description": "Allows reading dashboards, lists, and detail screens across the system."
+      },
+      "manageAll": {
+        "title": "Full system administration",
+        "description": "Allows configuring users, roles, and all operational modules."
+      },
+      "readAccounting": {
+        "title": "View accounting data",
+        "description": "Allows viewing journals, ledgers, tax reports, receivables, and payables."
+      },
+      "writeAccounting": {
+        "title": "Create and update accounting data",
+        "description": "Allows posting accounting entries, updating payment records, and managing period workflows."
+      },
+      "readExportDocument": {
+        "title": "View export documents",
+        "description": "Allows viewing commercial invoices, export document sets, and related shipment paperwork."
+      },
+      "writeExportDocument": {
+        "title": "Create and update export documents",
+        "description": "Allows issuing, editing, and cancelling export documentation."
+      },
+      "readSalesContract": {
+        "title": "View sales contracts",
+        "description": "Allows viewing export sales contracts and their related commercial information."
+      },
+      "writeSalesContract": {
+        "title": "Create and update sales contracts",
+        "description": "Allows creating, editing, and progressing export sales contracts."
+      },
+      "readCostPrice": {
+        "title": "View cost price",
+        "description": "Allows seeing purchase cost and cost price indicators."
+      },
+      "readCostFields": {
+        "title": "View cost-sensitive fields",
+        "description": "Allows viewing margin, valuation, and cost fields that are hidden from regular users."
+      },
+      "writeCostFields": {
+        "title": "Enter cost-sensitive fields",
+        "description": "Allows creating cost, valuation, and margin-related values."
+      },
+      "updateCostFields": {
+        "title": "Adjust cost-sensitive fields",
+        "description": "Allows updating cost values after review."
+      },
+      "manageCostFields": {
+        "title": "Manage all cost controls",
+        "description": "Allows full control over protected cost and margin fields."
+      },
+      "readBankFields": {
+        "title": "View bank information",
+        "description": "Allows viewing bank account and transfer details."
+      },
+      "readPaymentFields": {
+        "title": "View payment information",
+        "description": "Allows viewing payment schedule, payment evidence, and settlement details."
+      },
+      "manageBankFields": {
+        "title": "Manage bank information",
+        "description": "Allows updating protected bank account and transfer details."
+      },
+      "readTradeFinance": {
+        "title": "View trade finance",
+        "description": "Allows viewing L/C, D/P, D/A, and T/T finance information."
+      },
+      "manageTradeFinance": {
+        "title": "Manage trade finance",
+        "description": "Allows creating and updating L/C, collections, and international payment workflows."
+      },
+      "readLcSensitive": {
+        "title": "View sensitive L/C terms",
+        "description": "Allows viewing protected Letter of Credit terms and discrepancy information."
+      },
+      "custom": {
+        "description": "Permission configured by the system administrator."
+      }
+    },
+    "messages": {
+      "loadError": "Could not load role permissions",
+      "saveSuccess": "Role permissions updated",
+      "saveError": "Could not update role permissions"
+    },
+    "empty": {
+      "roles": "No active roles",
+      "permissions": "No permissions have been created yet",
+      "search": "No matching results"
+    }
   },
   "SystemSettings": {
     "pageTitle": "System Settings",
@@ -2202,6 +3617,23 @@
         "total": "Total",
         "required": "Required"
       },
+      "pricing": {
+        "resolving": "Resolving price",
+        "sourcePolicy": "Pricing policy",
+        "sourceDerived": "Derived Incoterm",
+        "sourceProductDefault": "Product default",
+        "sourceManual": "Manual price",
+        "sourceUnresolved": "No price",
+        "productDefaultHint": "No matching policy was found, so the product default price is being used.",
+        "unresolvedHint": "No matching pricing policy was found.",
+        "includedCosts": "Included: {items}",
+        "costInland": "origin inland",
+        "costPort": "origin port",
+        "costFreight": "freight",
+        "costInsurance": "insurance",
+        "costDestination": "destination delivery",
+        "costCustoms": "DDP customs/duty"
+      },
       "logistics": {
         "seaFreight": "Sea Freight",
         "insurance": "Insurance",
@@ -2209,7 +3641,9 @@
         "portCharges": "Local Port Charges",
         "other": "Other Fees / Doc Fee",
         "required": "Required!",
-        "buyerCollect": "Buyer Collect"
+        "buyerCollect": "Buyer Collect",
+        "optional": "Optional",
+        "includedLocked": "Already included in the unit price: {items}. Matching fields are locked to avoid double charging."
       }
     }
   },
@@ -2394,7 +3828,8 @@
       "ACCOUNTING_PERIOD_REOPEN": "Accounting Period Reopen",
       "ACCOUNTING_PERIOD_LOCK": "Accounting Period Lock",
       "SALES_CONTRACT_CANCEL": "Sales Contract Cancellation",
-      "EXPORT_DOCUMENT_REVIEW": "Export Document Review"
+      "EXPORT_DOCUMENT_REVIEW": "Export Document Review",
+      "PRICING_POLICY": "Pricing Policy"
     }
   },
   "Approvals": {
@@ -2484,7 +3919,8 @@
       "TRADE_FINANCE": "Trade Finance",
       "INVENTORY_COUNT": "Inventory Count",
       "PRODUCT_CHANGE_REQUEST": "Product Change Request",
-      "APPROVAL_WORKFLOW": "Approval Workflow"
+      "APPROVAL_WORKFLOW": "Approval Workflow",
+      "PRICING_POLICY": "Pricing Policy"
     },
     "notifications": {
       "approveSuccess": "Approved {number} successfully",
@@ -2617,15 +4053,20 @@
     "description": "Create stock counts, approve variances before ledger posting, and view FIFO/AVG valuation",
     "hiddenByPermission": "Hidden by permission",
     "searchPlaceholder": "Search count no., warehouse, creator",
+    "draftEntryHint": "Enter the physical counted quantity for draft counts, save it, then submit to lock the variance.",
     "actions": {
       "reload": "Reload",
       "create": "Create Stock Count",
       "submit": "Submit",
-      "approve": "Approve"
+      "approve": "Approve",
+      "saveDraft": "Save count",
+      "openApproval": "Open approval"
     },
     "messages": {
       "createSuccess": "Stock count created from current inventory",
       "createError": "Could not create stock count",
+      "saveSuccess": "Counted quantities saved",
+      "saveError": "Could not save counted quantities",
       "submitSuccess": "Stock count submitted for approval",
       "submitError": "Could not submit stock count",
       "approveSuccess": "Stock count approved and variance posted",
@@ -2639,6 +4080,22 @@
     "sections": {
       "counts": "Stock Counts",
       "valuation": "Inventory Valuation Report"
+    },
+    "valuation": {
+      "methodInUse": "Using {method}",
+      "generatedAt": "Calculated at: {time}",
+      "FIFO": {
+        "title": "FIFO - first in, first out",
+        "description": "Values inventory from the remaining cost layers after consuming the oldest received lots first. Useful when costs need to follow lot flow."
+      },
+      "AVG": {
+        "title": "AVG - weighted average",
+        "description": "Values inventory using the weighted average unit cost of remaining stock. Useful when you want to smooth price changes across lots."
+      },
+      "sameResultTitle": "FIFO and AVG currently produce the same result",
+      "sameResultDescription": "This is normal when remaining lots have the same unit cost, only one cost layer remains, or older data has no lot-level cost difference.",
+      "differentResultTitle": "FIFO and AVG differ by {difference}",
+      "differentResultDescription": "FIFO total: {fifo}. AVG total: {avg}."
     },
     "status": {
       "DRAFT": "Draft",
@@ -2671,11 +4128,11 @@
     }
   },
   "ExportDeliveries": {
-    "title": "Export Delivery",
-    "description": "Manage standalone export warehouse release notes linked with shipments",
+    "title": "Export Deliveries",
+    "description": "Manage export warehouse release notes linked to shipments",
     "actions": {
       "reload": "Reload",
-      "createFromShipment": "Create from Shipment",
+      "createFromShipment": "Create from shipment",
       "detail": "Details",
       "issue": "Issue",
       "cancel": "Cancel",
@@ -2698,7 +4155,14 @@
       "actions": "Actions"
     },
     "itemTable": {
-      "quantity": "Quantity"
+      "sku": "SKU",
+      "quantity": "Quantity",
+      "lot": "Lot"
+    },
+    "empty": {
+      "noDeliveries": "No export deliveries yet",
+      "noItems": "No delivery lines",
+      "noAudit": "No audit events"
     },
     "status": {
       "DRAFT": "Draft",
@@ -2860,7 +4324,7 @@
       "detail": "Detail",
       "issue": "Issue",
       "cancel": "Cancel",
-      "esignPdf": "E-sign PDF",
+      "invoicePdf": "Invoice PDF",
       "createDraft": "Create draft",
       "cancelDocument": "Cancel document"
     },
@@ -2938,7 +4402,9 @@
       "createFailed": "Cannot create Commercial Invoice",
       "issueFailed": "Cannot issue Commercial Invoice",
       "cancelFailed": "Cannot cancel Commercial Invoice",
-      "downloadFailed": "Cannot download signature packet PDF"
+      "detailFailed": "Cannot load Commercial Invoice detail",
+      "downloadFailed": "Cannot download Commercial Invoice PDF",
+      "issueBeforeDownload": "Issue the Commercial Invoice before downloading its official PDF"
     }
   },
   "AdjustmentModal": {

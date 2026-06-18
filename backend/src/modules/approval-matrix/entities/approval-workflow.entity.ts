@@ -65,10 +65,22 @@ export class ApprovalWorkflowRequest {
   @Column({ type: 'varchar', default: 'VND' })
   currency: string;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   amount: number;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   amountVnd: number;
 
   @Column({ type: 'varchar', default: ApprovalRequestStatus.PENDING })
@@ -92,7 +104,9 @@ export class ApprovalWorkflowRequest {
   @Column({ type: 'jsonb', default: () => "'{}'::jsonb" })
   metadata: JsonRecord;
 
-  @OneToMany(() => ApprovalWorkflowStep, (step) => step.request, { cascade: true })
+  @OneToMany(() => ApprovalWorkflowStep, (step) => step.request, {
+    cascade: true,
+  })
   steps: ApprovalWorkflowStep[];
 
   @CreateDateColumn()
@@ -103,8 +117,14 @@ export class ApprovalWorkflowRequest {
 }
 
 @Entity('approval_workflow_steps')
-@Index('idx_approval_steps_request_order', ['requestId', 'stepOrder'], { unique: true })
-@Index('idx_approval_steps_assignee', ['status', 'approverRoleName', 'approverUsername'])
+@Index('idx_approval_steps_request_order', ['requestId', 'stepOrder'], {
+  unique: true,
+})
+@Index('idx_approval_steps_assignee', [
+  'status',
+  'approverRoleName',
+  'approverUsername',
+])
 export class ApprovalWorkflowStep {
   @PrimaryColumn({ type: 'varchar', length: 40, name: '_id' })
   _id: string;
@@ -119,7 +139,9 @@ export class ApprovalWorkflowStep {
   @Column({ type: 'varchar', length: 40 })
   requestId: string;
 
-  @ManyToOne(() => ApprovalWorkflowRequest, (request) => request.steps, { onDelete: 'CASCADE' })
+  @ManyToOne(() => ApprovalWorkflowRequest, (request) => request.steps, {
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'requestId' })
   request: ApprovalWorkflowRequest;
 

@@ -46,7 +46,7 @@ const ShipmentTable = ({ session }: IProps) => {
   const [searchInput, setSearchInput] = useState<string>("");
   const debouncedSearchText = useDebounce(searchInput, 500);
 
-  const { data, meta, stats, loading, fetchShipments, deleteShipment, issueStock } = useShipments(session);
+  const { data, meta, stats, loading, fetchShipments, deleteShipment, issueStock } = useShipments();
 
   const [detailOpen, setDetailOpen] = useState(false);
   const [selectedShipmentId, setSelectedShipmentId] = useState<string | null>(null);
@@ -55,6 +55,14 @@ const ShipmentTable = ({ session }: IProps) => {
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [filters, setFilters] = useState<any>({});
   const [filterForm] = Form.useForm();
+
+  useEffect(() => {
+    const id = searchParams.get('id');
+    if (id) {
+      setSelectedShipmentId(id);
+      setDetailOpen(true);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     fetchShipments({
@@ -325,7 +333,7 @@ const ShipmentTable = ({ session }: IProps) => {
         placement="right"
         onClose={() => setIsFilterOpen(false)}
         open={isFilterOpen}
-        styles={{ wrapper: { width: 400 } }}
+        size={400}
         extra={
           <Space>
             <Button onClick={handleResetFilters}>{tTable('table.reset')}</Button>

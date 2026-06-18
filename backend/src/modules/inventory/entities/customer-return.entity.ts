@@ -71,10 +71,18 @@ export class CustomerReturn {
   @JoinColumn({ name: 'salesContractId' })
   salesContract: SalesContract | null;
 
-  @Column({ type: 'enum', enum: CustomerReturnReason, default: CustomerReturnReason.OTHER })
+  @Column({
+    type: 'enum',
+    enum: CustomerReturnReason,
+    default: CustomerReturnReason.OTHER,
+  })
   reason: CustomerReturnReason;
 
-  @Column({ type: 'enum', enum: CustomerReturnStatus, default: CustomerReturnStatus.DRAFT })
+  @Column({
+    type: 'enum',
+    enum: CustomerReturnStatus,
+    default: CustomerReturnStatus.DRAFT,
+  })
   status: CustomerReturnStatus;
 
   @Column({ type: 'date' })
@@ -107,7 +115,9 @@ export class CustomerReturn {
   @Column({ type: 'text', nullable: true })
   decisionNote: string | null;
 
-  @OneToMany(() => CustomerReturnItem, item => item.customerReturn, { cascade: true })
+  @OneToMany(() => CustomerReturnItem, (item) => item.customerReturn, {
+    cascade: true,
+  })
   items: CustomerReturnItem[];
 
   @CreateDateColumn()
@@ -133,7 +143,9 @@ export class CustomerReturnItem {
   @Column({ type: 'varchar', length: 40 })
   customerReturnId: string;
 
-  @ManyToOne(() => CustomerReturn, returnDoc => returnDoc.items, { onDelete: 'CASCADE' })
+  @ManyToOne(() => CustomerReturn, (returnDoc) => returnDoc.items, {
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'customerReturnId' })
   customerReturn: CustomerReturn;
 
@@ -144,13 +156,24 @@ export class CustomerReturnItem {
   @JoinColumn({ name: 'productId' })
   product: Product;
 
-  @Column({ type: 'numeric', precision: 12, scale: 2, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 12,
+    scale: 2,
+    transformer: new ColumnNumericTransformer(),
+  })
   quantity: number;
 
   @Column({ type: 'varchar', nullable: true })
   unit: string | null;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   unitCost: number;
 
   @Column({ type: 'varchar', nullable: true })

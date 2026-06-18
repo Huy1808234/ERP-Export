@@ -33,7 +33,7 @@ import { useSession } from 'next-auth/react';
 import dayjs, { type Dayjs } from 'dayjs';
 import PageBanner from '@/components/guest/PageBanner';
 import { getAccessToken } from '@/lib/auth-token';
-import { sendRequest } from '@/lib/api-client';
+import { backendFetch, sendRequest } from '@/lib/api-client';
 
 const { Text } = Typography;
 const { Dragger } = Upload;
@@ -159,7 +159,7 @@ export default function FinancePortal() {
     const body = new FormData();
     body.append('file', file);
 
-    const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/files/upload?folder=payments`, {
+    const response = await backendFetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/files/upload?folder=payments`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${accessToken}` },
       body,
@@ -213,7 +213,7 @@ export default function FinancePortal() {
 
   const downloadStatement = async () => {
     if (!accessToken) return;
-    const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/portal/finance/statement/download`, {
+    const response = await backendFetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/portal/finance/statement/download`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     if (!response.ok) {

@@ -3,6 +3,11 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AccountReceivable } from '@/modules/account-receivables/entities/account-receivable.entity';
 import { PaymentAllocation } from '@/modules/account-receivables/entities/payment-allocation.entity';
 import { FilesModule } from '@/modules/files/files.module';
+import { Inquiry } from '@/modules/inquiries/entities/inquiry.entity';
+import { Partner } from '@/modules/partners/entities/partner.entity';
+import { PricingPoliciesModule } from '@/modules/pricing-policies/pricing-policies.module';
+import { Product } from '@/modules/products/entities/product.entity';
+import { ProformaInvoice } from '@/modules/proforma-invoices/entities/proforma-invoice.entity';
 import { SalesContract } from '@/modules/sales-contracts/entities/sales-contract.entity';
 import { Shipment } from '@/modules/shipments/entities/shipment.entity';
 import { TradeFinanceModule } from '@/modules/trade-finance/trade-finance.module';
@@ -18,6 +23,10 @@ import { PortalSupportTicket } from './entities/portal-support-ticket.entity';
     TypeOrmModule.forFeature([
       AccountReceivable,
       PaymentAllocation,
+      Inquiry,
+      Partner,
+      Product,
+      ProformaInvoice,
       SalesContract,
       Shipment,
       PortalNotification,
@@ -26,6 +35,7 @@ import { PortalSupportTicket } from './entities/portal-support-ticket.entity';
       PortalSupportTicket,
     ]),
     FilesModule,
+    PricingPoliciesModule,
     TradeFinanceModule,
   ],
   controllers: [PortalController],

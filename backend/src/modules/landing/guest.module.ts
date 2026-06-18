@@ -19,7 +19,7 @@ import { Product } from '../products/entities/product.entity';
       PurchaseOrder,
       ProformaInvoice,
       SalesContract,
-      Product
+      Product,
     ]),
   ],
   controllers: [GuestController],

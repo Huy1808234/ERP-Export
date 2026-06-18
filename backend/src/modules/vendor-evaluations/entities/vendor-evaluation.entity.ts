@@ -61,25 +61,64 @@ export class VendorEvaluation {
   @Column({ type: 'date', nullable: true })
   periodEnd: Date;
 
-  @Column({ type: 'numeric', precision: 5, scale: 2, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 5,
+    scale: 2,
+    transformer: new ColumnNumericTransformer(),
+  })
   qualityScore: number;
 
-  @Column({ type: 'numeric', precision: 5, scale: 2, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 5,
+    scale: 2,
+    transformer: new ColumnNumericTransformer(),
+  })
   deliveryScore: number;
 
-  @Column({ type: 'numeric', precision: 5, scale: 2, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 5,
+    scale: 2,
+    transformer: new ColumnNumericTransformer(),
+  })
   priceScore: number;
 
-  @Column({ type: 'numeric', precision: 5, scale: 2, default: 80, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 5,
+    scale: 2,
+    default: 80,
+    transformer: new ColumnNumericTransformer(),
+  })
   communicationScore: number;
 
-  @Column({ type: 'numeric', precision: 5, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 5,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   defectRate: number;
 
-  @Column({ type: 'numeric', precision: 5, scale: 2, default: 100, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 5,
+    scale: 2,
+    default: 100,
+    transformer: new ColumnNumericTransformer(),
+  })
   onTimeDeliveryRate: number;
 
-  @Column({ type: 'numeric', precision: 5, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 5,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   overallScore: number;
 
   @Column({ type: 'varchar', default: VendorGrade.C })

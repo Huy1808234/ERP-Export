@@ -87,13 +87,25 @@ export class PortalSupportTicket {
   @Column()
   subject: string;
 
-  @Column({ type: 'enum', enum: PortalTicketCategory, default: PortalTicketCategory.OTHER })
+  @Column({
+    type: 'enum',
+    enum: PortalTicketCategory,
+    default: PortalTicketCategory.OTHER,
+  })
   category: PortalTicketCategory;
 
-  @Column({ type: 'enum', enum: PortalTicketPriority, default: PortalTicketPriority.MEDIUM })
+  @Column({
+    type: 'enum',
+    enum: PortalTicketPriority,
+    default: PortalTicketPriority.MEDIUM,
+  })
   priority: PortalTicketPriority;
 
-  @Column({ type: 'enum', enum: PortalTicketStatus, default: PortalTicketStatus.OPEN })
+  @Column({
+    type: 'enum',
+    enum: PortalTicketStatus,
+    default: PortalTicketStatus.OPEN,
+  })
   status: PortalTicketStatus;
 
   @Column()

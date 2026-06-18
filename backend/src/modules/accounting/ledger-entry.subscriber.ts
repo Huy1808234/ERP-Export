@@ -1,11 +1,16 @@
-import { DataSource, EntitySubscriberInterface, EventSubscriber, InsertEvent } from 'typeorm';
+import {
+  DataSource,
+  EntitySubscriberInterface,
+  EventSubscriber,
+  InsertEvent,
+} from 'typeorm';
 import { LedgerEntry } from './entities/ledger-entry.entity';
 import { Injectable } from '@nestjs/common';
 
 /**
- * TECH LEAD NOTE: 
+ * TECH LEAD NOTE:
  * Subscriber này chỉ nên dùng để log hoặc trigger các side-effect không liên quan đến ACID.
- * Việc cập nhật số dư đối tác đã được chuyển hoàn toàn sang AccountingService 
+ * Việc cập nhật số dư đối tác đã được chuyển hoàn toàn sang AccountingService
  * để đảm bảo tính nhất quán của giao dịch (Transaction Integrity).
  */
 @Injectable()

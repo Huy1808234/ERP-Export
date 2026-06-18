@@ -1,4 +1,15 @@
-import { BeforeInsert, Column, CreateDateColumn, Entity, Index, PrimaryColumn, UpdateDateColumn, ManyToOne, JoinColumn, OneToMany } from 'typeorm';
+import {
+  BeforeInsert,
+  Column,
+  CreateDateColumn,
+  Entity,
+  Index,
+  PrimaryColumn,
+  UpdateDateColumn,
+  ManyToOne,
+  JoinColumn,
+  OneToMany,
+} from 'typeorm';
 import { PurchaseOrder } from '@/modules/purchase-orders/entities/purchase-order.entity';
 import { Partner } from '@/modules/partners/entities/partner.entity';
 import { TradeFinanceTransaction } from '@/modules/trade-finance/entities/trade-finance-transaction.entity';
@@ -9,11 +20,13 @@ import { createEntityId } from '@/common/ids/entity-id.util';
 export enum VendorInvoiceStatus {
   PENDING = 'PENDING',
   PAID = 'PAID',
-  CANCELLED = 'CANCELLED'
+  CANCELLED = 'CANCELLED',
 }
 
 @Entity('vendor_invoices')
-@Index('UDX_vendor_invoice_vendor_number', ['vendorId', 'invoiceNumber'], { unique: true })
+@Index('UDX_vendor_invoice_vendor_number', ['vendorId', 'invoiceNumber'], {
+  unique: true,
+})
 export class VendorInvoice {
   @PrimaryColumn({ type: 'varchar', length: 40, name: '_id' })
   _id: string;
@@ -51,29 +64,51 @@ export class VendorInvoice {
   @Column({ type: 'timestamp', nullable: true })
   dueDate: Date | null;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    transformer: new ColumnNumericTransformer(),
+  })
   amount: number;
 
   @Column({ type: 'integer', default: 10 })
   taxRate: number; // Thuế suất (%)
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   taxAmount: number;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    transformer: new ColumnNumericTransformer(),
+  })
   totalAmount: number;
 
   @Column({
     type: 'enum',
     enum: VendorInvoiceStatus,
-    default: VendorInvoiceStatus.PENDING
+    default: VendorInvoiceStatus.PENDING,
   })
   status: VendorInvoiceStatus;
 
   @Column({ type: 'varchar', default: 'VND' })
   currency: string;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, default: 1, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    default: 1,
+    transformer: new ColumnNumericTransformer(),
+  })
   exchangeRate: number;
 
   @Column({ type: 'text', nullable: true })

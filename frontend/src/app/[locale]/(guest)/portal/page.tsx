@@ -13,6 +13,7 @@ import {
 import { useSession } from 'next-auth/react';
 import PageBanner from '@/components/guest/PageBanner';
 import { getAccessToken } from '@/lib/auth-token';
+import { backendFetch } from '@/lib/api-client';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -25,7 +26,7 @@ const PortalDashboard = () => {
   useEffect(() => {
     const fetchSummary = async () => {
       try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/dashboards/portal/summary`, {
+        const res = await backendFetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/dashboards/portal/summary`, {
           headers: {
             'Authorization': `Bearer ${accessToken}`
           }

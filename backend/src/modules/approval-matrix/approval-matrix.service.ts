@@ -131,6 +131,7 @@ export class ApprovalMatrixService {
       actorUsername,
       reason: reason || null,
       metadata: request.metadata || {},
+      requesterUsername: request.requesterUsername,
     };
   }
 
@@ -217,7 +218,11 @@ export class ApprovalMatrixService {
     return rule;
   }
 
-  async updateRule(recordId: string, dto: UpdateApprovalRuleDto, user?: AuthenticatedUser) {
+  async updateRule(
+    recordId: string,
+    dto: UpdateApprovalRuleDto,
+    user?: AuthenticatedUser,
+  ) {
     return this.dataSource.transaction(async (manager) => {
       const rule = await manager.findOne(ApprovalRule, {
         where: { _id: recordId },
@@ -308,106 +313,109 @@ export class ApprovalMatrixService {
     dto: CreateApprovalWorkflowRequestDto,
     user?: AuthenticatedUser,
   ) {
-      const existing = await manager.findOne(ApprovalWorkflowRequest, {
-        where: {
-          documentType: dto.documentType,
-          documentId: dto.documentId,
-          status: ApprovalRequestStatus.PENDING,
-        },
-      });
-      if (existing)
-        throw new BadRequestException(
-          'This document already has a pending approval request',
-        );
-
-      const rule = dto.ruleId
-        ? await manager.findOne(ApprovalRule, {
-            where: { _id: dto.ruleId, isActive: true },
-            relations: ['steps'],
-          })
-        : await this.findMatchingRule(
-            dto.documentType,
-            Number(dto.amountVnd || 0),
-            dto.currency,
-          );
-
-      if (!rule) {
-        throw new BadRequestException(
-          'No active approval rule matches this document',
-        );
-      }
-
-      const steps = [...(rule.steps || [])].sort(
-        (a, b) => a.stepOrder - b.stepOrder,
-      );
-      if (!steps.length)
-        throw new BadRequestException(
-          'Approval rule must have at least one step',
-        );
-
-      const request = manager.create(ApprovalWorkflowRequest, {
-        ruleId: rule._id,
+    const existing = await manager.findOne(ApprovalWorkflowRequest, {
+      where: {
         documentType: dto.documentType,
         documentId: dto.documentId,
-        documentNumber: dto.documentNumber?.trim() || null,
-        title: dto.title.trim(),
-        currency: this.normalizeCurrency(dto.currency) || 'VND',
-        amount: Number(dto.amount || dto.amountVnd || 0),
-        amountVnd: Number(dto.amountVnd || 0),
         status: ApprovalRequestStatus.PENDING,
-        currentStepOrder: steps[0].stepOrder,
-        requesterUsername: this.getActorUsername(user),
-        completedByUsername: null,
-        completedAt: null,
-        rejectionReason: null,
-        metadata: dto.metadata || {},
-      });
-
-      const savedRequest = await manager.save(request);
-      await manager.save(
-        ApprovalWorkflowStep,
-        steps.map((step) =>
-          manager.create(ApprovalWorkflowStep, {
-            requestId: savedRequest._id,
-            stepOrder: step.stepOrder,
-            approverRoleName: step.approverRoleName,
-            approverUsername: step.approverUsername,
-            status: ApprovalStepStatus.PENDING,
-            actedByUsername: null,
-            actedAt: null,
-            note: null,
-          }),
-        ),
+      },
+    });
+    if (existing)
+      throw new BadRequestException(
+        'This document already has a pending approval request',
       );
 
-      const requestWithSteps = await manager.findOne(ApprovalWorkflowRequest, {
-        where: { _id: savedRequest._id },
-        relations: ['rule', 'steps'],
-        order: { steps: { stepOrder: 'ASC' } },
-      });
+    const rule = dto.ruleId
+      ? await manager.findOne(ApprovalRule, {
+          where: { _id: dto.ruleId, isActive: true },
+          relations: ['steps'],
+        })
+      : await this.findMatchingRule(
+          dto.documentType,
+          Number(dto.amountVnd || 0),
+          dto.currency,
+        );
 
-      if (requestWithSteps) {
-        const requestedEvent: ApprovalWorkflowRequestedEvent = {
-          requestId: requestWithSteps._id,
-          documentType: requestWithSteps.documentType,
-          documentId: requestWithSteps.documentId,
-          documentNumber: requestWithSteps.documentNumber,
-          title: requestWithSteps.title,
-          requesterUsername: requestWithSteps.requesterUsername,
-          currentStepOrder: requestWithSteps.currentStepOrder,
-          approverRoleNames: steps.map((step) => step.approverRoleName),
-          approverUsernames: steps
-            .map((step) => step.approverUsername)
-            .filter((username): username is string => Boolean(username)),
-          metadata: requestWithSteps.metadata || {},
-        };
-        this.eventEmitter.emit(APPROVAL_WORKFLOW_REQUESTED_EVENT, requestedEvent);
-      }
+    if (!rule) {
+      throw new BadRequestException(
+        'No active approval rule matches this document',
+      );
+    }
 
-      return requestWithSteps;
+    const steps = [...(rule.steps || [])].sort(
+      (a, b) => a.stepOrder - b.stepOrder,
+    );
+    if (!steps.length)
+      throw new BadRequestException(
+        'Approval rule must have at least one step',
+      );
+
+    const request = manager.create(ApprovalWorkflowRequest, {
+      ruleId: rule._id,
+      documentType: dto.documentType,
+      documentId: dto.documentId,
+      documentNumber: dto.documentNumber?.trim() || null,
+      title: dto.title.trim(),
+      currency: this.normalizeCurrency(dto.currency) || 'VND',
+      amount: Number(dto.amount || dto.amountVnd || 0),
+      amountVnd: Number(dto.amountVnd || 0),
+      status: ApprovalRequestStatus.PENDING,
+      currentStepOrder: steps[0].stepOrder,
+      requesterUsername: this.getActorUsername(user),
+      completedByUsername: null,
+      completedAt: null,
+      rejectionReason: null,
+      metadata: dto.metadata || {},
+    });
+
+    const savedRequest = await manager.save(request);
+    await manager.save(
+      ApprovalWorkflowStep,
+      steps.map((step) =>
+        manager.create(ApprovalWorkflowStep, {
+          requestId: savedRequest._id,
+          stepOrder: step.stepOrder,
+          approverRoleName: step.approverRoleName,
+          approverUsername: step.approverUsername,
+          status: ApprovalStepStatus.PENDING,
+          actedByUsername: null,
+          actedAt: null,
+          note: null,
+        }),
+      ),
+    );
+
+    const requestWithSteps = await manager.findOne(ApprovalWorkflowRequest, {
+      where: { _id: savedRequest._id },
+      relations: ['rule', 'steps'],
+      order: { steps: { stepOrder: 'ASC' } },
+    });
+
+    if (requestWithSteps) {
+      const requestedEvent: ApprovalWorkflowRequestedEvent = {
+        requestId: requestWithSteps._id,
+        documentType: requestWithSteps.documentType,
+        documentId: requestWithSteps.documentId,
+        documentNumber: requestWithSteps.documentNumber,
+        title: requestWithSteps.title,
+        requesterUsername: requestWithSteps.requesterUsername,
+        currentStepOrder: requestWithSteps.currentStepOrder,
+        approverRoleNames: steps.map((step) => step.approverRoleName),
+        approverUsernames: steps
+          .map((step) => step.approverUsername)
+          .filter((username): username is string => Boolean(username)),
+        metadata: requestWithSteps.metadata || {},
+      };
+      this.eventEmitter.emit(APPROVAL_WORKFLOW_REQUESTED_EVENT, requestedEvent);
+    }
+
+    return requestWithSteps;
   }
 
-  async createRequest(dto: CreateApprovalWorkflowRequestDto, user?: AuthenticatedUser) {
+  async createRequest(
+    dto: CreateApprovalWorkflowRequestDto,
+    user?: AuthenticatedUser,
+  ) {
     return this.dataSource.transaction((manager) =>
       this.createRequestInTransaction(manager, dto, user),
     );
@@ -503,11 +511,23 @@ export class ApprovalMatrixService {
     return { request, currentStep };
   }
 
-  async approveRequest(recordId: string, dto: ApprovalActionDto, user?: AuthenticatedUser) {
+  async approveRequest(
+    recordId: string,
+    dto: ApprovalActionDto,
+    user?: AuthenticatedUser,
+  ) {
     const actorUsername = this.getActorUsername(user);
     const result = await this.dataSource.transaction(async (manager) => {
       const { request, currentStep } =
         await this.loadRequestForAction(recordId);
+      if (
+        request.documentType === ApprovalDocumentType.INVENTORY_COUNT &&
+        request.requesterUsername === actorUsername
+      ) {
+        throw new ForbiddenException(
+          'Requester cannot approve their own inventory count',
+        );
+      }
       if (!this.canActOnStep(currentStep, user)) {
         throw new ForbiddenException(
           'You are not allowed to approve this step',
@@ -559,7 +579,11 @@ export class ApprovalMatrixService {
     return result;
   }
 
-  async rejectRequest(recordId: string, dto: ApprovalActionDto, user?: AuthenticatedUser) {
+  async rejectRequest(
+    recordId: string,
+    dto: ApprovalActionDto,
+    user?: AuthenticatedUser,
+  ) {
     const actorUsername = this.getActorUsername(user);
     const result = await this.dataSource.transaction(async (manager) => {
       const { request, currentStep } =
@@ -603,7 +627,11 @@ export class ApprovalMatrixService {
     return result;
   }
 
-  async cancelRequest(recordId: string, dto: ApprovalActionDto, user?: AuthenticatedUser) {
+  async cancelRequest(
+    recordId: string,
+    dto: ApprovalActionDto,
+    user?: AuthenticatedUser,
+  ) {
     const request = await this.requestRepository.findOne({
       where: { _id: recordId },
     });

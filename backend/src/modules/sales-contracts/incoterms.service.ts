@@ -2,15 +2,39 @@ import { Injectable } from '@nestjs/common';
 import { Incoterm } from '../quotations/entities/quotation.entity';
 import { SalesContract } from './entities/sales-contract.entity';
 
+type IncotermCalculationInput = Pick<
+  Partial<SalesContract>,
+  | 'domesticTransportCost'
+  | 'portCharges'
+  | 'seaFreight'
+  | 'insuranceCost'
+  | 'otherFee'
+  | 'logisticsFee'
+  | 'exchangeRate'
+  | 'incoterm'
+> & {
+  items?: Array<{
+    quantity: number;
+    unitPrice: number;
+  }>;
+};
+
 @Injectable()
 export class IncotermsService {
   /**
    * Thuật toán tự động tính toán giá trị hợp đồng dựa trên Incoterm
    * Lõi: Tự động cộng dồn các loại chi phí Logistics vào giá bán
    */
-  calculateTotal(contract: Partial<SalesContract>): { totalAmount: number; totalAmountVnd: number } {
+  calculateTotal(contract: IncotermCalculationInput): {
+    totalAmount: number;
+    totalAmountVnd: number;
+  } {
     const items = contract.items || [];
-    const itemsSum = items.reduce((sum, item) => sum + (Number(item.quantity || 0) * Number(item.unitPrice || 0)), 0);
+    const itemsSum = items.reduce(
+      (sum, item) =>
+        sum + Number(item.quantity || 0) * Number(item.unitPrice || 0),
+      0,
+    );
 
     let totalAmount = itemsSum;
 
@@ -46,10 +70,10 @@ export class IncotermsService {
     totalAmount += logisticsFee + otherFee;
 
     const exchangeRate = Number(contract.exchangeRate) || 1;
-    
+
     return {
       totalAmount,
-      totalAmountVnd: totalAmount * exchangeRate
+      totalAmountVnd: totalAmount * exchangeRate,
     };
   }
 }

@@ -1,10 +1,8 @@
 import { useCallback, useState } from 'react';
-import { getSession } from 'next-auth/react';
 import { notification } from '@/providers/antd-static';
 
 import { sendRequest } from '@/lib/api-client';
 import type { IShipment, IPaginationMeta } from '@/types/o2c';
-import { getAccessToken } from '@/lib/auth-token';
 
 interface FetchShipmentsParams {
   current: number;
@@ -13,31 +11,17 @@ interface FetchShipmentsParams {
   sort?: string;
 }
 
-export const useShipments = (session?: any) => {
+export const useShipments = () => {
   const [data, setData] = useState<IShipment[]>([]);
   const [meta, setMeta] = useState<IPaginationMeta>({ current: 1, pageSize: 10, total: 0 });
   const [stats, setStats] = useState({ total: 0, inTransit: 0, closed: 0 });
   const [loading, setLoading] = useState(false);
 
-  const resolveAccessToken = useCallback(async () => {
-    const directToken = getAccessToken(session);
-    if (directToken) return directToken;
-
-    const currentSession = await getSession();
-    return getAccessToken(currentSession);
-  }, [session]);
-
   const fetchShipments = useCallback(
     async (params: FetchShipmentsParams & Record<string, unknown>) => {
       setLoading(true);
       try {
-        const accessToken = await resolveAccessToken();
         const { current, pageSize, sort, search, ...filters } = params;
-
-        if (!accessToken) {
-          notification.error({ title: 'Phiên đăng nhập đã hết hạn' });
-          return;
-        }
 
         const res = await sendRequest<IBackendRes<IModelPaginate<IShipment>>>({
           url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/shipments`,
@@ -49,7 +33,6 @@ export const useShipments = (session?: any) => {
             ...(search ? { search } : {}),
             ...filters,
           },
-          headers: { Authorization: `Bearer ${accessToken}` },
         });
 
           if (res?.data) {
@@ -65,7 +48,6 @@ export const useShipments = (session?: any) => {
           const statsRes = await sendRequest<IBackendRes<any>>({
             url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/shipments/stats`,
             method: 'GET',
-            headers: { Authorization: `Bearer ${accessToken}` },
           });
           if (statsRes?.data) {
             setStats(statsRes.data);
@@ -76,23 +58,15 @@ export const useShipments = (session?: any) => {
         setLoading(false);
       }
     },
-    [resolveAccessToken]
+    []
   );
 
   const deleteShipment = useCallback(
     async (id: string, onSuccess?: () => void) => {
       try {
-        const accessToken = await resolveAccessToken();
-
-        if (!accessToken) {
-          notification.error({ title: 'Phiên đăng nhập đã hết hạn' });
-          return;
-        }
-
         const res = await sendRequest<IBackendRes<unknown>>({
           url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/shipments/${id}`,
           method: 'DELETE',
-          headers: { Authorization: `Bearer ${accessToken}` },
         });
 
 
@@ -106,22 +80,15 @@ export const useShipments = (session?: any) => {
         notification.error({ title: 'Lỗi hệ thống khi xóa lô hàng' });
       }
     },
-    [resolveAccessToken]
+    []
   );
 
   const issueStock = useCallback(
     async (id: string, onSuccess?: () => void) => {
       try {
-        const accessToken = await resolveAccessToken();
-        if (!accessToken) {
-          notification.error({ title: 'Phiên đăng nhập đã hết hạn' });
-          return;
-        }
-
         const draftRes = await sendRequest<IBackendRes<{ _id: string; deliveryNumber?: string }>>({
           url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/inventory/export-deliveries/from-shipment/${id}`,
           method: 'POST',
-          headers: { Authorization: `Bearer ${accessToken}` },
         });
 
         if (!draftRes?.data?._id) {
@@ -132,7 +99,6 @@ export const useShipments = (session?: any) => {
         const res = await sendRequest<IBackendRes<{ deliveryNumber?: string }>>({
           url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/inventory/export-deliveries/${draftRes.data._id}/issue`,
           method: 'PATCH',
-          headers: { Authorization: `Bearer ${accessToken}` },
         });
 
         if (res?.data) {
@@ -150,7 +116,7 @@ export const useShipments = (session?: any) => {
         notification.error({ title: 'Lỗi hệ thống khi xác nhận xuất kho' });
       }
     },
-    [resolveAccessToken]
+    []
   );
 
   return { data, meta, stats, loading, fetchShipments, deleteShipment, issueStock };

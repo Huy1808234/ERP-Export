@@ -1,4 +1,11 @@
-import { DataSource, EntitySubscriberInterface, EventSubscriber, InsertEvent, UpdateEvent, RemoveEvent } from 'typeorm';
+import {
+  DataSource,
+  EntitySubscriberInterface,
+  EventSubscriber,
+  InsertEvent,
+  UpdateEvent,
+  RemoveEvent,
+} from 'typeorm';
 import { AuditLog } from './entities/audit-log.entity';
 
 @EventSubscriber()
@@ -17,7 +24,7 @@ export class AuditSubscriber implements EntitySubscriberInterface {
 
   async afterInsert(event: InsertEvent<any>) {
     if (event.metadata.tableName === 'audit_logs') return;
-    
+
     const auditLog = this.dataSource.manager.create(AuditLog, {
       tableName: event.metadata.tableName,
       recordId: this.getEntityRef(event.entity),
@@ -30,13 +37,16 @@ export class AuditSubscriber implements EntitySubscriberInterface {
 
   async afterUpdate(event: UpdateEvent<any>) {
     if (event.metadata.tableName === 'audit_logs') return;
-    
+
     const oldValues = event.databaseEntity;
     const newValues = event.entity;
-    
+
     const auditLog = this.dataSource.manager.create(AuditLog, {
       tableName: event.metadata.tableName,
-      recordId: this.getEntityRef(event.entity, this.getEntityRef(event.databaseEntity)),
+      recordId: this.getEntityRef(
+        event.entity,
+        this.getEntityRef(event.databaseEntity),
+      ),
       action: 'UPDATE',
       oldValues,
       newValues,
@@ -47,7 +57,7 @@ export class AuditSubscriber implements EntitySubscriberInterface {
 
   async afterRemove(event: RemoveEvent<any>) {
     if (event.metadata.tableName === 'audit_logs') return;
-    
+
     const auditLog = this.dataSource.manager.create(AuditLog, {
       tableName: event.metadata.tableName,
       recordId: this.getEntityRef(event.databaseEntity, event.entityId),

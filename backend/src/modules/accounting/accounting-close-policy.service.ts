@@ -5,12 +5,18 @@ import Decimal from 'decimal.js';
 import dayjs from 'dayjs';
 import { createOpaqueCode } from '@/common/ids/entity-id.util';
 import { AccountingAuditEvent } from './entities/accounting-audit-event.entity';
-import { AccountingPeriod, AccountingPeriodStatus } from './entities/accounting-period.entity';
+import {
+  AccountingPeriod,
+  AccountingPeriodStatus,
+} from './entities/accounting-period.entity';
 import { AccountingPeriodClosePacket } from './entities/accounting-period-close-packet.entity';
 import { FxRevaluation } from './entities/fx-revaluation.entity';
 import { JournalEntry, JournalStatus } from './entities/journal-entry.entity';
 import { LedgerEntry } from './entities/ledger-entry.entity';
-import { TaxReportRun, TaxReportRunStatus } from './entities/tax-report-run.entity';
+import {
+  TaxReportRun,
+  TaxReportRunStatus,
+} from './entities/tax-report-run.entity';
 import { VatRefundDossier } from './entities/vat-refund-dossier.entity';
 
 export type AccountingCloseChecklistStatus = 'PASSED' | 'WARNING' | 'FAILED';
@@ -124,7 +130,10 @@ export class AccountingClosePolicyService {
   }
 
   private createDocumentNumber(prefix: string, date = new Date()) {
-    const suffix = createOpaqueCode(prefix.toLowerCase()).split('_').pop()?.toUpperCase();
+    const suffix = createOpaqueCode(prefix.toLowerCase())
+      .split('_')
+      .pop()
+      ?.toUpperCase();
     return `${prefix}-${dayjs(date).format('YYYYMMDD-HHmmss')}-${suffix}`;
   }
 
@@ -157,7 +166,9 @@ export class AccountingClosePolicyService {
     return { current, pageSize };
   }
 
-  private async verifyAuditChain(manager: EntityManager): Promise<AuditVerificationResult> {
+  private async verifyAuditChain(
+    manager: EntityManager,
+  ): Promise<AuditVerificationResult> {
     const events = await manager.getRepository(AccountingAuditEvent).find({
       order: { createdAt: 'ASC', _id: 'ASC' },
     });
@@ -176,7 +187,10 @@ export class AccountingClosePolicyService {
         previousHash,
       });
 
-      if (event.previousHash !== previousHash || event.eventHash !== expectedHash) {
+      if (
+        event.previousHash !== previousHash ||
+        event.eventHash !== expectedHash
+      ) {
         return {
           valid: false,
           checkedEvents: events.length,
@@ -255,7 +269,10 @@ export class AccountingClosePolicyService {
     return snapshot;
   }
 
-  private async buildJournalSummary(period: AccountingPeriod, manager: EntityManager) {
+  private async buildJournalSummary(
+    period: AccountingPeriod,
+    manager: EntityManager,
+  ) {
     const summary = await manager
       .getRepository(JournalEntry)
       .createQueryBuilder('je')
@@ -287,14 +304,20 @@ export class AccountingClosePolicyService {
       journalCount: Number(summary?.journalCount || 0),
       firstEntryDate: summary?.firstEntryDate || null,
       lastEntryDate: summary?.lastEntryDate || null,
-      referenceTypeCounts: references.reduce<Record<string, number>>((acc, row) => {
-        acc[String(row.referenceType || 'MANUAL')] = Number(row.count || 0);
-        return acc;
-      }, {}),
+      referenceTypeCounts: references.reduce<Record<string, number>>(
+        (acc, row) => {
+          acc[String(row.referenceType || 'MANUAL')] = Number(row.count || 0);
+          return acc;
+        },
+        {},
+      ),
     };
   }
 
-  private async countPostedFxRevaluations(period: AccountingPeriod, manager: EntityManager) {
+  private async countPostedFxRevaluations(
+    period: AccountingPeriod,
+    manager: EntityManager,
+  ) {
     return manager.getRepository(FxRevaluation).count({
       where: {
         periodId: period._id,
@@ -303,12 +326,19 @@ export class AccountingClosePolicyService {
     });
   }
 
-  private async findVatRefundsForPeriod(period: AccountingPeriod, manager: EntityManager) {
+  private async findVatRefundsForPeriod(
+    period: AccountingPeriod,
+    manager: EntityManager,
+  ) {
     return manager
       .getRepository(VatRefundDossier)
       .createQueryBuilder('vat')
-      .where('vat.periodStart <= :endDate', { endDate: this.toDateOnly(period.endDate) })
-      .andWhere('vat.periodEnd >= :startDate', { startDate: this.toDateOnly(period.startDate) })
+      .where('vat.periodStart <= :endDate', {
+        endDate: this.toDateOnly(period.endDate),
+      })
+      .andWhere('vat.periodEnd >= :startDate', {
+        startDate: this.toDateOnly(period.startDate),
+      })
       .orderBy('vat.createdAt', 'DESC')
       .getMany();
   }
@@ -320,15 +350,22 @@ export class AccountingClosePolicyService {
     manager?: EntityManager,
   ): Promise<AccountingClosePolicyResult> {
     const mgr = this.getManager(manager);
-    const trialBalanceSnapshot = await this.buildTrialBalanceSnapshot(period, mgr);
+    const trialBalanceSnapshot = await this.buildTrialBalanceSnapshot(
+      period,
+      mgr,
+    );
     const auditChain = await this.verifyAuditChain(mgr);
     const fxPostedCount = await this.countPostedFxRevaluations(period, mgr);
     const vatRefunds = await this.findVatRefundsForPeriod(period, mgr);
-    const taxWarnings = Array.isArray(taxReport.warnings) ? taxReport.warnings : [];
+    const taxWarnings = Array.isArray(taxReport.warnings)
+      ? taxReport.warnings
+      : [];
     const refundableVat = Number(taxReport.summary?.refundableVat || 0);
     const checklist: AccountingCloseChecklistItem[] = [];
 
-    const balanceDifference = new Decimal(trialBalanceSnapshot.difference || 0).abs();
+    const balanceDifference = new Decimal(
+      trialBalanceSnapshot.difference || 0,
+    ).abs();
     checklist.push({
       key: 'TRIAL_BALANCE_BALANCED',
       label: 'Trial balance balanced',
@@ -346,19 +383,25 @@ export class AccountingClosePolicyService {
     checklist.push({
       key: 'ACCOUNTING_PERIOD_OPEN',
       label: 'Accounting period is open',
-      status: period.status === AccountingPeriodStatus.OPEN ? 'PASSED' : 'FAILED',
-      details: period.status === AccountingPeriodStatus.OPEN
-        ? 'Period is open and can still accept the closing journal.'
-        : `Period status is ${period.status}.`,
+      status:
+        period.status === AccountingPeriodStatus.OPEN ? 'PASSED' : 'FAILED',
+      details:
+        period.status === AccountingPeriodStatus.OPEN
+          ? 'Period is open and can still accept the closing journal.'
+          : `Period status is ${period.status}.`,
     });
 
     checklist.push({
       key: 'CLOSING_JOURNAL_READY',
       label: 'Closing journal ready',
-      status: closingItems.length === 0 || closingItems.length >= 2 ? 'PASSED' : 'FAILED',
-      details: closingItems.length === 0
-        ? 'No revenue/expense balances require closing.'
-        : `${closingItems.length} closing lines are ready for posting.`,
+      status:
+        closingItems.length === 0 || closingItems.length >= 2
+          ? 'PASSED'
+          : 'FAILED',
+      details:
+        closingItems.length === 0
+          ? 'No revenue/expense balances require closing.'
+          : `${closingItems.length} closing lines are ready for posting.`,
       evidence: { closingItemCount: closingItems.length },
     });
 
@@ -379,19 +422,22 @@ export class AccountingClosePolicyService {
       key: 'FX_REVALUATION_POSTED',
       label: 'FX revaluation posted',
       status: fxPostedCount > 0 ? 'PASSED' : 'WARNING',
-      details: fxPostedCount > 0
-        ? `${fxPostedCount} posted FX revaluation records are linked to this period.`
-        : 'No posted FX revaluation is linked to this period.',
+      details:
+        fxPostedCount > 0
+          ? `${fxPostedCount} posted FX revaluation records are linked to this period.`
+          : 'No posted FX revaluation is linked to this period.',
       evidence: { postedFxRevaluationCount: fxPostedCount },
     });
 
     checklist.push({
       key: 'VAT_REFUND_DOSSIER_READY',
       label: 'VAT refund dossier reviewed',
-      status: refundableVat > 0 && vatRefunds.length === 0 ? 'WARNING' : 'PASSED',
-      details: refundableVat > 0 && vatRefunds.length === 0
-        ? 'Refundable VAT exists but no VAT refund dossier overlaps this period.'
-        : `${vatRefunds.length} VAT refund dossier(s) overlap this period.`,
+      status:
+        refundableVat > 0 && vatRefunds.length === 0 ? 'WARNING' : 'PASSED',
+      details:
+        refundableVat > 0 && vatRefunds.length === 0
+          ? 'Refundable VAT exists but no VAT refund dossier overlaps this period.'
+          : `${vatRefunds.length} VAT refund dossier(s) overlap this period.`,
       evidence: {
         refundableVat,
         vatRefundDossierCount: vatRefunds.length,
@@ -412,8 +458,12 @@ export class AccountingClosePolicyService {
       },
     });
 
-    const failedCheckCount = checklist.filter((item) => item.status === 'FAILED').length;
-    const warningCount = checklist.filter((item) => item.status === 'WARNING').length;
+    const failedCheckCount = checklist.filter(
+      (item) => item.status === 'FAILED',
+    ).length;
+    const warningCount = checklist.filter(
+      (item) => item.status === 'WARNING',
+    ).length;
     const policyHash = this.hashPayload({
       period_id: period._id,
       trialBalanceHash: trialBalanceSnapshot.hash,
@@ -444,21 +494,34 @@ export class AccountingClosePolicyService {
   ) {
     const mgr = this.getManager(manager);
     const summary = taxReport.summary || {};
-    const accountBreakdown = Array.isArray(taxReport.accountBreakdown) ? taxReport.accountBreakdown : [];
-    const journalLines = Array.isArray(taxReport.journalLines) ? taxReport.journalLines : [];
-    const warnings = Array.isArray(taxReport.warnings) ? taxReport.warnings : [];
+    const accountBreakdown = Array.isArray(taxReport.accountBreakdown)
+      ? taxReport.accountBreakdown
+      : [];
+    const journalLines = Array.isArray(taxReport.journalLines)
+      ? taxReport.journalLines
+      : [];
+    const warnings = Array.isArray(taxReport.warnings)
+      ? taxReport.warnings
+      : [];
     const documentTrace = taxReport.documentTrace || null;
     const reconciliation = taxReport.reconciliation || null;
-    const reportHash = taxReport.reportHash || this.hashPayload({
-      period: taxReport.period || null,
-      summary,
-      accountBreakdown,
-      journalLineIds: journalLines.map((line) => line._id || line.journalEntryId || null),
-      documentTrace,
-      reconciliation,
-      warnings,
-    });
-    const runNumber = this.createDocumentNumber('TAXRUN', dayjs(period.endDate).toDate());
+    const reportHash =
+      taxReport.reportHash ||
+      this.hashPayload({
+        period: taxReport.period || null,
+        summary,
+        accountBreakdown,
+        journalLineIds: journalLines.map(
+          (line) => line._id || line.journalEntryId || null,
+        ),
+        documentTrace,
+        reconciliation,
+        warnings,
+      });
+    const runNumber = this.createDocumentNumber(
+      'TAXRUN',
+      dayjs(period.endDate).toDate(),
+    );
     const runHash = this.hashPayload({
       runNumber,
       period_id: period._id,
@@ -467,7 +530,9 @@ export class AccountingClosePolicyService {
       reportHash,
       summary,
       accountBreakdown,
-      journalLineIds: journalLines.map((line) => line._id || line.journalEntryId || null),
+      journalLineIds: journalLines.map(
+        (line) => line._id || line.journalEntryId || null,
+      ),
       warningCount: warnings.length,
       documentTrace,
       reconciliation,
@@ -532,7 +597,10 @@ export class AccountingClosePolicyService {
       taxReportHash: record.taxReportHash,
       approvalWorkflowRequestId: record.approvalWorkflowRequestId,
     }));
-    const packetNumber = this.createDocumentNumber('CLOSEPKT', dayjs(period.endDate).toDate());
+    const packetNumber = this.createDocumentNumber(
+      'CLOSEPKT',
+      dayjs(period.endDate).toDate(),
+    );
     const packetHash = this.hashPayload({
       packetNumber,
       period_id: period._id,
@@ -611,7 +679,10 @@ export class AccountingClosePolicyService {
       });
     }
 
-    const [results, total] = await qb.take(pageSize).skip((current - 1) * pageSize).getManyAndCount();
+    const [results, total] = await qb
+      .take(pageSize)
+      .skip((current - 1) * pageSize)
+      .getManyAndCount();
     return {
       results,
       meta: {
@@ -632,7 +703,9 @@ export class AccountingClosePolicyService {
       .addOrderBy('packet.createdAt', 'DESC');
 
     if (query.period_id) {
-      qb.andWhere('packet.period_id = :period_id', { period_id: query.period_id });
+      qb.andWhere('packet.period_id = :period_id', {
+        period_id: query.period_id,
+      });
     }
     if (query.startDate) {
       qb.andWhere('packet.periodEnd >= :startDate', {
@@ -645,7 +718,10 @@ export class AccountingClosePolicyService {
       });
     }
 
-    const [results, total] = await qb.take(pageSize).skip((current - 1) * pageSize).getManyAndCount();
+    const [results, total] = await qb
+      .take(pageSize)
+      .skip((current - 1) * pageSize)
+      .getManyAndCount();
     return {
       results,
       meta: {
@@ -657,14 +733,19 @@ export class AccountingClosePolicyService {
     };
   }
 
-  async findPeriodClosePackets(period_id: string, query: AccountingPaginationQuery = {}) {
+  async findPeriodClosePackets(
+    period_id: string,
+    query: AccountingPaginationQuery = {},
+  ) {
     return this.findClosePackets({ ...query, period_id });
   }
 
   async findLatestClosePacket(period_id: string, manager?: EntityManager) {
-    return this.getManager(manager).getRepository(AccountingPeriodClosePacket).findOne({
-      where: { period_id },
-      order: { createdAt: 'DESC', _id: 'DESC' },
-    });
+    return this.getManager(manager)
+      .getRepository(AccountingPeriodClosePacket)
+      .findOne({
+        where: { period_id },
+        order: { createdAt: 'DESC', _id: 'DESC' },
+      });
   }
 }

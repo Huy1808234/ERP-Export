@@ -11,6 +11,374 @@
 - Mỗi hành động quan trọng cần kiểm tra audit trail nếu hệ thống có hỗ trợ.
 - Khi test lỗi, phải kiểm tra thông báo lỗi có rõ ràng và dữ liệu không bị ghi sai.
 
+### 0.1. Thứ Tự Test Khuyến Nghị
+
+Đi theo thứ tự này để phát hiện lỗi chặn luồng trước, rồi mới test sâu từng module:
+
+| Thứ tự | Nhóm test | Module/màn hình | Điều kiện qua bước |
+|---|---|---|---|
+| P0-01 | Smoke hệ thống | Login, đổi ngôn ngữ, sidebar, search header, reload trang | Không trắng màn hình, không 401/403 sai, không mixed locale nghiêm trọng trên màn đang test |
+| P0-02 | Dữ liệu nền | Đối Tác, Sản Phẩm, Tiền tệ/tỷ giá, Forwarder, User/Role | Tạo/sửa/tìm kiếm được dữ liệu tối thiểu cho P2P và O2C |
+| P0-03 | Phê duyệt | Ma Trận Phê Duyệt, Smart Approvals | Có rule cho PR/PO/Contract/Inventory Adjustment/AP Payment; duyệt/từ chối chạy đúng role |
+| P0-04 | P2P happy path | PR -> PO -> GRN -> Vendor Invoice -> 3-Way Matching -> AP | Tồn kho tăng, Vendor Invoice khớp, AP phát sinh |
+| P0-05 | O2C happy path | Inquiry -> Quotation -> Pricing Policy -> PI -> Sales Contract -> Signature/Approve | Contract approved/confirmed, reservation giữ hàng đúng |
+| P0-06 | Kho và xuất hàng | Reservation -> Shipment -> Export Delivery -> Issue Stock | Tồn kho giảm, reserved stock giảm, không phát sinh lỗi FOR UPDATE |
+| P0-07 | Chứng từ và AR | Commercial Invoice issue -> Export Document -> AR Aging -> T/T Allocation | CI issued tạo AR, AR giảm khi phân bổ thanh toán |
+| P0-08 | Finance/AP | L/C, D/P/D/A, T/T, AP payment batch | Thanh toán buyer/vendor cập nhật đúng công nợ và journal |
+| P0-09 | Portal buyer | Buyer login -> xem PI/Contract/Shipment/Documents/Statement | Buyer chỉ thấy dữ liệu của chính mình |
+| P1-01 | Ngoại lệ mua/kho | GRN reject, PO short receipt, P2P/QC Exception, Purchase Return | Candidate hiện đúng, claim/resolve không crash, AP chỉ ghi phần hợp lệ |
+| P1-02 | Ngoại lệ O2C | Customer Return, cancel contract/PO, overdue AR, partial payment | Trạng thái và số liệu được rollback/cập nhật đúng |
+| P1-03 | Báo cáo/dashboard | Operation Overview, Accounting & Tax, AR/AP Aging, Stock History | Số liệu khớp với chứng từ đã tạo ở P0 |
+| P2-01 | I18n debt scan | Chuyển English/Vietnamese trên từng module | Ghi lại text hard-code còn lẫn, không block P0 nếu nghiệp vụ chạy đúng |
+| P2-02 | Lint/cleanup debt | Backend lint legacy, unused imports frontend | Ghi nhận nợ kỹ thuật; không trộn với bug nghiệp vụ trừ khi gây runtime |
+
+Nguyên tắc dừng test: nếu một bước P0 fail do trắng trang, API 500, sai số tồn kho/công nợ, hoặc role không đúng, dừng flow đó và fix trước khi test tiếp các bước sau.
+
+### 0.2. Bản Đồ Test Theo Sidebar
+
+| Nhóm menu | Test trước | Test sau | Điểm bắt buộc kiểm tra |
+|---|---|---|---|
+| Trung Tâm Điều Hành | Operation Overview | Smart Approvals, Approval Matrix | Dashboard load được, số liệu không âm vô lý, phê duyệt hiển thị request mới |
+| Dữ Liệu Nền Tảng | Global Partners, Product Catalog | Live Inventory, Stock History, Stock Counts | Buyer/vendor/product dùng được ở PR/PO/PI; không lộ giá vốn sai role |
+| Kho | Live Inventory, Stock History | Export Delivery, Customer Returns, Inventory Counts | Stock tăng/giảm/reserved đúng; xuất kho không âm; kiểm kê tạo chênh lệch |
+| Kinh Doanh O2C | Market Inquiries, Sales Quotations, Pricing Policies | Proforma Invoice, Export Contract, Commercial Invoice | Giá lấy đúng policy/incoterm; PI -> contract -> CI không mất dòng hàng |
+| Mua Hàng P2P | PR, PO, Goods Receipt | Vendor Invoice, Vendor Scorecards, Purchase Return, P2P/QC Exceptions, 3-Way Matching | PO nhận hàng đúng dòng; GRN reject tạo candidate; Vendor Invoice khớp 3 chiều |
+| Chuỗi Cung Ứng | Global Logistics | Export Documents | Shipment có container/ETD/ETA; chứng từ sinh/upload/share portal được |
+| Quản Trị Tài Chính | L/C, D/P/D/A, T/T | Buyer Receivables, AP, Accounting & Tax | AR/AP aging đúng hạn; payment allocation đúng ngoại tệ/tỷ giá; journal cân debit/credit |
+| Quản Trị Hệ Thống | Team Management | RBAC, Settings, FX Management | Role thấy đúng menu; user không quyền bị chặn; tỷ giá dùng được khi tạo chứng từ |
+
+### 0.3. Regression Bắt Buộc Sau Các Fix Runtime Gần Đây
+
+- [ ] Tạo Export Delivery từ Shipment và bấm Issue Stock; backend log không còn lỗi `FOR UPDATE cannot be applied to the nullable side of an outer join`.
+- [ ] Issue Commercial Invoice từ Shipment đã có export delivery; CI tạo AR và export document.
+- [ ] Gửi ký Sales Contract cho buyer; invitation tạo được, contract chuyển trạng thái pending buyer signature.
+- [ ] Tạo QC exception từ GRN rejected line; candidate biến mất khỏi danh sách pending sau khi tạo.
+- [ ] Send claim và resolve QC exception; purchase return/claim cập nhật đúng trạng thái.
+- [ ] Cancel PO chưa nhận hàng; PO có GRN hoặc received quantity phải bị chặn.
+- [ ] Receive Customer Return đã approved; tồn kho tăng lại đúng số lượng.
+- [ ] Tạo AP payment batch, duyệt, mark paid; AP status chuyển paid/partial đúng.
+- [ ] Reverse AP settlement audit; paid amount giảm đúng và có journal reversal.
+- [ ] Chuyển English/Vietnamese trên Account Receivables và Purchase Exceptions; ghi nhận module nào còn hard-code.
+
+### 0.4. Chuẩn Ghi Nhận Lỗi
+
+Mỗi lỗi nên ghi theo format:
+
+```txt
+[Priority] Module - Màn hình - Hành động
+Data dùng test:
+Kết quả mong đợi:
+Kết quả thực tế:
+Ảnh/log/API:
+Có block P0 không:
+```
+
+### 0.5. Lộ Trình Test Chi Tiết Từng Luồng
+
+Chạy theo đúng thứ tự dưới đây. Không nhảy sang luồng sau nếu điều kiện pass của luồng hiện tại chưa đạt.
+
+#### Luồng 0 - Smoke Và Nền Tảng Kỹ Thuật
+
+Mục tiêu: xác nhận app không trắng màn hình, auth/session ổn, menu điều hướng được.
+
+1. [ ] Mở trang login.
+2. [ ] Đăng nhập bằng Admin.
+3. [ ] Reload dashboard sau login.
+4. [ ] Đổi ngôn ngữ Vietnamese -> English -> Vietnamese.
+5. [ ] Mở/thu sidebar, scroll hết menu.
+6. [ ] Test global search với mã sản phẩm, buyer, PO, shipment nếu đã có data.
+7. [ ] Mở từng nhóm menu chính trong sidebar, chỉ cần xác nhận page không trắng.
+8. [ ] Mở dev console/network, ghi nhận API 500 hoặc lỗi hydration nếu có.
+
+Pass khi: không trắng trang, không loop login, sidebar/search hoạt động, không có API 500 ở màn dashboard chính.
+
+#### Luồng 1 - Dữ Liệu Nền Bắt Buộc
+
+Mục tiêu: tạo dữ liệu đủ để chạy P2P và O2C end-to-end.
+
+1. [ ] Tạo hoặc kiểm tra Currency: VND, USD, EUR.
+2. [ ] Nhập tỷ giá USD/VND và EUR/VND.
+3. [ ] Tạo Buyer nước ngoài A.
+4. [ ] Tạo Buyer nước ngoài B để test portal không xem chéo.
+5. [ ] Tạo Vendor trong nước.
+6. [ ] Tạo Forwarder/Logistics Partner.
+7. [ ] Tạo Product có đủ SKU, tên Việt/Anh, HS code, unit, packing, purchase price, export price, preferred vendor.
+8. [ ] Mở Product Catalog và kiểm tra product vừa tạo hiển thị.
+9. [ ] Mở Live Inventory kiểm tra product có stock ban đầu hoặc stock = 0 rõ ràng.
+10. [ ] Tạo user theo role: Sales, Purchasing, Warehouse, Logistics, Accounting, Buyer Portal.
+11. [ ] Đăng nhập thử ít nhất Admin + Sales + Warehouse + Accounting.
+
+Pass khi: buyer/vendor/product/forwarder/user dùng được trong dropdown của các màn PR/PO/PI/Shipment.
+
+#### Luồng 2 - Ma Trận Phê Duyệt Và Smart Approvals
+
+Mục tiêu: đảm bảo các nghiệp vụ lớn không bị kẹt vì thiếu rule duyệt.
+
+1. [ ] Mở Approval Matrix.
+2. [ ] Tạo/check rule cho Purchase Request.
+3. [ ] Tạo/check rule cho Purchase Order.
+4. [ ] Tạo/check rule cho Sales Contract.
+5. [ ] Tạo/check rule cho Inventory Adjustment.
+6. [ ] Tạo/check rule cho AP Payment Batch.
+7. [ ] Tạo/check rule cho AP Payment Reversal nếu có.
+8. [ ] Với mỗi rule, kiểm tra amount range, currency, approver role, step order.
+9. [ ] Mở Smart Approvals, xác nhận màn load được khi chưa có request.
+
+Pass khi: các luồng PR/PO/Contract/AP/Adjustment có rule hoặc có behavior fallback được hiểu rõ và ghi chú.
+
+#### Luồng 3 - P2P Happy Path: Mua Hàng -> Nhập Kho -> AP
+
+Mục tiêu: kiểm tra procurement chuẩn không ngoại lệ.
+
+1. [ ] Login Purchasing.
+2. [ ] Tạo Purchase Request cho Product, quantity đủ lớn, gắn vendor đề xuất nếu có.
+3. [ ] Submit PR.
+4. [ ] Login approver hoặc Admin.
+5. [ ] Duyệt PR trong Smart Approvals.
+6. [ ] Login Purchasing.
+7. [ ] Tạo Purchase Order từ PR đã duyệt.
+8. [ ] Kiểm tra PO lấy đúng product, quantity, unit price, VAT, total.
+9. [ ] Submit/send PO theo flow hiện tại.
+10. [ ] Duyệt PO nếu có approval.
+11. [ ] Login Warehouse.
+12. [ ] Tạo Goods Receipt từ PO.
+13. [ ] Nhập đủ quantity, rejected quantity = 0.
+14. [ ] Save GRN.
+15. [ ] Mở Live Inventory, kiểm tra current stock tăng đúng.
+16. [ ] Mở Stock History, kiểm tra ledger nhập kho có reference GRN/PO.
+17. [ ] Login Accounting.
+18. [ ] Tạo Vendor Invoice từ PO/GRN.
+19. [ ] Mở 3-Way Matching, kiểm tra PO + GRN + Vendor Invoice khớp.
+20. [ ] Mở Công nợ NCC/AP, kiểm tra AP phát sinh đúng vendor, amount, due date.
+21. [ ] Duyệt công nợ hoặc tạo AP Payment Batch.
+22. [ ] Duyệt batch payment.
+23. [ ] Mark batch paid.
+24. [ ] Kiểm tra AP status chuyển Paid/Partial đúng.
+25. [ ] Mở Accounting & Tax, kiểm tra journal cân debit/credit nếu có màn hiển thị.
+
+Pass khi: stock tăng đúng, AP tạo đúng, payment batch paid được, không có API 500.
+
+#### Luồng 4 - P2P Exception: Nhận Thiếu, Hàng Lỗi, Claim NCC
+
+Mục tiêu: test ngoại lệ mua hàng và trang P2P/QC Exceptions.
+
+1. [ ] Tạo PO mới quantity 100.
+2. [ ] Tạo GRN nhận 80, rejected 0.
+3. [ ] Mở P2P/QC Exceptions.
+4. [ ] Kiểm tra candidate PO short receipt hiển thị backorder 20.
+5. [ ] Tạo QC exception từ candidate nếu flow cho phép.
+6. [ ] Gửi claim cho vendor.
+7. [ ] Resolve claim bằng replacement hoặc credit note.
+8. [ ] Kiểm tra Product backorder và Vendor claim/backorder giảm/đóng đúng.
+9. [ ] Tạo PO/GRN khác: nhận 100, rejected 10.
+10. [ ] Mở P2P/QC Exceptions, kiểm tra GRN rejected line hiển thị.
+11. [ ] Tạo Purchase Return từ hàng lỗi nếu flow hỗ trợ.
+12. [ ] Kiểm tra Vendor Scorecard cập nhật defect/claim count.
+13. [ ] Tạo Vendor Invoice cho PO có reject.
+14. [ ] Mở 3-Way Matching, kiểm tra AP chỉ ghi phần hàng hợp lệ hoặc cảnh báo mismatch rõ ràng.
+
+Pass khi: exception candidate đúng nguồn, claim/resolve không crash, AP không ghi sai cho hàng lỗi.
+
+#### Luồng 5 - O2C Happy Path: Inquiry -> Contract
+
+Mục tiêu: test bán hàng xuất khẩu trước khi đụng kho/chứng từ.
+
+1. [ ] Login Sales.
+2. [ ] Tạo Market Inquiry cho Buyer A.
+3. [ ] Chọn Product và quantity.
+4. [ ] Chuyển Inquiry thành Sales Quotation.
+5. [ ] Kiểm tra giá bán, currency, incoterm, expiry.
+6. [ ] Tạo Pricing Policy cho product/buyer/incoterm nếu chưa có.
+7. [ ] Tạo Proforma Invoice từ Quotation.
+8. [ ] Gửi PI hoặc chuyển trạng thái PI theo flow hiện tại.
+9. [ ] Buyer hoặc Sales accept PI.
+10. [ ] Tạo Sales Contract từ PI.
+11. [ ] Submit Sales Contract for approval.
+12. [ ] Duyệt Sales Contract.
+13. [ ] Gửi ký buyer nếu dùng e-sign.
+14. [ ] Mở portal signing bằng token hoặc buyer portal.
+15. [ ] Buyer ký/verify OTP nếu flow hỗ trợ.
+16. [ ] Kiểm tra Contract status/signature status cập nhật.
+
+Pass khi: Inquiry -> Quotation -> PI -> Contract không mất dòng hàng, tổng tiền và currency đúng.
+
+#### Luồng 6 - Kho Xuất Khẩu: Reservation -> Export Delivery
+
+Mục tiêu: kiểm tra giữ hàng, xuất kho và các lỗi lock đã fix.
+
+1. [ ] Đảm bảo product trong contract có tồn kho khả dụng.
+2. [ ] Trigger reservation khi contract approved/confirmed theo flow hiện tại.
+3. [ ] Mở Live Inventory, kiểm tra reserved stock tăng.
+4. [ ] Tạo Shipment từ Sales Contract.
+5. [ ] Chọn forwarder, POL/POD, ETD/ETA.
+6. [ ] Tạo container cho Shipment.
+7. [ ] Mở Export Delivery.
+8. [ ] Tạo phiếu xuất từ Shipment.
+9. [ ] Kiểm tra line item lấy đúng product/quantity từ contract.
+10. [ ] Issue Export Delivery.
+11. [ ] Mở Live Inventory, kiểm tra current stock giảm và reserved stock giảm.
+12. [ ] Mở Stock History, kiểm tra ledger xuất kho có reference Export Delivery.
+13. [ ] Thử tạo Export Delivery lần 2 cho cùng Shipment.
+14. [ ] Kiểm tra hệ thống chặn duplicate rõ ràng.
+
+Pass khi: xuất kho không âm, không lỗi `FOR UPDATE`, shipment không tạo duplicate delivery active.
+
+#### Luồng 7 - Logistics Và Bộ Chứng Từ Xuất Khẩu
+
+Mục tiêu: shipment có đầy đủ timeline, container và chứng từ.
+
+1. [ ] Login Logistics.
+2. [ ] Mở Shipment vừa tạo.
+3. [ ] Cập nhật booking number, shipping line, vessel, voyage.
+4. [ ] Cập nhật container number, seal, package count nếu có.
+5. [ ] Chuyển trạng thái shipment: booked -> loading -> customs cleared -> on board.
+6. [ ] Mở Export Documents.
+7. [ ] Generate Commercial Invoice/Packing List snapshot nếu có.
+8. [ ] Upload B/L hoặc AWB.
+9. [ ] Upload C/O, quality certificate nếu có.
+10. [ ] Mark document reviewed/approved.
+11. [ ] Share document lên Buyer Portal.
+12. [ ] Kiểm tra document checklist của shipment.
+
+Pass khi: chứng từ hiện đúng version/current, buyer chỉ tải được file đã share.
+
+#### Luồng 8 - Commercial Invoice -> AR -> Thu Tiền
+
+Mục tiêu: kiểm tra AR sinh đúng từ Commercial Invoice đã phát hành.
+
+1. [ ] Mở Commercial Invoices.
+2. [ ] Tạo draft CI từ Shipment.
+3. [ ] Kiểm tra line item, buyer, contract, currency, exchange rate, due date.
+4. [ ] Issue Commercial Invoice.
+5. [ ] Mở Công Nợ Buyer/AR.
+6. [ ] Kiểm tra AR mới sinh với invoice number đúng.
+7. [ ] Kiểm tra AR Aging: chưa tới hạn nằm Current/Trong hạn.
+8. [ ] Ghi nhận T/T Advance hoặc T/T Balance trong Finance.
+9. [ ] Allocate payment vào AR.
+10. [ ] Kiểm tra paid amount foreign/VND cập nhật.
+11. [ ] Nếu thanh toán đủ, kiểm tra AR status Paid.
+12. [ ] Kiểm tra DSO và dashboard doanh thu cập nhật.
+
+Pass khi: CI issue tạo AR, payment allocation giảm AR đúng ngoại tệ/tỷ giá.
+
+#### Luồng 9 - Trade Finance: L/C Và D/P, D/A
+
+Mục tiêu: kiểm tra nghiệp vụ tài chính thương mại ngoài T/T.
+
+1. [ ] Với contract khác, tạo Letter of Credit.
+2. [ ] Nhập LC number, issuing bank, amount, expiry, latest shipment date.
+3. [ ] Kiểm tra deadline/cảnh báo trong dashboard finance.
+4. [ ] Chuyển trạng thái L/C qua các bước received -> checked -> documents presented -> accepted -> paid.
+5. [ ] Ghi nhận discrepancy nếu có.
+6. [ ] Resolve discrepancy.
+7. [ ] Với contract khác, tạo Collection D/P hoặc D/A.
+8. [ ] Cập nhật collection order, maturity date, bank status.
+9. [ ] Ghi nhận collection paid hoặc overdue.
+10. [ ] Kiểm tra AR liên quan được allocate hoặc cảnh báo đúng.
+
+Pass khi: deadline đúng ngày, trạng thái trade finance phản ánh vào AR/payment.
+
+#### Luồng 10 - Inventory Control: Adjustment, Count, Snapshot
+
+Mục tiêu: kiểm tra các chức năng kho không thuộc nhập/xuất thường.
+
+1. [ ] Mở Inventory Adjustment.
+2. [ ] Tạo adjustment tăng/giảm stock có lý do.
+3. [ ] Submit adjustment approval nếu amount cần duyệt.
+4. [ ] Duyệt adjustment.
+5. [ ] Kiểm tra stock và ledger thay đổi.
+6. [ ] Tạo Inventory Count.
+7. [ ] Nhập counted quantity khác system quantity.
+8. [ ] Submit count.
+9. [ ] Approve count.
+10. [ ] Kiểm tra chênh lệch được hạch toán/ledger nếu flow hỗ trợ.
+11. [ ] Tạo Inventory Period Snapshot.
+12. [ ] Kiểm tra snapshot giữ nguyên số liệu tại thời điểm tạo.
+
+Pass khi: adjustment/count không cho tồn âm, approval và ledger rõ ràng.
+
+#### Luồng 11 - Customer Return
+
+Mục tiêu: kiểm tra trả hàng buyer sau bán.
+
+1. [ ] Tạo Customer Return từ Buyer/Shipment/Contract.
+2. [ ] Chọn product và quantity trả.
+3. [ ] Submit return.
+4. [ ] Approve return.
+5. [ ] Receive return về kho.
+6. [ ] Kiểm tra Live Inventory tăng lại.
+7. [ ] Kiểm tra Stock History có ledger RETURN.
+8. [ ] Reject một return khác và kiểm tra không đổi tồn kho.
+
+Pass khi: chỉ return approved mới được receive, tồn kho tăng đúng quantity.
+
+#### Luồng 12 - Accounting, Reports, Dashboard
+
+Mục tiêu: đối chiếu số liệu quản trị sau khi đã có đủ chứng từ.
+
+1. [ ] Mở Operation Overview.
+2. [ ] Kiểm tra doanh thu, gross margin nếu role được xem cost.
+3. [ ] Mở Accounting & Tax.
+4. [ ] Kiểm tra journal entries từ CI, AP payment, inventory.
+5. [ ] Mở AR Aging, kiểm tra khớp AR page.
+6. [ ] Mở AP Aging, kiểm tra khớp AP page.
+7. [ ] Mở Stock History, kiểm tra movement theo product.
+8. [ ] Export Excel/PDF nếu màn hỗ trợ.
+9. [ ] Đổi date range và refresh.
+
+Pass khi: số liệu dashboard không lệch rõ ràng với chứng từ nguồn.
+
+#### Luồng 13 - Buyer Portal End-To-End
+
+Mục tiêu: kiểm tra trải nghiệm và bảo mật dữ liệu phía buyer.
+
+1. [ ] Login Buyer A.
+2. [ ] Xem dashboard portal.
+3. [ ] Tạo inquiry từ portal.
+4. [ ] Admin Sales thấy inquiry.
+5. [ ] Buyer A xem PI/Contract của mình.
+6. [ ] Buyer A ký contract nếu có flow e-sign.
+7. [ ] Buyer A xem shipment tracking.
+8. [ ] Buyer A tải document đã share.
+9. [ ] Buyer A xem statement/AR.
+10. [ ] Buyer A upload T/T receipt.
+11. [ ] Accounting xác nhận receipt.
+12. [ ] Buyer A tạo support ticket.
+13. [ ] Admin trả lời ticket.
+14. [ ] Login Buyer B.
+15. [ ] Thử mở URL/data của Buyer A.
+
+Pass khi: Buyer B không xem được dữ liệu Buyer A, portal cập nhật trạng thái theo admin.
+
+#### Luồng 14 - RBAC Và Negative Test
+
+Mục tiêu: đảm bảo quyền không bị thủng.
+
+1. [ ] Login Sales, thử mở AP payment và cost-sensitive screen.
+2. [ ] Login Warehouse, thử mở AR/AP và giá vốn.
+3. [ ] Login Purchasing, thử ghi nhận thanh toán buyer.
+4. [ ] Login Accounting, thử chỉnh shipment/PO nếu role không được phép.
+5. [ ] Login Buyer Portal, thử mở admin route.
+6. [ ] Test API bằng URL trực tiếp nếu có thể.
+7. [ ] Kiểm tra menu ẩn và API trả 403/redirect đúng.
+
+Pass khi: quyền bị chặn ở cả UI và API, không chỉ ẩn menu.
+
+#### Luồng 15 - I18n Và Nợ Kỹ Thuật Không Chặn P0
+
+Mục tiêu: ghi nhận debt có hệ thống sau khi nghiệp vụ chính đã pass.
+
+1. [ ] Chuyển sang English.
+2. [ ] Đi từng menu sidebar.
+3. [ ] Ghi lại màn còn hard-code tiếng Việt.
+4. [ ] Chuyển sang Vietnamese.
+5. [ ] Ghi lại màn còn hard-code English không phù hợp.
+6. [ ] Chạy frontend lint và ghi số warning.
+7. [ ] Chạy backend lint và ghi nhóm lỗi chính.
+8. [ ] Không sửa lẫn vào bug P0 nếu không gây crash/runtime.
+
+Pass khi: có danh sách debt rõ module, file, màn hình, priority.
+
 ---
 
 ## 1. Tài Khoản Và Vai Trò Cần Chuẩn Bị

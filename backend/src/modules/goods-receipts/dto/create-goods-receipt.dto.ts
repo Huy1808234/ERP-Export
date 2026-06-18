@@ -1,4 +1,14 @@
-import { IsArray, IsDateString, IsIn, IsNotEmpty, IsOptional, IsString, ValidateNested, IsNumber, Min } from 'class-validator';
+import {
+  IsArray,
+  IsDateString,
+  IsIn,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  ValidateNested,
+  IsNumber,
+  Min,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 export const GOODS_RECEIPT_QUALITY_STATUSES = [
@@ -44,7 +54,7 @@ class GoodsReceiptItemDto {
 
   @IsOptional()
   @IsIn(GOODS_RECEIPT_QUALITY_STATUSES)
-  qualityStatus?: typeof GOODS_RECEIPT_QUALITY_STATUSES[number];
+  qualityStatus?: (typeof GOODS_RECEIPT_QUALITY_STATUSES)[number];
 
   @IsOptional()
   @IsString()

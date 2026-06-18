@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { Roles, User } from '@/decorator/customize';
 import { AccountReceivablesService } from './account-receivables.service';
 import { CreateAccountReceivableDto } from './dto/create-account-receivable.dto';
@@ -7,7 +15,9 @@ import { AllocatePaymentDto } from './dto/allocate-payment.dto';
 
 @Controller('account-receivables')
 export class AccountReceivablesController {
-  constructor(private readonly accountReceivablesService: AccountReceivablesService) {}
+  constructor(
+    private readonly accountReceivablesService: AccountReceivablesService,
+  ) {}
 
   @Post()
   @Roles('ADMIN', 'MANAGER', 'ACCOUNTANT', 'SALES')
@@ -47,7 +57,10 @@ export class AccountReceivablesController {
 
   @Patch(':_id')
   @Roles('ADMIN', 'MANAGER', 'ACCOUNTANT')
-  update(@Param('_id') recordId: string, @Body() dto: UpdateAccountReceivableDto) {
+  update(
+    @Param('_id') recordId: string,
+    @Body() dto: UpdateAccountReceivableDto,
+  ) {
     return this.accountReceivablesService.update(recordId, dto);
   }
 

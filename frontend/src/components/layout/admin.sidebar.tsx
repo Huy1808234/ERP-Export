@@ -34,8 +34,14 @@ import { Avatar, Dropdown, Tag, Typography, theme } from 'antd';
 import type { MenuProps } from 'antd';
 import type { Session } from 'next-auth';
 import { signOut } from 'next-auth/react';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import AdminScrollArea from './admin.scroll-area';
+import {
+    canAccessDashboardPath,
+    canManageRolePermissions,
+    canManageUsers,
+    getAccessRoleName,
+} from '@/lib/access-control';
 
 const { Text } = Typography;
 
@@ -55,6 +61,85 @@ const groupKeys = [
     'grp-admin',
 ];
 
+const menuRouteByKey: Record<string, string> = {
+    dashboard: '/dashboard',
+    approvals: '/dashboard/approvals',
+    'approval-matrix': '/dashboard/approval-matrix',
+    partners: '/dashboard/partners',
+    products: '/dashboard/product',
+    inventory: '/dashboard/inventory',
+    'inventory-ledger': '/dashboard/inventory/ledger',
+    'inventory-counts': '/dashboard/inventory/counts',
+    'inventory-export-deliveries': '/dashboard/inventory/export-deliveries',
+    'inventory-returns': '/dashboard/inventory/returns',
+    inquiries: '/dashboard/inquiry',
+    quotations: '/dashboard/quotation',
+    'pricing-policies': '/dashboard/pricing-policies',
+    'proforma-invoices': '/dashboard/proforma-invoice',
+    'sales-contracts': '/dashboard/sales-contract',
+    'commercial-invoices': '/dashboard/commercial-invoices',
+    'purchase-requests': '/dashboard/purchase-request',
+    'purchase-orders': '/dashboard/purchase-orders',
+    'goods-receipts': '/dashboard/goods-receipt',
+    'vendor-invoices': '/dashboard/vendor-invoice',
+    'vendor-evaluations': '/dashboard/vendor-evaluations',
+    'purchase-returns': '/dashboard/purchase-return',
+    'purchase-exceptions': '/dashboard/purchase/exceptions',
+    'purchase-matching': '/dashboard/purchase/matching',
+    shipments: '/dashboard/shipment',
+    ports: '/dashboard/ports',
+    'export-documents': '/dashboard/document',
+    'trade-finance-lc': '/dashboard/finance/lc',
+    'trade-finance-collections': '/dashboard/finance/collections',
+    'trade-finance-general': '/dashboard/finance/general',
+    'account-receivables': '/dashboard/account-receivables',
+    'account-payables': '/dashboard/account-payables',
+    accounting: '/dashboard/accounting',
+    users: '/dashboard/user',
+    'role-permissions': '/dashboard/user?tab=permissions',
+    countries: '/dashboard/settings/countries',
+};
+
+const getMenuItemKey = (item: MenuItem): string | null => {
+    if (!item || typeof item !== 'object' || !('key' in item)) return null;
+    return typeof item.key === 'string' ? item.key : null;
+};
+
+const getMenuItemChildren = (item: MenuItem): MenuItem[] | undefined => {
+    if (!item || typeof item !== 'object' || !('children' in item)) return undefined;
+    return Array.isArray(item.children) ? item.children as MenuItem[] : undefined;
+};
+
+const canAccessMenuItem = (itemKey: string | null, route: string | undefined, roleName: string): boolean => {
+    if (itemKey === 'users') return canManageUsers(roleName);
+    if (itemKey === 'role-permissions') return canManageRolePermissions(roleName);
+
+    return !route || canAccessDashboardPath(route, roleName);
+};
+
+const filterMenuItemsByAccess = (items: MenuItem[], roleName: string): MenuItem[] => (
+    items.reduce<MenuItem[]>((nextItems, item) => {
+        if (!item) return nextItems;
+
+        const children = getMenuItemChildren(item);
+        if (children) {
+            const allowedChildren = filterMenuItemsByAccess(children, roleName);
+            if (allowedChildren.length > 0) {
+                nextItems.push({ ...item, children: allowedChildren } as MenuItem);
+            }
+            return nextItems;
+        }
+
+        const itemKey = getMenuItemKey(item);
+        const route = itemKey ? menuRouteByKey[itemKey] : undefined;
+        if (canAccessMenuItem(itemKey, route, roleName)) {
+            nextItems.push(item);
+        }
+
+        return nextItems;
+    }, [])
+);
+
 const AdminSideBar = ({ session }: IProps) => {
     const t = useTranslations('Sidebar');
     const tHeader = useTranslations('Header');
@@ -62,6 +147,7 @@ const AdminSideBar = ({ session }: IProps) => {
     const { collapseMenu } = useContext(AdminContext)!;
     const pathname = usePathname();
     const params = useParams();
+    const searchParams = useSearchParams();
     const locale = params?.locale ?? 'vi';
     const { token } = theme.useToken();
     const { isDark } = useTheme();
@@ -70,6 +156,7 @@ const AdminSideBar = ({ session }: IProps) => {
     const userEmail = session?.user?.email ?? 'admin';
     const userName = session?.user?.name || userEmail.split('@')[0] || 'admin';
     const userInitial = (userName || userEmail || 'A').charAt(0).toUpperCase();
+    const roleName = getAccessRoleName(session?.user);
     const purchaseExceptionsLabel = (() => {
         try {
             return t('items.purchaseExceptions');
@@ -97,6 +184,7 @@ const AdminSideBar = ({ session }: IProps) => {
     const getSelectedKey = () => {
         if (pathname?.includes('/dashboard/product')) return 'products';
         if (pathname?.includes('/dashboard/partners')) return 'partners';
+        if (pathname?.includes('/dashboard/user') && searchParams.get('tab') === 'permissions') return 'role-permissions';
         if (pathname?.includes('/dashboard/user')) return 'users';
         if (pathname?.includes('/dashboard/quotation')) return 'quotations';
         if (pathname?.includes('/dashboard/pricing-policies')) return 'pricing-policies';
@@ -111,6 +199,7 @@ const AdminSideBar = ({ session }: IProps) => {
         if (pathname?.includes('/dashboard/vendor-evaluations')) return 'vendor-evaluations';
         if (pathname?.includes('/dashboard/purchase/exceptions')) return 'purchase-exceptions';
         if (pathname?.includes('/dashboard/purchase-return')) return 'purchase-returns';
+        if (pathname?.includes('/dashboard/ports')) return 'ports';
         if (pathname?.includes('/dashboard/shipment')) return 'shipments';
         if (pathname?.includes('/dashboard/document')) return 'export-documents';
         if (pathname?.includes('/dashboard/finance/lc')) return 'trade-finance-lc';
@@ -124,13 +213,14 @@ const AdminSideBar = ({ session }: IProps) => {
         if (pathname?.includes('/dashboard/inventory/export-deliveries')) return 'inventory-export-deliveries';
         if (pathname?.includes('/dashboard/inventory/ledger')) return 'inventory-ledger';
         if (pathname?.includes('/dashboard/inventory')) return 'inventory';
+        if (pathname?.includes('/dashboard/settings/countries')) return 'countries';
         if (pathname?.includes('/dashboard/settings')) return 'settings';
         if (pathname?.includes('/dashboard/approval-matrix')) return 'approval-matrix';
         if (pathname?.includes('/dashboard/approvals')) return 'approvals';
         return 'dashboard';
     };
 
-    const items: MenuItem[] = useMemo(() => [
+    const items: MenuItem[] = useMemo(() => filterMenuItemsByAccess([
         {
             key: 'grp-main',
             label: t('groups.main'),
@@ -290,6 +380,11 @@ const AdminSideBar = ({ session }: IProps) => {
                     icon: <GlobalOutlined />,
                 },
                 {
+                    key: "ports",
+                    label: <Link href={"/dashboard/ports"}>{t('items.ports')}</Link>,
+                    icon: <GlobalOutlined />,
+                },
+                {
                     key: "export-documents",
                     label: <Link href={"/dashboard/document"}>{t('items.exportDocuments')}</Link>,
                     icon: <FileTextOutlined />,
@@ -323,7 +418,7 @@ const AdminSideBar = ({ session }: IProps) => {
                 },
                 {
                     key: "account-payables",
-                    label: <Link href={"/dashboard/account-payables"}>Công nợ NCC</Link>,
+                    label: <Link href={"/dashboard/account-payables"}>{t('items.accountPayables')}</Link>,
                     icon: <WalletOutlined />,
                 },
                 {
@@ -343,9 +438,23 @@ const AdminSideBar = ({ session }: IProps) => {
                     label: <Link href={"/dashboard/user"}>{t('items.users')}</Link>,
                     icon: <TeamOutlined />,
                 },
+                {
+                    key: "role-permissions",
+                    label: (
+                        <Link href={{ pathname: "/dashboard/user", query: { tab: "permissions" } }}>
+                            {t('items.rolePermissions')}
+                        </Link>
+                    ),
+                    icon: <SafetyCertificateOutlined />,
+                },
+                {
+                    key: "countries",
+                    label: <Link href={"/dashboard/settings/countries"}>{t('items.countries')}</Link>,
+                    icon: <GlobalOutlined />,
+                },
             ],
         },
-    ], [t, purchaseExceptionsLabel, exportDeliveriesLabel, commercialInvoicesLabel]);
+    ], roleName), [t, purchaseExceptionsLabel, exportDeliveriesLabel, commercialInvoicesLabel, roleName]);
 
     const userMenuItems: MenuProps['items'] = [
         {

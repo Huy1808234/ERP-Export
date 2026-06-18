@@ -1,7 +1,17 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { Roles } from '../../decorator/customize';
 import { JwtAuthGuard } from '../../auth/passport/jwt-auth.guard';
 import { RolesGuard } from '../../auth/passport/roles.guard';
+import { BulkUpdateRolePermissionsDto } from './dto/bulk-update-role-permissions.dto';
 import { CreatePermissionDto } from './dto/create-permission.dto';
 import { CreateRoleDto } from './dto/create-role.dto';
 import { UpdatePermissionDto } from './dto/update-permission.dto';
@@ -34,6 +44,13 @@ export class RolesController {
     return this.rolesService.findAllPermissions();
   }
 
+  @Patch('permissions/bulk-assignment')
+  updateRolePermissionAssignments(
+    @Body() bulkUpdateDto: BulkUpdateRolePermissionsDto,
+  ) {
+    return this.rolesService.updateRolePermissionAssignments(bulkUpdateDto);
+  }
+
   @Get('permissions/:permission_ref')
   findPermissionByRef(@Param('permission_ref') permission_ref: string) {
     return this.rolesService.findPermissionByRef(permission_ref);
@@ -44,7 +61,10 @@ export class RolesController {
     @Param('permission_ref') permission_ref: string,
     @Body() updatePermissionDto: UpdatePermissionDto,
   ) {
-    return this.rolesService.updatePermission(permission_ref, updatePermissionDto);
+    return this.rolesService.updatePermission(
+      permission_ref,
+      updatePermissionDto,
+    );
   }
 
   @Delete('permissions/:permission_ref')
@@ -58,7 +78,10 @@ export class RolesController {
   }
 
   @Patch(':role_ref')
-  updateRole(@Param('role_ref') role_ref: string, @Body() updateRoleDto: UpdateRoleDto) {
+  updateRole(
+    @Param('role_ref') role_ref: string,
+    @Body() updateRoleDto: UpdateRoleDto,
+  ) {
     return this.rolesService.updateRole(role_ref, updateRoleDto);
   }
 

@@ -8,6 +8,7 @@ import { CurrenciesModule } from '../currencies/currencies.module';
 import { PricingPoliciesModule } from '../pricing-policies/pricing-policies.module';
 import { ApprovalMatrixModule } from '../approval-matrix/approval-matrix.module';
 import { QuotationApprovalListener } from './quotation-approval.listener';
+import { PortsModule } from '../ports/ports.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { QuotationApprovalListener } from './quotation-approval.listener';
     CurrenciesModule,
     PricingPoliciesModule,
     ApprovalMatrixModule,
+    PortsModule,
   ],
   controllers: [QuotationsController],
   providers: [QuotationsService, QuotationApprovalListener],

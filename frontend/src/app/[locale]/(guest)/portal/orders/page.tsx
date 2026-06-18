@@ -1,106 +1,221 @@
-'use client'
-import React, { useState } from 'react';
-import { Table, Tag, Button, Typography, Space, Modal, Steps, message, theme, Input, Divider } from 'antd';
-import {
-  FilePdfOutlined,
-  EditOutlined,
-  EyeOutlined,
-  SearchOutlined,
-  FilterOutlined
-} from '@ant-design/icons';
+'use client';
+
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { App, Button, Card, Descriptions, Empty, Input, Modal, Space, Table, Tag, Typography } from 'antd';
+import type { ColumnsType } from 'antd/es/table';
+import { EyeOutlined, FilePdfOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
+import { useSession } from 'next-auth/react';
 import PageBanner from '@/components/guest/PageBanner';
+import { getAccessToken } from '@/lib/auth-token';
+import { sendRequest } from '@/lib/api-client';
 
-const { Title, Text, Paragraph } = Typography;
+const { Text } = Typography;
 
-const OrdersPortal = () => {
-  const { token } = theme.useToken();
-  const [isSignModalOpen, setIsSignModalOpen] = useState(false);
-  const [currentOrder, setCurrentOrder] = useState<any>(null);
+type PortalProduct = {
+  _id: string;
+  sku: string;
+  vietnameseName: string;
+  englishName?: string | null;
+  unitOfMeasure?: string | null;
+};
 
-  const orders = [
-    {
-      key: '1',
-      id: 'SC-2024-001',
-      date: '2024-05-10',
-      total: '$12,500',
-      status: 'SHIPPED',
-      type: 'Sales Contract',
-      signed: true,
-    },
-    {
-      key: '2',
-      id: 'PI-2024-088',
-      date: '2024-05-12',
-      total: '$8,200',
-      status: 'PENDING_SIGN',
-      type: 'Proforma Invoice',
-      signed: false,
-    },
-    {
-      key: '3',
-      id: 'SC-2024-005',
-      date: '2024-05-15',
-      total: '$15,000',
-      status: 'PROCESSING',
-      type: 'Sales Contract',
-      signed: true,
-    },
-  ];
+type PortalLineItem = {
+  _id: string;
+  product?: PortalProduct | null;
+  quantity: number;
+  unit?: string | null;
+  unitPrice: number;
+  totalAmount?: number;
+  totalPrice?: number;
+};
 
-  const handleSign = (order: any) => {
-    setCurrentOrder(order);
-    setIsSignModalOpen(true);
+type PortalContract = {
+  _id: string;
+  contractNumber: string;
+  status: string;
+  signatureStatus?: string | null;
+  incoterm: string;
+  currencyCode: string;
+  totalAmount: number;
+  createdAt: string;
+  deliveryDate?: string | null;
+  validUntil?: string | null;
+  items?: PortalLineItem[];
+};
+
+type PortalProformaInvoice = {
+  _id: string;
+  piNumber: string;
+  status: string;
+  incoterm: string;
+  currency: string;
+  totalAmount: number;
+  issueDate: string;
+  salesContractId?: string | null;
+  salesContract?: { _id: string; contractNumber: string; status: string } | null;
+  items?: PortalLineItem[];
+};
+
+type PortalOrdersResponse = {
+  summary: {
+    contractCount: number;
+    proformaInvoiceCount: number;
+    pendingSignatureCount: number;
+    shippedCount: number;
   };
+  contracts: PortalContract[];
+  proformaInvoices: PortalProformaInvoice[];
+};
 
-  const confirmSign = () => {
-    message.success(`Bạn đã ký điện tử thành công cho ${currentOrder.id}. Bản hợp đồng chính thức đã được gửi tới email của bạn.`);
-    setIsSignModalOpen(false);
-  };
+type OrderRow = {
+  _id: string;
+  type: 'PI' | 'CONTRACT';
+  number: string;
+  date: string;
+  status: string;
+  signatureStatus?: string | null;
+  incoterm: string;
+  currency: string;
+  totalAmount: number;
+  items: PortalLineItem[];
+  source: PortalContract | PortalProformaInvoice;
+};
 
-  const columns = [
+const statusColor: Record<string, string> = {
+  DRAFT: 'default',
+  PENDING_APPROVAL: 'orange',
+  APPROVED: 'blue',
+  SENT: 'processing',
+  ACCEPTED: 'green',
+  PENDING_BUYER_SIGNATURE: 'purple',
+  BUYER_SIGNED: 'cyan',
+  CONFIRMED: 'blue',
+  SHIPPED: 'green',
+  PAID: 'green',
+  REJECTED: 'red',
+  CANCELLED: 'red',
+};
+
+const money = (value: number, currency: string) => (
+  `${Number(value || 0).toLocaleString('en-US', { maximumFractionDigits: 2 })} ${currency}`
+);
+
+export default function OrdersPortal() {
+  const { message } = App.useApp();
+  const { data: session } = useSession();
+  const accessToken = getAccessToken(session);
+  const headers = useMemo(() => (
+    accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined
+  ), [accessToken]);
+
+  const [loading, setLoading] = useState(false);
+  const [orders, setOrders] = useState<PortalOrdersResponse | null>(null);
+  const [search, setSearch] = useState('');
+  const [selected, setSelected] = useState<OrderRow | null>(null);
+
+  const fetchOrders = useCallback(async () => {
+    if (!headers) return;
+    setLoading(true);
+    try {
+      const res = await sendRequest<IBackendRes<PortalOrdersResponse>>({
+        url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/portal/orders`,
+        method: 'GET',
+        headers,
+      });
+      setOrders(res?.data || null);
+    } catch {
+      message.error('Không tải được danh sách PI/hợp đồng');
+    } finally {
+      setLoading(false);
+    }
+  }, [headers, message]);
+
+  useEffect(() => {
+    fetchOrders();
+  }, [fetchOrders]);
+
+  const rows = useMemo<OrderRow[]>(() => {
+    const proformaRows = (orders?.proformaInvoices || []).map((pi) => ({
+      _id: pi._id,
+      type: 'PI' as const,
+      number: pi.piNumber,
+      date: pi.issueDate,
+      status: pi.status,
+      signatureStatus: pi.salesContract?.status || null,
+      incoterm: pi.incoterm,
+      currency: pi.currency,
+      totalAmount: Number(pi.totalAmount || 0),
+      items: pi.items || [],
+      source: pi,
+    }));
+    const contractRows = (orders?.contracts || []).map((contract) => ({
+      _id: contract._id,
+      type: 'CONTRACT' as const,
+      number: contract.contractNumber,
+      date: contract.createdAt,
+      status: contract.status,
+      signatureStatus: contract.signatureStatus || null,
+      incoterm: contract.incoterm,
+      currency: contract.currencyCode,
+      totalAmount: Number(contract.totalAmount || 0),
+      items: contract.items || [],
+      source: contract,
+    }));
+
+    const keyword = search.trim().toLowerCase();
+    return [...contractRows, ...proformaRows]
+      .filter((row) => (
+        !keyword
+        || row.number.toLowerCase().includes(keyword)
+        || row.status.toLowerCase().includes(keyword)
+        || row.type.toLowerCase().includes(keyword)
+      ))
+      .sort((left, right) => new Date(right.date).getTime() - new Date(left.date).getTime());
+  }, [orders, search]);
+
+  const columns: ColumnsType<OrderRow> = [
     {
-      title: 'Số văn bản',
-      dataIndex: 'id',
-      key: 'id',
-      render: (text: string) => <Text strong style={{ color: '#1890ff' }}>{text}</Text>,
+      title: 'Số chứng từ',
+      dataIndex: 'number',
+      render: (value: string, record) => (
+        <Space orientation="vertical" size={0}>
+          <Text strong style={{ color: '#1677ff' }}>{value}</Text>
+          <Tag>{record.type === 'PI' ? 'Proforma Invoice' : 'Sales Contract'}</Tag>
+        </Space>
+      ),
     },
     {
-      title: 'Loại tài liệu',
-      dataIndex: 'type',
-      key: 'type',
-      render: (text: string) => <Tag style={{ borderRadius: '4px' }}>{text}</Tag>,
-    },
-    {
-      title: 'Ngày phát hành',
+      title: 'Ngày',
       dataIndex: 'date',
-      key: 'date',
+      render: (value: string) => value ? new Date(value).toLocaleDateString('vi-VN') : '-',
+    },
+    {
+      title: 'Điều kiện',
+      dataIndex: 'incoterm',
+      render: (value: string) => <Tag color="blue">{value}</Tag>,
     },
     {
       title: 'Tổng giá trị',
-      dataIndex: 'total',
-      key: 'total',
-      render: (text: string) => <Text strong>{text}</Text>,
+      align: 'right',
+      render: (_, record) => <Text strong>{money(record.totalAmount, record.currency)}</Text>,
     },
     {
       title: 'Trạng thái',
       dataIndex: 'status',
-      key: 'status',
-      render: (status: string) => (
-        <Tag color={status === 'PENDING_SIGN' ? 'orange' : status === 'SHIPPED' ? 'green' : 'blue'} style={{ borderRadius: '4px', padding: '0 12px' }}>
-          {status === 'PENDING_SIGN' ? 'CHỜ KÝ' : status === 'SHIPPED' ? 'HOÀN TẤT' : 'ĐANG XỬ LÝ'}
-        </Tag>
+      render: (value: string, record) => (
+        <Space orientation="vertical" size={0}>
+          <Tag color={statusColor[value] || 'default'}>{value}</Tag>
+          {record.signatureStatus ? <Text type="secondary">{record.signatureStatus}</Text> : null}
+        </Space>
       ),
     },
     {
       title: 'Hành động',
-      key: 'action',
-      render: (_: any, record: any) => (
+      align: 'right',
+      render: (_, record) => (
         <Space>
-          <Button type="text" icon={<EyeOutlined />} style={{ color: '#1890ff' }}>Xem</Button>
-          {!record.signed && (
-            <Button type="primary" size="small" icon={<EditOutlined />} onClick={() => handleSign(record)} style={{ borderRadius: '6px' }}>Ký ngay</Button>
-          )}
-          <Button type="text" icon={<FilePdfOutlined />} disabled={!record.signed}>PDF</Button>
+          <Button icon={<EyeOutlined />} onClick={() => setSelected(record)}>Xem</Button>
+          <Button icon={<FilePdfOutlined />} disabled>PDF</Button>
         </Space>
       ),
     },
@@ -110,91 +225,85 @@ const OrdersPortal = () => {
     <div style={{ margin: '-48px -48px 0 -48px' }}>
       <PageBanner
         title="Hợp đồng & Đơn hàng"
-        subtitle="Quản lý danh sách hợp đồng, theo dõi lịch sử và thực hiện ký duyệt điện tử trực tuyến."
+        subtitle="Theo dõi Proforma Invoice, Sales Contract và trạng thái ký duyệt của tài khoản buyer hiện tại."
         height="260px"
         offset={false}
         breadcrumbs={[{ title: 'Portal', href: '/portal' }, { title: 'Đơn hàng' }]}
         imageUrl="https://images.unsplash.com/photo-1454165833267-028ec48467b8?auto=format&fit=crop&q=80&w=2500"
       />
 
-      <div style={{ padding: '48px' }}>
-        <div style={{ marginBottom: '32px', display: 'flex', justifyContent: 'flex-end' }}>
-          <Space size="middle">
-            <Input
-              prefix={<SearchOutlined style={{ color: '#94a3b8' }} />}
-              placeholder="Tìm theo mã SC/PI..."
-              style={{ width: '280px', height: '44px', borderRadius: '12px' }}
+      <div style={{ padding: 48 }}>
+        <Card
+          variant="borderless"
+          extra={<Button icon={<ReloadOutlined />} onClick={fetchOrders}>Làm mới</Button>}
+        >
+          <Space orientation="vertical" size={16} style={{ width: '100%' }}>
+            <Space wrap>
+              <Input
+                prefix={<SearchOutlined />}
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Tìm theo mã PI/SC hoặc trạng thái"
+                style={{ width: 320 }}
+              />
+              <Tag color="blue">Contract: {orders?.summary.contractCount || 0}</Tag>
+              <Tag color="purple">PI: {orders?.summary.proformaInvoiceCount || 0}</Tag>
+              <Tag color="orange">Chờ ký: {orders?.summary.pendingSignatureCount || 0}</Tag>
+            </Space>
+            <Table<OrderRow>
+              rowKey={(record) => `${record.type}-${record._id}`}
+              loading={loading}
+              dataSource={rows}
+              columns={columns}
+              pagination={{ pageSize: 8 }}
+              locale={{ emptyText: <Empty description="Chưa có PI hoặc hợp đồng nào" /> }}
+              scroll={{ x: 920 }}
             />
-            <Button icon={<FilterOutlined />} style={{ height: '44px', borderRadius: '12px' }}>Bộ lọc</Button>
           </Space>
-        </div>
-
-        <div style={{ background: '#fff', borderRadius: '24px', border: '1px solid #f1f5f9', overflow: 'hidden' }}>
-          <Table dataSource={orders} columns={columns} pagination={{ pageSize: 10 }} />
-        </div>
+        </Card>
       </div>
 
       <Modal
-        title={null}
-        open={isSignModalOpen}
-        onCancel={() => setIsSignModalOpen(false)}
-        onOk={confirmSign}
-        okText="Xác nhận & Ký tên"
-        cancelText="Để sau"
-        width={700}
-        centered
-        styles={{ body: { padding: '40px' } }}
+        title={selected?.number}
+        open={Boolean(selected)}
+        onCancel={() => setSelected(null)}
+        footer={<Button onClick={() => setSelected(null)}>Đóng</Button>}
+        width={820}
       >
-        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-          <div style={{
-            width: '80px', height: '80px', background: '#eff6ff', borderRadius: '50%',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px'
-          }}>
-            <EditOutlined style={{ fontSize: '32px', color: '#3b82f6' }} />
-          </div>
-          <Title level={3}>Ký điện tử tài liệu</Title>
-          <Text type="secondary">Bạn đang thực hiện ký duyệt cho văn bản: <Text strong>{currentOrder?.id}</Text></Text>
-        </div>
-
-        <Steps
-          current={1}
-          size="small"
-          items={[
-            { title: 'Phát hành', description: 'Bản nháp PI' },
-            { title: 'Phê duyệt', description: 'Ký xác nhận' },
-            { title: 'Hoàn tất', description: 'Sales Contract' },
-          ]}
-          style={{ marginBottom: '40px' }}
-        />
-
-        <div style={{
-          padding: '32px',
-          background: '#f8fafc',
-          borderRadius: '20px',
-          border: '1px dashed #cbd5e1',
-          textAlign: 'center'
-        }}>
-          <Paragraph type="secondary" style={{ fontSize: '14px', marginBottom: '24px' }}>
-            Tôi xác nhận đã kiểm tra kỹ các nội dung về mặt hàng, quy cách và giá trị trong bản Proforma Invoice này.
-          </Paragraph>
-          <div style={{
-            height: '100px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '32px',
-            fontFamily: '"Dancing Script", cursive, serif',
-            color: '#1e40af',
-            opacity: 0.8
-          }}>
-            VinaExport User
-          </div>
-          <Divider style={{ margin: '8px 0' }} />
-          <Text type="secondary" style={{ fontSize: '11px' }}>Hệ thống chữ ký điện tử bảo mật VinaExport - {new Date().toLocaleDateString()}</Text>
-        </div>
+        {selected ? (
+          <Space orientation="vertical" size={16} style={{ width: '100%' }}>
+            <Descriptions bordered column={2} size="small">
+              <Descriptions.Item label="Loại">{selected.type === 'PI' ? 'Proforma Invoice' : 'Sales Contract'}</Descriptions.Item>
+              <Descriptions.Item label="Trạng thái">{selected.status}</Descriptions.Item>
+              <Descriptions.Item label="Incoterm">{selected.incoterm}</Descriptions.Item>
+              <Descriptions.Item label="Tổng">{money(selected.totalAmount, selected.currency)}</Descriptions.Item>
+            </Descriptions>
+            <Table<PortalLineItem>
+              rowKey="_id"
+              dataSource={selected.items}
+              pagination={false}
+              columns={[
+                {
+                  title: 'Sản phẩm',
+                  render: (_, item) => (
+                    <Space orientation="vertical" size={0}>
+                      <Text strong>{item.product?.englishName || item.product?.vietnameseName || item.product?._id}</Text>
+                      <Text type="secondary">{item.product?.sku}</Text>
+                    </Space>
+                  ),
+                },
+                { title: 'Số lượng', dataIndex: 'quantity', align: 'right' },
+                { title: 'Đơn giá', dataIndex: 'unitPrice', align: 'right', render: (value: number) => money(value, selected.currency) },
+                {
+                  title: 'Thành tiền',
+                  align: 'right',
+                  render: (_, item) => money(Number(item.totalAmount ?? item.totalPrice ?? 0), selected.currency),
+                },
+              ]}
+            />
+          </Space>
+        ) : null}
       </Modal>
     </div>
   );
-};
-
-export default OrdersPortal;
+}

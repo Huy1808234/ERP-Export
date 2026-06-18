@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   App,
   Button,
+  Card,
   DatePicker,
   Descriptions,
   Drawer,
@@ -14,6 +15,8 @@ import {
   Popconfirm,
   Select,
   Space,
+  Spin,
+  Statistic,
   Table,
   Tag,
   Typography,
@@ -62,6 +65,36 @@ const statusColor: Record<CommercialInvoiceStatus, string> = {
   CANCELLED: 'red',
 };
 
+type StatCardProps = {
+  label: string;
+  value: React.ReactNode;
+  tone?: 'default' | 'success' | 'warning' | 'primary';
+};
+
+const statToneClass: Record<NonNullable<StatCardProps['tone']>, string> = {
+  default: 'text-slate-900 dark:text-slate-100',
+  success: 'text-emerald-600 dark:text-emerald-400',
+  warning: 'text-amber-600 dark:text-amber-400',
+  primary: 'text-blue-600 dark:text-blue-400',
+};
+
+const StatCard = ({ label, value, tone = 'default' }: StatCardProps) => (
+  <Card
+    variant="borderless"
+    className="border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900/70"
+    styles={{ body: { padding: 18 } }}
+  >
+    <Statistic
+      title={<span className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</span>}
+      valueRender={() => (
+        <div className={`mt-1 text-2xl font-bold leading-tight ${statToneClass[tone]}`}>
+          {value}
+        </div>
+      )}
+    />
+  </Card>
+);
+
 const CommercialInvoicesPage = () => {
   const t = useTranslations('CommercialInvoices');
   const { data: session } = useSession();
@@ -77,12 +110,14 @@ const CommercialInvoicesPage = () => {
     createFromShipment,
     issueInvoice,
     cancelInvoice,
-    downloadSignaturePacketPdf,
-  } = useCommercialInvoices(session);
+    fetchInvoiceDetail,
+    downloadCommercialInvoicePdf,
+  } = useCommercialInvoices();
 
   const canViewPrice = canReadCostFields(session?.user);
   const [createOpen, setCreateOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [selected, setSelected] = useState<ICommercialInvoice | null>(null);
 
@@ -141,12 +176,33 @@ const CommercialInvoicesPage = () => {
     }
   };
 
-  const downloadSignaturePacket = async (record: ICommercialInvoice) => {
-    if (!record.salesContract_id) return;
-    const contractNumber = record.salesContract?.contractNumber || record.salesContract_id;
-    const ok = await downloadSignaturePacketPdf(
-      record.salesContract_id,
-      `signature_packet_${contractNumber}.pdf`.replace(/[^a-zA-Z0-9_.-]/g, '_'),
+  const openInvoiceDetail = async (record: ICommercialInvoice) => {
+    setSelected(record);
+    setDetailOpen(true);
+    setDetailLoading(true);
+
+    try {
+      const detail = await fetchInvoiceDetail(record._id);
+      if (detail) {
+        setSelected(detail);
+        return;
+      }
+
+      message.error(t('messages.detailFailed'));
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  const downloadCommercialInvoice = async (record: ICommercialInvoice) => {
+    if (record.status !== 'ISSUED') {
+      message.warning(t('messages.issueBeforeDownload'));
+      return;
+    }
+
+    const ok = await downloadCommercialInvoicePdf(
+      record.shipment_id,
+      `CI_${record.invoiceNumber}.pdf`.replace(/[^a-zA-Z0-9_.-]/g, '_'),
     );
     if (!ok) message.error(t('messages.downloadFailed'));
   };
@@ -246,8 +302,7 @@ const CommercialInvoicesPage = () => {
             size="small"
             icon={<AuditOutlined />}
             onClick={() => {
-              setSelected(record);
-              setDetailOpen(true);
+              void openInvoiceDetail(record);
             }}
           >
             {t('actions.detail')}
@@ -272,9 +327,17 @@ const CommercialInvoicesPage = () => {
               {t('actions.cancel')}
             </Button>
           )}
-          <Button size="small" icon={<FilePdfOutlined />} onClick={() => downloadSignaturePacket(record)}>
-            {t('actions.esignPdf')}
-          </Button>
+          {record.status === 'ISSUED' && (
+            <Button
+              size="small"
+              icon={<FilePdfOutlined />}
+              onClick={() => {
+                void downloadCommercialInvoice(record);
+              }}
+            >
+              {t('actions.invoicePdf')}
+            </Button>
+          )}
         </Space>
       ),
     },
@@ -343,25 +406,13 @@ const CommercialInvoicesPage = () => {
       />
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-        <div className="rounded-lg border border-slate-200 bg-white p-4">
-          <Text type="secondary">{t('stats.documents')}</Text>
-          <div className="mt-2 text-2xl font-semibold">{rows.length}</div>
-        </div>
-        <div className="rounded-lg border border-slate-200 bg-white p-4">
-          <Text type="secondary">{t('stats.issued')}</Text>
-          <div className="mt-2 text-2xl font-semibold">{totals.issued}</div>
-        </div>
-        <div className="rounded-lg border border-slate-200 bg-white p-4">
-          <Text type="secondary">{t('stats.draft')}</Text>
-          <div className="mt-2 text-2xl font-semibold">{totals.draft}</div>
-        </div>
-        <div className="rounded-lg border border-slate-200 bg-white p-4">
-          <Text type="secondary">{t('stats.totalVnd')}</Text>
-          <div className="mt-2 text-xl font-semibold">{formatProtectedVnd(totals.vnd)}</div>
-        </div>
+        <StatCard label={t('stats.documents')} value={rows.length} />
+        <StatCard label={t('stats.issued')} value={totals.issued} tone="success" />
+        <StatCard label={t('stats.draft')} value={totals.draft} tone="warning" />
+        <StatCard label={t('stats.totalVnd')} value={formatProtectedVnd(totals.vnd)} tone="primary" />
       </div>
 
-      <div className="mt-4 rounded-lg border border-slate-200 bg-white p-4">
+      <div className="mt-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900/70">
         <Table<ICommercialInvoice>
           rowKey="_id"
           loading={loading}
@@ -378,6 +429,7 @@ const CommercialInvoicesPage = () => {
         onCancel={() => setCreateOpen(false)}
         onOk={createInvoice}
         okText={t('actions.createDraft')}
+        forceRender
         destroyOnHidden
       >
         <Form form={createForm} layout="vertical" initialValues={{ taxRatePercent: 0 }}>
@@ -420,6 +472,7 @@ const CommercialInvoicesPage = () => {
         onOk={cancelSelectedInvoice}
         okText={t('actions.cancelDocument')}
         okButtonProps={{ danger: true }}
+        forceRender
         destroyOnHidden
       >
         <Form form={cancelForm} layout="vertical">
@@ -440,39 +493,41 @@ const CommercialInvoicesPage = () => {
         size="large"
       >
         {selected && (
-          <Space orientation="vertical" size={16} style={{ width: '100%' }}>
-            <Descriptions bordered column={2} size="small">
-              <Descriptions.Item label={t('labels.status')}>
-                <Tag color={statusColor[selected.status]}>{t(`status.${selected.status}`)}</Tag>
-              </Descriptions.Item>
-              <Descriptions.Item label={t('labels.buyer')}>{selected.buyer?.name || selected.buyer_id}</Descriptions.Item>
-              <Descriptions.Item label={t('labels.shipment')}>{selected.shipment?.shipmentNumber || selected.shipment_id}</Descriptions.Item>
-              <Descriptions.Item label={t('labels.contract')}>{selected.salesContract?.contractNumber || selected.salesContract_id}</Descriptions.Item>
-              <Descriptions.Item label={t('labels.invoiceDate')}>{dayjs(selected.invoiceDate).format('DD/MM/YYYY')}</Descriptions.Item>
-              <Descriptions.Item label={t('labels.dueDate')}>{selected.dueDate ? dayjs(selected.dueDate).format('DD/MM/YYYY') : '-'}</Descriptions.Item>
-              <Descriptions.Item label={t('labels.subtotal')}>{formatProtectedMoney(selected.subtotalForeign, selected.currency)}</Descriptions.Item>
-              <Descriptions.Item label={t('labels.tax')}>{formatProtectedMoney(selected.taxAmountForeign, selected.currency)}</Descriptions.Item>
-              <Descriptions.Item label={t('labels.total')}>{formatProtectedMoney(selected.totalAmountForeign, selected.currency)}</Descriptions.Item>
-              <Descriptions.Item label={t('labels.totalVnd')}>{formatProtectedVnd(selected.totalAmountVnd)}</Descriptions.Item>
-            </Descriptions>
+          <Spin spinning={detailLoading}>
+            <Space orientation="vertical" size={16} style={{ width: '100%' }}>
+              <Descriptions bordered column={2} size="small">
+                <Descriptions.Item label={t('labels.status')}>
+                  <Tag color={statusColor[selected.status]}>{t(`status.${selected.status}`)}</Tag>
+                </Descriptions.Item>
+                <Descriptions.Item label={t('labels.buyer')}>{selected.buyer?.name || selected.buyer_id}</Descriptions.Item>
+                <Descriptions.Item label={t('labels.shipment')}>{selected.shipment?.shipmentNumber || selected.shipment_id}</Descriptions.Item>
+                <Descriptions.Item label={t('labels.contract')}>{selected.salesContract?.contractNumber || selected.salesContract_id}</Descriptions.Item>
+                <Descriptions.Item label={t('labels.invoiceDate')}>{dayjs(selected.invoiceDate).format('DD/MM/YYYY')}</Descriptions.Item>
+                <Descriptions.Item label={t('labels.dueDate')}>{selected.dueDate ? dayjs(selected.dueDate).format('DD/MM/YYYY') : '-'}</Descriptions.Item>
+                <Descriptions.Item label={t('labels.subtotal')}>{formatProtectedMoney(selected.subtotalForeign, selected.currency)}</Descriptions.Item>
+                <Descriptions.Item label={t('labels.tax')}>{formatProtectedMoney(selected.taxAmountForeign, selected.currency)}</Descriptions.Item>
+                <Descriptions.Item label={t('labels.total')}>{formatProtectedMoney(selected.totalAmountForeign, selected.currency)}</Descriptions.Item>
+                <Descriptions.Item label={t('labels.totalVnd')}>{formatProtectedVnd(selected.totalAmountVnd)}</Descriptions.Item>
+              </Descriptions>
 
-            <Table<ICommercialInvoiceItem>
-              rowKey="_id"
-              size="small"
-              columns={itemColumns}
-              dataSource={selected.items ?? []}
-              pagination={false}
-              scroll={{ x: canViewPrice ? 760 : 520 }}
-            />
+              <Table<ICommercialInvoiceItem>
+                rowKey="_id"
+                size="small"
+                columns={itemColumns}
+                dataSource={selected.items ?? []}
+                pagination={false}
+                scroll={{ x: canViewPrice ? 760 : 520 }}
+              />
 
-            <Table<ICommercialInvoiceAuditEvent>
-              rowKey={(record) => `${record.action}-${record.at}-${record.reference_id || ''}`}
-              size="small"
-              columns={auditColumns}
-              dataSource={selected.auditTrail ?? []}
-              pagination={false}
-            />
-          </Space>
+              <Table<ICommercialInvoiceAuditEvent>
+                rowKey={(record) => `${record.action}-${record.at}-${record.reference_id || ''}`}
+                size="small"
+                columns={auditColumns}
+                dataSource={selected.auditTrail ?? []}
+                pagination={false}
+              />
+            </Space>
+          </Spin>
         )}
       </Drawer>
     </AdminPageScroll>

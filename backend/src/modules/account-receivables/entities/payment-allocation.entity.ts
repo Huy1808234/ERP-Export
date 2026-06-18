@@ -29,20 +29,38 @@ export class PaymentAllocation {
   @Column()
   accountReceivableId: string;
 
-  @ManyToOne(() => AccountReceivable, (ar) => ar.allocations, { onDelete: 'CASCADE' })
+  @ManyToOne(() => AccountReceivable, (ar) => ar.allocations, {
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'accountReceivableId' })
   accountReceivable: AccountReceivable;
 
   @Column({ type: 'varchar', length: 40, nullable: true })
   tradeFinanceTransactionId: string | null;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    transformer: new ColumnNumericTransformer(),
+  })
   allocatedAmountForeign: number;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    transformer: new ColumnNumericTransformer(),
+  })
   allocatedAmountVnd: number;
 
-  @Column({ type: 'numeric', precision: 15, scale: 6, default: 1, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 6,
+    default: 1,
+    transformer: new ColumnNumericTransformer(),
+  })
   exchangeRate: number;
 
   @Column({ type: 'timestamp' })

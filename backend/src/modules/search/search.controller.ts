@@ -6,10 +6,7 @@ export class SearchController {
   constructor(private readonly searchService: SearchService) {}
 
   @Get('global')
-  globalSearch(
-    @Query('q') query = '',
-    @Query('limit') limit?: string,
-  ) {
+  globalSearch(@Query('q') query = '', @Query('limit') limit?: string) {
     return this.searchService.globalSearch(query, Number(limit || 20));
   }
 }

@@ -1,11 +1,26 @@
-import { BeforeInsert, Column, CreateDateColumn, DeleteDateColumn, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryColumn, UpdateDateColumn } from 'typeorm';
+import {
+  BeforeInsert,
+  Column,
+  CreateDateColumn,
+  DeleteDateColumn,
+  Entity,
+  JoinColumn,
+  ManyToOne,
+  OneToMany,
+  PrimaryColumn,
+  UpdateDateColumn,
+} from 'typeorm';
 import { Partner } from '@/modules/partners/entities/partner.entity';
 import { User } from '@/modules/users/entities/user.entity';
-import { Quotation, Incoterm } from '@/modules/quotations/entities/quotation.entity';
+import {
+  Quotation,
+  Incoterm,
+} from '@/modules/quotations/entities/quotation.entity';
 import { ProformaInvoiceItem } from './proforma-invoice-item.entity';
 import { SalesContract } from '@/modules/sales-contracts/entities/sales-contract.entity';
 import { ColumnNumericTransformer } from '@/helpers/typeorm.util';
 import { createEntityId } from '@/common/ids/entity-id.util';
+import { Port } from '@/modules/ports/entities/port.entity';
 
 export enum PIStatus {
   DRAFT = 'DRAFT',
@@ -13,7 +28,7 @@ export enum PIStatus {
   SENT = 'SENT',
   ACCEPTED = 'ACCEPTED',
   REJECTED = 'REJECTED',
-  CANCELLED = 'CANCELLED'
+  CANCELLED = 'CANCELLED',
 }
 
 @Entity('proforma_invoices')
@@ -71,10 +86,24 @@ export class ProformaInvoice {
   incotermLocation: string;
 
   @Column({ type: 'varchar', nullable: true })
-  portOfLoading: string;
+  portOfLoading: string | null;
+
+  @Column({ type: 'varchar', length: 40, nullable: true })
+  portOfLoading_port_id: string | null;
+
+  @ManyToOne(() => Port, { nullable: true })
+  @JoinColumn({ name: 'portOfLoading_port_id' })
+  portOfLoadingPort: Port | null;
 
   @Column({ type: 'varchar', nullable: true })
-  portOfDischarge: string;
+  portOfDischarge: string | null;
+
+  @Column({ type: 'varchar', length: 40, nullable: true })
+  portOfDischarge_port_id: string | null;
+
+  @ManyToOne(() => Port, { nullable: true })
+  @JoinColumn({ name: 'portOfDischarge_port_id' })
+  portOfDischargePort: Port | null;
 
   @Column({ type: 'boolean', default: false })
   isPaid: boolean;
@@ -88,44 +117,110 @@ export class ProformaInvoice {
   @Column({ type: 'varchar', default: 'USD' })
   currency: string;
 
-  @Column({ type: 'numeric', precision: 15, scale: 6, default: 1, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 6,
+    default: 1,
+    transformer: new ColumnNumericTransformer(),
+  })
   exchangeRate: number; // Tỷ giá chốt tại thời điểm phát hành PI
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   totalAmount: number;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   totalAmountVnd: number; // Giá trị quy đổi VND tại thời điểm chốt PI
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   logisticsFee: number;
 
   @Column({ type: 'varchar', default: 'USD' })
   logisticsFeeCurrency: string;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   otherFee: number;
 
   @Column({ type: 'varchar', default: 'USD' })
   otherFeeCurrency: string;
 
   // Granular Fees matching Sales Contract
-  @Column({ type: 'numeric', precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   domesticTransportCost: number;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   portCharges: number;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   seaFreight: number;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   insuranceCost: number;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   depositAmount: number;
 
-  @Column({ type: 'numeric', precision: 5, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 5,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   depositPercent: number;
 
   @Column({ type: 'text', nullable: true })
@@ -153,7 +248,9 @@ export class ProformaInvoice {
   @Column({ type: 'text', nullable: true })
   rejectionReason: string | null;
 
-  @OneToMany(() => ProformaInvoiceItem, (item) => item.proformaInvoice, { cascade: true })
+  @OneToMany(() => ProformaInvoiceItem, (item) => item.proformaInvoice, {
+    cascade: true,
+  })
   items: ProformaInvoiceItem[];
 
   @Column({ type: 'text', nullable: true })

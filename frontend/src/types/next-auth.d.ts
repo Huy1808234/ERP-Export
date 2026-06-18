@@ -14,13 +14,18 @@ export interface IRole {
   permissions?: IPermission[];
 }
 
+export interface IAuthSessionRole {
+  _id?: string;
+  name: string;
+}
+
 export interface IAuthSessionUser {
   _id?: string;
   username?: string;
-  email?: string;
   name?: string;
+  email?: string;
   roleName?: string | null;
-  role?: IRole;
+  role?: IAuthSessionRole | null;
   partnerId?: string | null;
 }
 
@@ -45,7 +50,7 @@ declare module "next-auth" {
     _id?: string;
     username?: string;
     roleName?: string | null;
-    role?: IRole;
+    role?: IAuthSessionRole | null;
     partnerId?: string | null;
   }
 }
@@ -57,8 +62,5 @@ declare module "next-auth/jwt" {
     refreshToken?: string;
     accessTokenExpiresAt?: number;
     error?: "RefreshAccessTokenError";
-    _id?: string;
-    roleName?: string | null;
-    role?: IRole;
   }
 }

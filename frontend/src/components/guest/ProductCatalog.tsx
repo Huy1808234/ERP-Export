@@ -11,6 +11,7 @@ import {
 } from "@ant-design/icons";
 import { motion } from "framer-motion";
 import { useSession } from "next-auth/react";
+import { backendFetch } from "@/lib/api-client";
 import { guestService, type PublicCategory, type PublicProduct, type PublicProductQuery } from "@/services/guest.service";
 import PageBanner from "./PageBanner";
 
@@ -100,7 +101,7 @@ const ProductCatalog = (): React.ReactElement => {
 
   const handleRfqSubmit = async (values: InquiryFormValues): Promise<void> => {
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/inquiries`, {
+      const res = await backendFetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/inquiries`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(values)

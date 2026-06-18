@@ -14,7 +14,16 @@ import { CurrenciesModule } from '../currencies/currencies.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Partner, Quotation, ProformaInvoice, Shipment, PurchaseOrder, VendorInvoice, AccountPayable, QualityCheck]),
+    TypeOrmModule.forFeature([
+      Partner,
+      Quotation,
+      ProformaInvoice,
+      Shipment,
+      PurchaseOrder,
+      VendorInvoice,
+      AccountPayable,
+      QualityCheck,
+    ]),
     CurrenciesModule,
   ],
   controllers: [PartnersController],

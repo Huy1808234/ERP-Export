@@ -1,4 +1,12 @@
-import { BeforeInsert, Column, CreateDateColumn, Entity, Index, PrimaryColumn, UpdateDateColumn } from 'typeorm';
+import {
+  BeforeInsert,
+  Column,
+  CreateDateColumn,
+  Entity,
+  Index,
+  PrimaryColumn,
+  UpdateDateColumn,
+} from 'typeorm';
 import { ColumnNumericTransformer } from '@/helpers/typeorm.util';
 import { createEntityId } from '@/common/ids/entity-id.util';
 
@@ -34,16 +42,40 @@ export class VatRefundDossier {
   @Column({ type: 'date' })
   periodEnd: Date;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   exportRevenueVnd: number;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   inputVatAmount: number;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   outputVatAmount: number;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   refundAmount: number;
 
   @Column({ type: 'varchar', nullable: true })
@@ -52,7 +84,11 @@ export class VatRefundDossier {
   @Column({ type: 'jsonb', nullable: true })
   taxReportSnapshot: Record<string, unknown> | null;
 
-  @Column({ type: 'enum', enum: VatRefundStatus, default: VatRefundStatus.DRAFT })
+  @Column({
+    type: 'enum',
+    enum: VatRefundStatus,
+    default: VatRefundStatus.DRAFT,
+  })
   status: VatRefundStatus;
 
   @Column({ type: 'varchar' })

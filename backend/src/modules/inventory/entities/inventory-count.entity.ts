@@ -21,6 +21,23 @@ export enum InventoryCountStatus {
   CANCELLED = 'CANCELLED',
 }
 
+export type InventoryCountAuditEventType =
+  | 'CREATED'
+  | 'COUNT_SAVED'
+  | 'SUBMITTED'
+  | 'APPROVAL_REQUESTED'
+  | 'APPROVED'
+  | 'REJECTED'
+  | 'LEDGER_POSTED';
+
+export interface InventoryCountAuditEvent {
+  eventType: InventoryCountAuditEventType;
+  actorUsername: string;
+  occurredAt: string;
+  note?: string | null;
+  metadata?: Record<string, unknown>;
+}
+
 @Entity('inventory_counts')
 @Index(['status', 'countDate'])
 export class InventoryCount {
@@ -43,7 +60,11 @@ export class InventoryCount {
   @Column({ default: 'Main Warehouse' })
   warehouseName: string;
 
-  @Column({ type: 'enum', enum: InventoryCountStatus, default: InventoryCountStatus.DRAFT })
+  @Column({
+    type: 'enum',
+    enum: InventoryCountStatus,
+    default: InventoryCountStatus.DRAFT,
+  })
   status: InventoryCountStatus;
 
   @Column()
@@ -63,6 +84,12 @@ export class InventoryCount {
 
   @Column({ type: 'text', nullable: true })
   approvalNote: string | null;
+
+  @Column({ type: 'varchar', length: 40, nullable: true })
+  approvalWorkflowRequestId: string | null;
+
+  @Column({ type: 'jsonb', nullable: true })
+  auditTrail: InventoryCountAuditEvent[] | null;
 
   @OneToMany(() => InventoryCountItem, (item) => item.count, { cascade: true })
   items: InventoryCountItem[];
@@ -90,7 +117,9 @@ export class InventoryCountItem {
   @Column()
   countId: string;
 
-  @ManyToOne(() => InventoryCount, (count) => count.items, { onDelete: 'CASCADE' })
+  @ManyToOne(() => InventoryCount, (count) => count.items, {
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'countId' })
   count: InventoryCount;
 
@@ -101,19 +130,46 @@ export class InventoryCountItem {
   @JoinColumn({ name: 'productId' })
   product: Product;
 
-  @Column({ type: 'numeric', precision: 12, scale: 2, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 12,
+    scale: 2,
+    transformer: new ColumnNumericTransformer(),
+  })
   systemQuantity: number;
 
-  @Column({ type: 'numeric', precision: 12, scale: 2, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 12,
+    scale: 2,
+    transformer: new ColumnNumericTransformer(),
+  })
   countedQuantity: number;
 
-  @Column({ type: 'numeric', precision: 12, scale: 2, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 12,
+    scale: 2,
+    transformer: new ColumnNumericTransformer(),
+  })
   varianceQuantity: number;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   unitCost: number;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   varianceValue: number;
 
   @Column({ type: 'text', nullable: true })

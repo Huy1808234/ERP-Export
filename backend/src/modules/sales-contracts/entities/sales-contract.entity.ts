@@ -16,6 +16,7 @@ import { Incoterm } from '../../quotations/entities/quotation.entity';
 import { createEntityId } from '@/common/ids/entity-id.util';
 import { ContractSignature } from './contract-signature.entity';
 import { ContractSignatureInvitation } from './contract-signature-invitation.entity';
+import { Port } from '@/modules/ports/entities/port.entity';
 
 export enum SalesContractStatus {
   DRAFT = 'DRAFT',
@@ -57,8 +58,8 @@ export class SalesContract {
   @Column()
   buyerId: string;
 
-  @Column({ nullable: true })
-  proformaInvoiceId: string;
+  @Column({ type: 'varchar', length: 40, nullable: true })
+  proformaInvoiceId: string | null;
 
   @ManyToOne('ProformaInvoice', { nullable: true })
   @JoinColumn({ name: 'proformaInvoiceId' })
@@ -68,7 +69,11 @@ export class SalesContract {
   @JoinColumn({ name: 'buyerId' })
   buyer: Partner;
 
-  @Column({ type: 'enum', enum: SalesContractStatus, default: SalesContractStatus.DRAFT })
+  @Column({
+    type: 'enum',
+    enum: SalesContractStatus,
+    default: SalesContractStatus.DRAFT,
+  })
   status: SalesContractStatus;
 
   @Column({ type: 'enum', enum: Incoterm })
@@ -77,53 +82,115 @@ export class SalesContract {
   @Column()
   currencyCode: string;
 
-  @Column({ type: 'numeric', precision: 15, scale: 6, default: 1, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 6,
+    default: 1,
+    transformer: new ColumnNumericTransformer(),
+  })
   exchangeRate: number;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   totalAmount: number;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   totalAmountVnd: number;
 
   @Column({ type: 'date', nullable: true })
-  deliveryDate: string;
+  deliveryDate: string | null;
 
   @Column({ type: 'date', nullable: true })
-  validUntil: string;
+  validUntil: string | null;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   domesticTransportCost: number;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   portCharges: number;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   seaFreight: number;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   insuranceCost: number;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   logisticsFee: number;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   otherFee: number;
 
   @Column({ type: 'text', nullable: true })
-  paymentTerms: string;
+  paymentTerms: string | null;
 
   @Column({ type: 'text', nullable: true })
-  notes: string;
+  notes: string | null;
 
-  @OneToMany(() => SalesContractItem, item => item.salesContract, { cascade: true })
+  @OneToMany(() => SalesContractItem, (item) => item.salesContract, {
+    cascade: true,
+  })
   items: SalesContractItem[];
 
-  @OneToMany(() => ContractSignature, signature => signature.contract)
+  @OneToMany(() => ContractSignature, (signature) => signature.contract)
   signatures: ContractSignature[];
 
-  @OneToMany(() => ContractSignatureInvitation, invitation => invitation.contract)
+  @OneToMany(
+    () => ContractSignatureInvitation,
+    (invitation) => invitation.contract,
+  )
   signatureInvitations: ContractSignatureInvitation[];
+
+  @Column({ type: 'varchar', nullable: true })
+  createdByUsername: string | null;
 
   @Column({ type: 'varchar', length: 40, nullable: true })
   approvalWorkflowRequestId: string | null;
@@ -176,21 +243,35 @@ export class SalesContract {
   @Column({ type: 'varchar', nullable: true })
   signatureDocumentHash: string | null;
 
-  @Column({ nullable: true })
-  logisticsPartnerId: string;
+  @Column({ type: 'varchar', length: 40, nullable: true })
+  logisticsPartnerId: string | null;
 
   @ManyToOne('Partner', { nullable: true })
   @JoinColumn({ name: 'logisticsPartnerId' })
   logisticsPartner: any;
 
-  @Column({ nullable: true })
-  bookingNumber: string;
+  @Column({ type: 'varchar', nullable: true })
+  bookingNumber: string | null;
 
-  @Column({ nullable: true })
-  pol: string;
+  @Column({ type: 'varchar', nullable: true })
+  pol: string | null;
 
-  @Column({ nullable: true })
-  pod: string;
+  @Column({ type: 'varchar', length: 40, nullable: true })
+  pol_port_id: string | null;
+
+  @ManyToOne(() => Port, { nullable: true })
+  @JoinColumn({ name: 'pol_port_id' })
+  polPort: Port | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  pod: string | null;
+
+  @Column({ type: 'varchar', length: 40, nullable: true })
+  pod_port_id: string | null;
+
+  @ManyToOne(() => Port, { nullable: true })
+  @JoinColumn({ name: 'pod_port_id' })
+  podPort: Port | null;
 
   @CreateDateColumn()
   createdAt: Date;

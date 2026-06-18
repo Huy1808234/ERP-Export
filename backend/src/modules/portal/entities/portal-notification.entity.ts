@@ -42,7 +42,11 @@ export class PortalNotification {
   @Column({ type: 'enum', enum: PortalNotificationType })
   type: PortalNotificationType;
 
-  @Column({ type: 'enum', enum: PortalNotificationSeverity, default: PortalNotificationSeverity.INFO })
+  @Column({
+    type: 'enum',
+    enum: PortalNotificationSeverity,
+    default: PortalNotificationSeverity.INFO,
+  })
   severity: PortalNotificationSeverity;
 
   @Column()

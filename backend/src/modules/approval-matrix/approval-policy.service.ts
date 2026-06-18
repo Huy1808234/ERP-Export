@@ -199,10 +199,14 @@ export class ApprovalPolicyService {
   }
 
   findMatrixRequired() {
-    return this.actions.filter((action) => action.enforcement === 'MATRIX_REQUIRED');
+    return this.actions.filter(
+      (action) => action.enforcement === 'MATRIX_REQUIRED',
+    );
   }
 
   findLegacyDirectReview() {
-    return this.actions.filter((action) => action.enforcement === 'LEGACY_DIRECT_REVIEW');
+    return this.actions.filter(
+      (action) => action.enforcement === 'LEGACY_DIRECT_REVIEW',
+    );
   }
 }

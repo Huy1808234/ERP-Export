@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Queue } from 'bullmq';
@@ -12,16 +16,21 @@ import {
   ExportDocumentAuditEvent,
   ExportDocument,
 } from './entities/export-document.entity';
-import { Shipment, ShipmentStatus } from '@/modules/shipments/entities/shipment.entity';
+import {
+  Shipment,
+  ShipmentStatus,
+} from '@/modules/shipments/entities/shipment.entity';
 import { UpsertExportDocumentDto } from './dto/upsert-export-document.dto';
 import { ReviewExportDocumentDto } from './dto/review-export-document.dto';
 import { User } from '@/modules/users/entities/user.entity';
-import type { AuthenticatedUser, QueryParams } from '@/common/types/authenticated-user.type';
+import type {
+  AuthenticatedUser,
+  QueryParams,
+} from '@/common/types/authenticated-user.type';
 import { ApprovalMatrixService } from '@/modules/approval-matrix/approval-matrix.service';
 import { ApprovalDocumentType } from '@/modules/approval-matrix/entities/approval-rule.entity';
 import { FilesService } from '@/modules/files/files.service';
-
-const PdfPrinter = require('pdfmake');
+import { renderPdfBuffer, writePdfFile } from '@/common/pdfmake-server.util';
 
 const REQUIRED_EXPORT_DOCUMENTS = [
   DocumentType.COMMERCIAL_INVOICE,
@@ -57,12 +66,19 @@ type SnapshotDocumentItem = {
 
 type SnapshotDocumentData = Record<string, unknown> & {
   invoiceNumber?: string;
+  invoiceDate?: string;
+  dueDate?: string | null;
   shipmentNumber?: string;
   contractNumber?: string;
   buyerName?: string | null;
   buyerAddress?: string | null;
   currency?: string;
+  exchangeRate?: number;
+  subtotalForeign?: number;
+  taxRatePercent?: number;
+  taxAmountForeign?: number;
   totalAmount?: number;
+  totalAmountVnd?: number;
   incoterm?: string;
   paymentTerms?: string | null;
   items?: SnapshotDocumentItem[];
@@ -80,7 +96,8 @@ const DOCUMENT_LABELS: Record<DocumentType, string> = {
   [DocumentType.PHYTOSANITARY_CERTIFICATE]: 'Phytosanitary Certificate',
   [DocumentType.HEALTH_CERTIFICATE]: 'Health Certificate',
   [DocumentType.FUMIGATION_CERTIFICATE]: 'Fumigation Certificate',
-  [DocumentType.QUALITY_INSPECTION_CERTIFICATE]: 'Quality Inspection Certificate',
+  [DocumentType.QUALITY_INSPECTION_CERTIFICATE]:
+    'Quality Inspection Certificate',
   [DocumentType.VAT_REFUND_DOSSIER]: 'VAT Refund Dossier',
   [DocumentType.OTHER]: 'Other Document',
 };
@@ -169,16 +186,26 @@ export class ExportDocumentsService {
   ) {}
 
   async findAll(query: QueryParams) {
-    const current = Number(typeof query.current === 'string' ? query.current : 1);
-    const pageSize = Number(typeof query.pageSize === 'string' ? query.pageSize : 20);
+    const current = Number(
+      typeof query.current === 'string' ? query.current : 1,
+    );
+    const pageSize = Number(
+      typeof query.pageSize === 'string' ? query.pageSize : 20,
+    );
     const skip = (current - 1) * pageSize;
 
     const where: FindOptionsWhere<ExportDocument> = {};
-    const shipmentId = typeof query.shipmentId === 'string' ? query.shipmentId : undefined;
-    const documentType = typeof query.documentType === 'string' ? query.documentType : undefined;
-    const currentOnly = typeof query.currentOnly === 'string' ? query.currentOnly : undefined;
+    const shipmentId =
+      typeof query.shipmentId === 'string' ? query.shipmentId : undefined;
+    const documentType =
+      typeof query.documentType === 'string' ? query.documentType : undefined;
+    const currentOnly =
+      typeof query.currentOnly === 'string' ? query.currentOnly : undefined;
     if (shipmentId) where.shipmentId = shipmentId;
-    if (documentType && Object.values(DocumentType).includes(documentType as DocumentType)) {
+    if (
+      documentType &&
+      Object.values(DocumentType).includes(documentType as DocumentType)
+    ) {
       where.documentType = documentType as DocumentType;
     }
     if (currentOnly !== 'false') where.isCurrentVersion = true;
@@ -219,7 +246,9 @@ export class ExportDocumentsService {
   }
 
   async getDocumentAudit(recordId: string) {
-    const document = await this.docsRepository.findOne({ where: { _id: recordId } });
+    const document = await this.docsRepository.findOne({
+      where: { _id: recordId },
+    });
     if (!document) throw new NotFoundException('Export document not found');
 
     const versions = await this.docsRepository.find({
@@ -239,32 +268,68 @@ export class ExportDocumentsService {
 
   async upsertDocument(dto: UpsertExportDocumentDto, user: User) {
     await this.loadShipment(dto.shipmentId);
-    const fileAsset = dto.fileAsset_id ? await this.filesService.findOne(dto.fileAsset_id) : null;
-    const businessData = this.normalizeBusinessData(dto.documentType, dto.businessData);
-    const documentNumber = dto.documentNumber || this.deriveDocumentNumber(dto.documentType, businessData);
-    const customsClearedAt = dto.customsClearedAt || this.getStringValue(businessData, 'clearanceDate');
-    const versionNo = await this.getNextVersion(dto.shipmentId, dto.documentType);
+    const fileAsset = dto.fileAsset_id
+      ? await this.filesService.findOne(dto.fileAsset_id)
+      : null;
+    const businessData = this.normalizeBusinessData(
+      dto.documentType,
+      dto.businessData,
+    );
+    const documentNumber =
+      dto.documentNumber ||
+      this.deriveDocumentNumber(dto.documentType, businessData);
+    const customsClearedAt =
+      dto.customsClearedAt ||
+      this.getStringValue(businessData, 'clearanceDate');
+    const versionNo = await this.getNextVersion(
+      dto.shipmentId,
+      dto.documentType,
+    );
     const fileUrl = dto.fileUrl || fileAsset?.url || '';
-    const fileName = dto.fileName || fileAsset?.fileName || this.buildFileName(dto.documentType, dto.shipmentId, versionNo);
+    const fileName =
+      dto.fileName ||
+      fileAsset?.fileName ||
+      this.buildFileName(dto.documentType, dto.shipmentId, versionNo);
 
-    await this.markPreviousVersionsAsHistorical(dto.shipmentId, dto.documentType);
-    const checklistStatus = dto.checklistStatus ?? (fileUrl ? DocumentChecklistStatus.UPLOADED : DocumentChecklistStatus.DRAFT);
+    await this.markPreviousVersionsAsHistorical(
+      dto.shipmentId,
+      dto.documentType,
+    );
+    const checklistStatus =
+      dto.checklistStatus ??
+      (fileUrl
+        ? DocumentChecklistStatus.UPLOADED
+        : DocumentChecklistStatus.DRAFT);
     const auditTrail = [
-      this.createAuditEvent(ExportDocumentAuditAction.VERSION_CREATED, user.username, {
-        versionNo,
-        checklistStatus,
-        note: dto.notes,
-      }),
+      this.createAuditEvent(
+        ExportDocumentAuditAction.VERSION_CREATED,
+        user.username,
+        {
+          versionNo,
+          checklistStatus,
+          note: dto.notes,
+        },
+      ),
     ];
 
     if (fileUrl) {
-      auditTrail.push(this.createAuditEvent(ExportDocumentAuditAction.FILE_UPLOADED, user.username, {
-        versionNo,
-        checklistStatus,
-        fileName: dto.originalFileName || fileAsset?.originalName || fileName || null,
-        fileUrl,
-        fileAsset_id: fileAsset?._id || null,
-      }));
+      auditTrail.push(
+        this.createAuditEvent(
+          ExportDocumentAuditAction.FILE_UPLOADED,
+          user.username,
+          {
+            versionNo,
+            checklistStatus,
+            fileName:
+              dto.originalFileName ||
+              fileAsset?.originalName ||
+              fileName ||
+              null,
+            fileUrl,
+            fileAsset_id: fileAsset?._id || null,
+          },
+        ),
+      );
     }
 
     const doc = this.docsRepository.create({
@@ -286,8 +351,12 @@ export class ExportDocumentsService {
       isGenerated: false,
       issueDate: dto.issueDate ? new Date(dto.issueDate) : undefined,
       expiryDate: dto.expiryDate ? new Date(dto.expiryDate) : undefined,
-      customsDeclarationNumber: dto.customsDeclarationNumber || this.getStringValue(businessData, 'declarationNumber'),
-      customsClearedAt: customsClearedAt ? new Date(customsClearedAt) : undefined,
+      customsDeclarationNumber:
+        dto.customsDeclarationNumber ||
+        this.getStringValue(businessData, 'declarationNumber'),
+      customsClearedAt: customsClearedAt
+        ? new Date(customsClearedAt)
+        : undefined,
       uploadedByUsername: user.username,
       sharedWithBuyer: Boolean(dto.sharedWithBuyer),
       sharedByUsername: dto.sharedWithBuyer ? user.username : undefined,
@@ -309,17 +378,29 @@ export class ExportDocumentsService {
     return savedDoc;
   }
 
-  async setBuyerSharing(recordId: string, sharedWithBuyer: boolean, user: User) {
+  async setBuyerSharing(
+    recordId: string,
+    sharedWithBuyer: boolean,
+    user: User,
+  ) {
     const doc = await this.docsRepository.findOne({
       where: { _id: recordId },
-      relations: ['shipment', 'shipment.salesContract', 'shipment.salesContract.buyer'],
+      relations: [
+        'shipment',
+        'shipment.salesContract',
+        'shipment.salesContract.buyer',
+      ],
     });
     if (!doc) throw new NotFoundException('Export document not found');
     if (!doc.isCurrentVersion) {
-      throw new BadRequestException('Only current document versions can be shared with buyer');
+      throw new BadRequestException(
+        'Only current document versions can be shared with buyer',
+      );
     }
     if (sharedWithBuyer && !doc.fileUrl && !doc.snapshotData) {
-      throw new BadRequestException('Document needs an uploaded file or generated snapshot before sharing');
+      throw new BadRequestException(
+        'Document needs an uploaded file or generated snapshot before sharing',
+      );
     }
 
     doc.sharedWithBuyer = sharedWithBuyer;
@@ -327,12 +408,16 @@ export class ExportDocumentsService {
     doc.sharedAt = sharedWithBuyer ? new Date() : null;
     this.appendAuditEvent(
       doc,
-      sharedWithBuyer ? ExportDocumentAuditAction.SHARED : ExportDocumentAuditAction.UNSHARED,
+      sharedWithBuyer
+        ? ExportDocumentAuditAction.SHARED
+        : ExportDocumentAuditAction.UNSHARED,
       user.username,
       {
         versionNo: doc.versionNo,
         checklistStatus: doc.checklistStatus,
-        note: sharedWithBuyer ? 'Shared with buyer portal' : 'Removed from buyer portal',
+        note: sharedWithBuyer
+          ? 'Shared with buyer portal'
+          : 'Removed from buyer portal',
       },
     );
     return this.docsRepository.save(doc);
@@ -340,7 +425,9 @@ export class ExportDocumentsService {
 
   async findSharedPortalDocuments(user: AuthenticatedUser) {
     if (!user?.partnerId) {
-      throw new BadRequestException('Portal user is not linked to a buyer account');
+      throw new BadRequestException(
+        'Portal user is not linked to a buyer account',
+      );
     }
 
     const documents = await this.docsRepository
@@ -350,7 +437,9 @@ export class ExportDocumentsService {
       .leftJoinAndSelect('salesContract.buyer', 'buyer')
       .where('doc."sharedWithBuyer" = true')
       .andWhere('doc."isCurrentVersion" = true')
-      .andWhere('salesContract."buyerId" = :buyerId', { buyerId: user.partnerId })
+      .andWhere('salesContract."buyerId" = :buyerId', {
+        buyerId: user.partnerId,
+      })
       .orderBy('doc."sharedAt"', 'DESC', 'NULLS LAST')
       .addOrderBy('doc."createdAt"', 'DESC')
       .getMany();
@@ -368,50 +457,75 @@ export class ExportDocumentsService {
       expiryDate: doc.expiryDate,
       sharedAt: doc.sharedAt,
       downloadCount: doc.downloadCount,
-      shipment: doc.shipment ? {
-        _id: doc.shipment._id,
-        shipmentNumber: doc.shipment.shipmentNumber,
-        status: doc.shipment.status,
-        pol: doc.shipment.pol,
-        pod: doc.shipment.pod,
-        etd: doc.shipment.etd,
-        eta: doc.shipment.eta,
-        salesContract: doc.shipment.salesContract ? {
-          _id: doc.shipment.salesContract._id,
-          contractNumber: doc.shipment.salesContract.contractNumber,
-        } : null,
-      } : null,
+      shipment: doc.shipment
+        ? {
+            _id: doc.shipment._id,
+            shipmentNumber: doc.shipment.shipmentNumber,
+            status: doc.shipment.status,
+            pol: doc.shipment.pol,
+            pod: doc.shipment.pod,
+            etd: doc.shipment.etd,
+            eta: doc.shipment.eta,
+            salesContract: doc.shipment.salesContract
+              ? {
+                  _id: doc.shipment.salesContract._id,
+                  contractNumber: doc.shipment.salesContract.contractNumber,
+                }
+              : null,
+          }
+        : null,
     }));
   }
 
-  async downloadSharedPortalDocument(recordId: string, user: AuthenticatedUser) {
+  async downloadSharedPortalDocument(
+    recordId: string,
+    user: AuthenticatedUser,
+  ) {
     const doc = await this.docsRepository.findOne({
       where: {
         _id: recordId,
         isCurrentVersion: true,
         sharedWithBuyer: true,
       },
-      relations: ['shipment', 'shipment.salesContract', 'shipment.salesContract.buyer'],
+      relations: [
+        'shipment',
+        'shipment.salesContract',
+        'shipment.salesContract.buyer',
+      ],
     });
     if (!doc) throw new NotFoundException('Shared export document not found');
-    if (!user?.partnerId || doc.shipment?.salesContract?.buyerId !== user.partnerId) {
-      throw new BadRequestException('Document does not belong to this buyer account');
+    if (
+      !user?.partnerId ||
+      doc.shipment?.salesContract?.buyerId !== user.partnerId
+    ) {
+      throw new BadRequestException(
+        'Document does not belong to this buyer account',
+      );
     }
 
     const file = await this.resolveDocumentDownload(doc);
     doc.downloadCount = Number(doc.downloadCount || 0) + 1;
     doc.lastDownloadedAt = new Date();
-    this.appendAuditEvent(doc, ExportDocumentAuditAction.DOWNLOADED, user?.username || 'buyer-portal', {
-      versionNo: doc.versionNo,
-      checklistStatus: doc.checklistStatus,
-      fileName: file.fileName,
-      fileUrl: doc.fileUrl,
-    });
+    this.appendAuditEvent(
+      doc,
+      ExportDocumentAuditAction.DOWNLOADED,
+      user?.username || 'buyer-portal',
+      {
+        versionNo: doc.versionNo,
+        checklistStatus: doc.checklistStatus,
+        fileName: file.fileName,
+        fileUrl: doc.fileUrl,
+      },
+    );
     await this.docsRepository.save(doc);
     return file;
   }
 
-  async reviewDocument(recordId: string, dto: ReviewExportDocumentDto, user: User) {
+  async reviewDocument(
+    recordId: string,
+    dto: ReviewExportDocumentDto,
+    user: User,
+  ) {
     const doc = await this.docsRepository.findOne({ where: { _id: recordId } });
     if (!doc) throw new NotFoundException('Export document not found');
 
@@ -427,7 +541,8 @@ export class ExportDocumentsService {
         );
       }
 
-      const documentNumber = doc.documentNumber || `${doc.documentType}-v${doc.versionNo}`;
+      const documentNumber =
+        doc.documentNumber || `${doc.documentType}-v${doc.versionNo}`;
       const approvalRequest = await this.approvalMatrixService.createRequest(
         {
           ruleId: matchingRule._id,
@@ -452,11 +567,16 @@ export class ExportDocumentsService {
 
       doc.approvalWorkflowRequestId = approvalRequest?._id || null;
       if (dto.notes !== undefined) doc.notes = dto.notes;
-      this.appendAuditEvent(doc, ExportDocumentAuditAction.REVIEW_REQUESTED, user.username, {
-        versionNo: doc.versionNo,
-        checklistStatus: dto.checklistStatus,
-        note: dto.notes,
-      });
+      this.appendAuditEvent(
+        doc,
+        ExportDocumentAuditAction.REVIEW_REQUESTED,
+        user.username,
+        {
+          versionNo: doc.versionNo,
+          checklistStatus: dto.checklistStatus,
+          note: dto.notes,
+        },
+      );
 
       return {
         ...(await this.docsRepository.save(doc)),
@@ -468,11 +588,16 @@ export class ExportDocumentsService {
     doc.reviewedByUsername = user.username;
     doc.reviewedAt = new Date();
     if (dto.notes !== undefined) doc.notes = dto.notes;
-    this.appendAuditEvent(doc, ExportDocumentAuditAction.REVIEWED, user.username, {
-      versionNo: doc.versionNo,
-      checklistStatus: dto.checklistStatus,
-      note: dto.notes,
-    });
+    this.appendAuditEvent(
+      doc,
+      ExportDocumentAuditAction.REVIEWED,
+      user.username,
+      {
+        versionNo: doc.versionNo,
+        checklistStatus: dto.checklistStatus,
+        note: dto.notes,
+      },
+    );
 
     return this.docsRepository.save(doc);
   }
@@ -518,18 +643,32 @@ export class ExportDocumentsService {
     if (!doc) throw new NotFoundException('Export document not found');
 
     doc.approvalWorkflowRequestId = requestId;
-    this.appendAuditEvent(doc, ExportDocumentAuditAction.REVIEW_REJECTED, username, {
-      versionNo: doc.versionNo,
-      checklistStatus: doc.checklistStatus,
-      note: reason || 'Rejected by approval workflow',
-    });
+    this.appendAuditEvent(
+      doc,
+      ExportDocumentAuditAction.REVIEW_REJECTED,
+      username,
+      {
+        versionNo: doc.versionNo,
+        checklistStatus: doc.checklistStatus,
+        note: reason || 'Rejected by approval workflow',
+      },
+    );
 
     return this.docsRepository.save(doc);
   }
 
-  async generateSnapshotDocument(shipmentId: string, documentType: DocumentType) {
-    if (![DocumentType.COMMERCIAL_INVOICE, DocumentType.PACKING_LIST].includes(documentType)) {
-      throw new BadRequestException('Only Commercial Invoice and Packing List can be generated automatically');
+  async generateSnapshotDocument(
+    shipmentId: string,
+    documentType: DocumentType,
+  ) {
+    if (
+      ![DocumentType.COMMERCIAL_INVOICE, DocumentType.PACKING_LIST].includes(
+        documentType,
+      )
+    ) {
+      throw new BadRequestException(
+        'Only Commercial Invoice and Packing List can be generated automatically',
+      );
     }
 
     return this.createSnapshotFromShipment(shipmentId, documentType);
@@ -538,7 +677,10 @@ export class ExportDocumentsService {
   /**
    * Render PDF synchronously for immediate download and keep a current snapshot record.
    */
-  async generateDocumentPdf(shipmentId: string, type: 'CI' | 'PL'): Promise<Buffer> {
+  async generateDocumentPdf(
+    shipmentId: string,
+    type: 'CI' | 'PL',
+  ): Promise<Buffer> {
     const documentType = this.shortTypeToDocumentType(type);
 
     let doc = await this.docsRepository.findOne({
@@ -553,7 +695,11 @@ export class ExportDocumentsService {
     return this.renderDocumentBuffer(doc);
   }
 
-  async requestDocumentGeneration(shipmentId: string, type: DocumentType, snapshotData: Record<string, unknown>) {
+  async requestDocumentGeneration(
+    shipmentId: string,
+    type: DocumentType,
+    snapshotData: Record<string, unknown>,
+  ) {
     await this.loadShipment(shipmentId);
     const versionNo = await this.getNextVersion(shipmentId, type);
     await this.markPreviousVersionsAsHistorical(shipmentId, type);
@@ -569,11 +715,15 @@ export class ExportDocumentsService {
       fileName: this.buildFileName(type, shipmentId, versionNo),
       fileUrl: '',
       auditTrail: [
-        this.createAuditEvent(ExportDocumentAuditAction.VERSION_CREATED, 'system', {
-          versionNo,
-          checklistStatus: DocumentChecklistStatus.DRAFT,
-          note: 'Queued for PDF generation',
-        }),
+        this.createAuditEvent(
+          ExportDocumentAuditAction.VERSION_CREATED,
+          'system',
+          {
+            versionNo,
+            checklistStatus: DocumentChecklistStatus.DRAFT,
+            note: 'Queued for PDF generation',
+          },
+        ),
       ],
     });
 
@@ -587,7 +737,9 @@ export class ExportDocumentsService {
   }
 
   async generatePdf(documentId: string) {
-    const doc = await this.docsRepository.findOne({ where: { _id: documentId } });
+    const doc = await this.docsRepository.findOne({
+      where: { _id: documentId },
+    });
     if (!doc) return;
 
     const docDefinition =
@@ -597,64 +749,77 @@ export class ExportDocumentsService {
           ? this.getPackingListDefinition(doc)
           : this.getGenericDocumentDefinition(doc);
 
-    const fonts = {
-      Helvetica: {
-        normal: 'Helvetica',
-        bold: 'Helvetica-Bold',
-        italics: 'Helvetica-Oblique',
-        bolditalics: 'Helvetica-BoldOblique',
-      },
-      Courier: {
-        normal: 'Courier',
-        bold: 'Courier-Bold',
-      },
-    };
-
     try {
-      const printer = new PdfPrinter(fonts);
-      const pdfDoc = printer.createPdfKitDocument(docDefinition);
-
       const uploadDir = path.join(process.cwd(), 'uploads', 'documents');
-      if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+      if (!fs.existsSync(uploadDir))
+        fs.mkdirSync(uploadDir, { recursive: true });
 
-      const filePath = path.join(uploadDir, doc.fileName || this.buildFileName(doc.documentType, doc.shipmentId, doc.versionNo));
-      pdfDoc.pipe(fs.createWriteStream(filePath));
-      pdfDoc.end();
+      const filePath = path.join(
+        uploadDir,
+        doc.fileName ||
+          this.buildFileName(doc.documentType, doc.shipmentId, doc.versionNo),
+      );
+      await writePdfFile(docDefinition, filePath);
 
       doc.isGenerated = true;
       doc.checklistStatus = DocumentChecklistStatus.GENERATED;
       doc.fileUrl = `/uploads/documents/${path.basename(filePath)}`;
-      this.appendAuditEvent(doc, ExportDocumentAuditAction.GENERATED, 'system', {
-        versionNo: doc.versionNo,
-        checklistStatus: doc.checklistStatus,
-        fileName: path.basename(filePath),
-        fileUrl: doc.fileUrl,
-      });
+      this.appendAuditEvent(
+        doc,
+        ExportDocumentAuditAction.GENERATED,
+        'system',
+        {
+          versionNo: doc.versionNo,
+          checklistStatus: doc.checklistStatus,
+          fileName: path.basename(filePath),
+          fileUrl: doc.fileUrl,
+        },
+      );
       await this.docsRepository.save(doc);
     } catch (error) {
       console.error('Error generating PDF:', error);
     }
   }
 
-  private async createSnapshotFromShipment(shipmentId: string, documentType: DocumentType) {
+  private async createSnapshotFromShipment(
+    shipmentId: string,
+    documentType: DocumentType,
+  ) {
     const shipment = await this.loadShipment(shipmentId);
     const contract = shipment.salesContract;
     const buyer = contract.buyer;
     const items: SnapshotDocumentItem[] = (contract.items || []).map((item) => {
       const product = item.product;
-      const cartons = product?.piecesPerCarton ? Number(item.quantity || 0) / Number(product.piecesPerCarton) : 0;
+      const cartons = product?.piecesPerCarton
+        ? Number(item.quantity || 0) / Number(product.piecesPerCarton)
+        : 0;
 
       return {
         sku: product?.sku,
-        productName: product?.englishName || product?.vietnameseName || product?.description || product?.sku,
+        productName:
+          product?.englishName ||
+          product?.vietnameseName ||
+          product?.description ||
+          product?.sku,
         hsCode: product?.hsCode,
         quantity: Number(item.quantity || 0),
         unit: product?.unitOfMeasure || 'PCS',
         unitPrice: Number(item.unitPrice || 0),
         totalPrice: Number(item.quantity || 0) * Number(item.unitPrice || 0),
-        netWeight: cartons && product?.netWeightPerCarton ? Number((cartons * Number(product.netWeightPerCarton)).toFixed(2)) : null,
-        grossWeight: cartons && product?.grossWeightPerCarton ? Number((cartons * Number(product.grossWeightPerCarton)).toFixed(2)) : null,
-        cbm: cartons && product?.cbmPerCarton ? Number((cartons * Number(product.cbmPerCarton)).toFixed(4)) : null,
+        netWeight:
+          cartons && product?.netWeightPerCarton
+            ? Number((cartons * Number(product.netWeightPerCarton)).toFixed(2))
+            : null,
+        grossWeight:
+          cartons && product?.grossWeightPerCarton
+            ? Number(
+                (cartons * Number(product.grossWeightPerCarton)).toFixed(2),
+              )
+            : null,
+        cbm:
+          cartons && product?.cbmPerCarton
+            ? Number((cartons * Number(product.cbmPerCarton)).toFixed(4))
+            : null,
       };
     });
 
@@ -694,11 +859,15 @@ export class ExportDocumentsService {
       snapshotData,
       businessData: null,
       auditTrail: [
-        this.createAuditEvent(ExportDocumentAuditAction.VERSION_CREATED, 'system', {
-          versionNo,
-          checklistStatus: DocumentChecklistStatus.GENERATED,
-          note: 'Generated from shipment snapshot',
-        }),
+        this.createAuditEvent(
+          ExportDocumentAuditAction.VERSION_CREATED,
+          'system',
+          {
+            versionNo,
+            checklistStatus: DocumentChecklistStatus.GENERATED,
+            note: 'Generated from shipment snapshot',
+          },
+        ),
         this.createAuditEvent(ExportDocumentAuditAction.GENERATED, 'system', {
           versionNo,
           checklistStatus: DocumentChecklistStatus.GENERATED,
@@ -706,7 +875,11 @@ export class ExportDocumentsService {
         }),
       ],
       isGenerated: false,
-      fileName: this.buildFileName(documentType, shipment.shipmentNumber, versionNo),
+      fileName: this.buildFileName(
+        documentType,
+        shipment.shipmentNumber,
+        versionNo,
+      ),
       fileUrl: '',
       issueDate: new Date(),
     });
@@ -727,7 +900,9 @@ export class ExportDocumentsService {
     });
 
     if (!shipment?.salesContract) {
-      throw new BadRequestException('Shipment or linked sales contract was not found');
+      throw new BadRequestException(
+        'Shipment or linked sales contract was not found',
+      );
     }
 
     return shipment;
@@ -741,14 +916,22 @@ export class ExportDocumentsService {
     return (latest?.versionNo || 0) + 1;
   }
 
-  private async markPreviousVersionsAsHistorical(shipmentId: string, documentType: DocumentType) {
-    await this.docsRepository.update({ shipmentId, documentType, isCurrentVersion: true }, { isCurrentVersion: false });
+  private async markPreviousVersionsAsHistorical(
+    shipmentId: string,
+    documentType: DocumentType,
+  ) {
+    await this.docsRepository.update(
+      { shipmentId, documentType, isCurrentVersion: true },
+      { isCurrentVersion: false },
+    );
   }
 
   private async resolveDocumentDownload(doc: ExportDocument) {
     if (doc.fileUrl) {
       const uploadRoot = path.resolve(process.cwd(), 'uploads');
-      const relativePath = doc.fileUrl.replace(/^\/uploads[\\/]/, '').replace(/^uploads[\\/]/, '');
+      const relativePath = doc.fileUrl
+        .replace(/^\/uploads[\\/]/, '')
+        .replace(/^uploads[\\/]/, '');
       const filePath = path.resolve(uploadRoot, relativePath);
 
       if (!filePath.startsWith(uploadRoot) || !fs.existsSync(filePath)) {
@@ -758,14 +941,17 @@ export class ExportDocumentsService {
       return {
         buffer: await fs.promises.readFile(filePath),
         mimeType: doc.mimeType || 'application/octet-stream',
-        fileName: doc.originalFileName || doc.fileName || path.basename(filePath),
+        fileName:
+          doc.originalFileName || doc.fileName || path.basename(filePath),
       };
     }
 
     return {
       buffer: await this.renderDocumentBuffer(doc),
       mimeType: 'application/pdf',
-      fileName: doc.fileName || this.buildFileName(doc.documentType, doc.shipmentId, doc.versionNo),
+      fileName:
+        doc.fileName ||
+        this.buildFileName(doc.documentType, doc.shipmentId, doc.versionNo),
     };
   }
 
@@ -777,36 +963,23 @@ export class ExportDocumentsService {
           ? this.getPackingListDefinition(doc)
           : this.getGenericDocumentDefinition(doc);
 
-    const fonts = {
-      Helvetica: {
-        normal: 'Helvetica',
-        bold: 'Helvetica-Bold',
-        italics: 'Helvetica-Oblique',
-        bolditalics: 'Helvetica-BoldOblique',
-      },
-      Courier: {
-        normal: 'Courier',
-        bold: 'Courier-Bold',
-      },
-    };
-
-    const printer = new PdfPrinter(fonts);
-    const pdfDoc = printer.createPdfKitDocument(docDefinition);
-
-    return new Promise((resolve, reject) => {
-      const chunks: Buffer[] = [];
-      pdfDoc.on('data', (chunk: Buffer) => chunks.push(chunk));
-      pdfDoc.on('end', () => resolve(Buffer.concat(chunks)));
-      pdfDoc.on('error', (err: Error) => reject(err));
-      pdfDoc.end();
-    });
+    return renderPdfBuffer(docDefinition);
   }
 
   private buildChecklist(shipment: Shipment, documents: ExportDocument[]) {
-    const currentByType = new Map(documents.map((doc) => [doc.documentType, doc]));
+    const currentByType = new Map(
+      documents.map((doc) => [doc.documentType, doc]),
+    );
     const requiredDocuments = [...REQUIRED_EXPORT_DOCUMENTS];
 
-    if ([ShipmentStatus.CUSTOMS_CLEARED, ShipmentStatus.ON_BOARD, ShipmentStatus.ARRIVED, ShipmentStatus.CLOSED].includes(shipment.status)) {
+    if (
+      [
+        ShipmentStatus.CUSTOMS_CLEARED,
+        ShipmentStatus.ON_BOARD,
+        ShipmentStatus.ARRIVED,
+        ShipmentStatus.CLOSED,
+      ].includes(shipment.status)
+    ) {
       requiredDocuments.push(DocumentType.VAT_REFUND_DOSSIER);
     }
 
@@ -838,7 +1011,9 @@ export class ExportDocumentsService {
   }
 
   private buildVatRefundDossier(documents: ExportDocument[]) {
-    const currentByType = new Map(documents.map((doc) => [doc.documentType, doc]));
+    const currentByType = new Map(
+      documents.map((doc) => [doc.documentType, doc]),
+    );
     const required = [
       DocumentType.COMMERCIAL_INVOICE,
       DocumentType.PACKING_LIST,
@@ -849,12 +1024,14 @@ export class ExportDocumentsService {
 
     const checklist = required.map((documentType) => {
       const doc = currentByType.get(documentType);
-      const ready = !!doc && ![
-        DocumentChecklistStatus.MISSING,
-        DocumentChecklistStatus.DRAFT,
-        DocumentChecklistStatus.EXPIRED,
-        DocumentChecklistStatus.NOT_APPLICABLE,
-      ].includes(doc.checklistStatus);
+      const ready =
+        !!doc &&
+        ![
+          DocumentChecklistStatus.MISSING,
+          DocumentChecklistStatus.DRAFT,
+          DocumentChecklistStatus.EXPIRED,
+          DocumentChecklistStatus.NOT_APPLICABLE,
+        ].includes(doc.checklistStatus);
 
       return {
         documentType,
@@ -871,27 +1048,46 @@ export class ExportDocumentsService {
   }
 
   private shortTypeToDocumentType(type: 'CI' | 'PL') {
-    return type === 'CI' ? DocumentType.COMMERCIAL_INVOICE : DocumentType.PACKING_LIST;
+    return type === 'CI'
+      ? DocumentType.COMMERCIAL_INVOICE
+      : DocumentType.PACKING_LIST;
   }
 
-  private buildFileName(documentType: DocumentType, reference: string, versionNo: number) {
-    return `${documentType}_${reference}_v${versionNo}.pdf`.replace(/[^a-zA-Z0-9_.-]/g, '_');
+  private buildFileName(
+    documentType: DocumentType,
+    reference: string,
+    versionNo: number,
+  ) {
+    return `${documentType}_${reference}_v${versionNo}.pdf`.replace(
+      /[^a-zA-Z0-9_.-]/g,
+      '_',
+    );
   }
 
-  private normalizeBusinessData(documentType: DocumentType, rawData?: Record<string, unknown>) {
+  private normalizeBusinessData(
+    documentType: DocumentType,
+    rawData?: Record<string, unknown>,
+  ) {
     const requiredFields = BUSINESS_FORM_REQUIRED_FIELDS[documentType];
     if (!requiredFields) return rawData || null;
 
     const businessData = rawData || {};
-    const missingFields = requiredFields.filter((field) => !this.getStringValue(businessData, field));
+    const missingFields = requiredFields.filter(
+      (field) => !this.getStringValue(businessData, field),
+    );
     if (missingFields.length) {
-      throw new BadRequestException(`Missing required business fields: ${missingFields.join(', ')}`);
+      throw new BadRequestException(
+        `Missing required business fields: ${missingFields.join(', ')}`,
+      );
     }
 
     return businessData;
   }
 
-  private deriveDocumentNumber(documentType: DocumentType, businessData: Record<string, unknown> | null) {
+  private deriveDocumentNumber(
+    documentType: DocumentType,
+    businessData: Record<string, unknown> | null,
+  ) {
     const numberFieldByType: Partial<Record<DocumentType, string>> = {
       [DocumentType.BILL_OF_LADING]: 'blNumber',
       [DocumentType.AIRWAY_BILL]: 'awbNumber',
@@ -905,10 +1101,15 @@ export class ExportDocumentsService {
     };
 
     const numberField = numberFieldByType[documentType];
-    return numberField ? this.getStringValue(businessData, numberField) : undefined;
+    return numberField
+      ? this.getStringValue(businessData, numberField)
+      : undefined;
   }
 
-  private getStringValue(data: Record<string, unknown> | null | undefined, key: string) {
+  private getStringValue(
+    data: Record<string, unknown> | null | undefined,
+    key: string,
+  ) {
     const value = data?.[key];
     if (value === null || value === undefined || value === '') return undefined;
     return String(value);
@@ -924,7 +1125,9 @@ export class ExportDocumentsService {
   private createAuditEvent(
     action: ExportDocumentAuditAction,
     username: string,
-    extra: Partial<Omit<ExportDocumentAuditEvent, 'action' | 'username' | 'at'>> = {},
+    extra: Partial<
+      Omit<ExportDocumentAuditEvent, 'action' | 'username' | 'at'>
+    > = {},
   ): ExportDocumentAuditEvent {
     return {
       action,
@@ -938,7 +1141,9 @@ export class ExportDocumentsService {
     doc: ExportDocument,
     action: ExportDocumentAuditAction,
     username: string,
-    extra: Partial<Omit<ExportDocumentAuditEvent, 'action' | 'username' | 'at'>> = {},
+    extra: Partial<
+      Omit<ExportDocumentAuditEvent, 'action' | 'username' | 'at'>
+    > = {},
   ) {
     doc.auditTrail = [
       ...(Array.isArray(doc.auditTrail) ? doc.auditTrail : []),
@@ -949,11 +1154,17 @@ export class ExportDocumentsService {
   private getGenericDocumentDefinition(doc: ExportDocument) {
     return {
       content: [
-        { text: DOCUMENT_LABELS[doc.documentType] || doc.documentType, style: 'header' },
+        {
+          text: DOCUMENT_LABELS[doc.documentType] || doc.documentType,
+          style: 'header',
+        },
         { text: `Shipment ID: ${doc.shipmentId}`, margin: [0, 10] },
         { text: `Document No: ${doc.documentNumber || '-'}`, margin: [0, 5] },
         { text: 'Snapshot Data:', style: 'subheader' },
-        { text: JSON.stringify(doc.snapshotData || {}, null, 2), font: 'Courier' },
+        {
+          text: JSON.stringify(doc.snapshotData || {}, null, 2),
+          font: 'Courier',
+        },
         { text: '\n\nGenerated by Mini ERP Export System', style: 'footer' },
       ],
       styles: {
@@ -972,12 +1183,41 @@ export class ExportDocumentsService {
   private getCommercialInvoiceDefinition(doc: ExportDocument) {
     const data = this.getSnapshotData(doc);
     const items = Array.isArray(data.items) ? data.items : [];
+    const currency = data.currency || 'USD';
+    const toNumber = (value: unknown): number => {
+      const numericValue = Number(value);
+      return Number.isFinite(numericValue) ? numericValue : 0;
+    };
+    const formatAmount = (value: unknown): string =>
+      toNumber(value).toLocaleString('en-US', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+    const formatQuantity = (value: unknown): string =>
+      toNumber(value).toLocaleString('en-US', {
+        maximumFractionDigits: 4,
+      });
+    const subtotal = toNumber(data.subtotalForeign ?? data.totalAmount);
+    const taxAmount = toNumber(data.taxAmountForeign);
+    const totalAmount = toNumber(data.totalAmount);
+    const totalAmountVnd = toNumber(data.totalAmountVnd);
+    const hasVndEquivalent = totalAmountVnd > 0 && currency !== 'VND';
+    const invoiceDate =
+      data.invoiceDate ||
+      (doc.issueDate ? doc.issueDate.toISOString().slice(0, 10) : 'N/A');
 
     return {
       content: [
         { text: 'COMMERCIAL INVOICE', style: 'header', alignment: 'center' },
-        { text: `No: ${data.invoiceNumber || doc.documentNumber || 'N/A'}`, alignment: 'right' },
-        { text: `Date: ${new Date().toLocaleDateString()}`, alignment: 'right', margin: [0, 0, 0, 20] },
+        {
+          text: `No: ${data.invoiceNumber || doc.documentNumber || 'N/A'}`,
+          alignment: 'right',
+        },
+        {
+          text: `Date: ${invoiceDate}`,
+          alignment: 'right',
+          margin: [0, 0, 0, 20],
+        },
         {
           columns: [
             {
@@ -997,7 +1237,30 @@ export class ExportDocumentsService {
               ],
             },
           ],
-          margin: [0, 0, 0, 20],
+          margin: [0, 0, 0, 12],
+        },
+        {
+          columns: [
+            {
+              width: '*',
+              stack: [
+                {
+                  text: `Shipment: ${data.shipmentNumber || doc.shipmentId || 'N/A'}`,
+                },
+                { text: `Contract: ${data.contractNumber || 'N/A'}` },
+                { text: `Incoterm: ${data.incoterm || 'N/A'}` },
+              ],
+            },
+            {
+              width: '*',
+              stack: [
+                { text: `Payment Terms: ${data.paymentTerms || 'N/A'}` },
+                { text: `Due Date: ${data.dueDate || 'N/A'}` },
+                { text: `Currency: ${currency}` },
+              ],
+            },
+          ],
+          margin: [0, 0, 0, 18],
         },
         {
           table: {
@@ -1010,24 +1273,69 @@ export class ExportDocumentsService {
                 { text: 'Unit Price', bold: true },
                 { text: 'Amount', bold: true },
               ],
-              ...items.map((item) => [
-                item.productName || item.sku,
-                item.quantity,
-                `${item.unitPrice} ${data.currency || 'USD'}`,
-                `${item.totalPrice} ${data.currency || 'USD'}`,
-              ]),
+              ...(items.length
+                ? items.map((item) => [
+                    item.productName || item.sku || '-',
+                    `${formatQuantity(item.quantity)} ${item.unit || ''}`.trim(),
+                    `${formatAmount(item.unitPrice)} ${currency}`,
+                    `${formatAmount(item.totalPrice)} ${currency}`,
+                  ])
+                : [
+                    [
+                      { text: 'No items', colSpan: 4, alignment: 'center' },
+                      {},
+                      {},
+                      {},
+                    ],
+                  ]),
+              [
+                {
+                  text: 'SUBTOTAL',
+                  bold: true,
+                  colSpan: 3,
+                  alignment: 'right',
+                },
+                {},
+                {},
+                { text: `${formatAmount(subtotal)} ${currency}`, bold: true },
+              ],
+              [
+                {
+                  text: `TAX${data.taxRatePercent !== undefined ? ` (${formatQuantity(data.taxRatePercent)}%)` : ''}`,
+                  colSpan: 3,
+                  alignment: 'right',
+                },
+                {},
+                {},
+                { text: `${formatAmount(taxAmount)} ${currency}` },
+              ],
               [
                 { text: 'TOTAL', bold: true, colSpan: 3 },
                 {},
                 {},
-                { text: `${data.totalAmount} ${data.currency || 'USD'}`, bold: true },
+                {
+                  text: `${formatAmount(totalAmount)} ${currency}`,
+                  bold: true,
+                },
               ],
             ],
           },
+          layout: 'lightHorizontalLines',
         },
-        { text: `Incoterm: ${data.incoterm || 'FOB'}`, margin: [0, 20, 0, 0] },
-        { text: `Payment Terms: ${data.paymentTerms || 'T/T'}`, margin: [0, 5, 0, 0] },
-        { text: '\n\nAuthorized Signature', alignment: 'right', margin: [0, 50, 0, 0] },
+        ...(hasVndEquivalent
+          ? [
+              {
+                text: `VND Equivalent: ${formatAmount(totalAmountVnd)} VND`,
+                alignment: 'right',
+                margin: [0, 8, 0, 0],
+              },
+            ]
+          : []),
+        {
+          text: '\n\nAuthorized Signature',
+          alignment: 'right',
+          margin: [0, 50, 0, 0],
+        },
       ],
       styles: {
         header: { fontSize: 24, bold: true, margin: [0, 0, 0, 10] },
@@ -1044,8 +1352,15 @@ export class ExportDocumentsService {
     return {
       content: [
         { text: 'PACKING LIST', style: 'header', alignment: 'center' },
-        { text: `No: ${data.invoiceNumber || doc.documentNumber || 'N/A'}`, alignment: 'right' },
-        { text: `Date: ${new Date().toLocaleDateString()}`, alignment: 'right', margin: [0, 0, 0, 20] },
+        {
+          text: `No: ${data.invoiceNumber || doc.documentNumber || 'N/A'}`,
+          alignment: 'right',
+        },
+        {
+          text: `Date: ${new Date().toLocaleDateString()}`,
+          alignment: 'right',
+          margin: [0, 0, 0, 20],
+        },
         {
           table: {
             headerRows: 1,
@@ -1068,7 +1383,11 @@ export class ExportDocumentsService {
             ],
           },
         },
-        { text: '\n\nAuthorized Signature', alignment: 'right', margin: [0, 50, 0, 0] },
+        {
+          text: '\n\nAuthorized Signature',
+          alignment: 'right',
+          margin: [0, 50, 0, 0],
+        },
       ],
       styles: {
         header: { fontSize: 24, bold: true, margin: [0, 0, 0, 10] },

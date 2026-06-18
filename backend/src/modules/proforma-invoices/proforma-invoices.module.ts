@@ -10,6 +10,7 @@ import { CurrenciesModule } from '../currencies/currencies.module';
 import { AccountingModule } from '../accounting/accounting.module';
 import { ApprovalMatrixModule } from '../approval-matrix/approval-matrix.module';
 import { ProformaInvoiceApprovalListener } from './proforma-invoice-approval.listener';
+import { PortsModule } from '../ports/ports.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { ProformaInvoiceApprovalListener } from './proforma-invoice-approval.lis
     CurrenciesModule,
     AccountingModule,
     ApprovalMatrixModule,
+    PortsModule,
   ],
   controllers: [ProformaInvoicesController],
   providers: [ProformaInvoicesService, ProformaInvoiceApprovalListener],

@@ -1,4 +1,13 @@
-import { BeforeInsert, Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryColumn, UpdateDateColumn } from 'typeorm';
+import {
+  BeforeInsert,
+  Column,
+  CreateDateColumn,
+  Entity,
+  JoinColumn,
+  ManyToOne,
+  PrimaryColumn,
+  UpdateDateColumn,
+} from 'typeorm';
 import { GoodsReceipt } from './goods-receipt.entity';
 import { Product } from '@/modules/products/entities/product.entity';
 import { PurchaseOrderItem } from '@/modules/purchase-orders/entities/purchase-order-item.entity';
@@ -20,7 +29,10 @@ export class GoodsReceiptItem {
   @Column({ type: 'varchar', length: 40, nullable: true })
   goodsReceiptId: string | null;
 
-  @ManyToOne(() => GoodsReceipt, (gr) => gr.items, { onDelete: 'CASCADE', nullable: true })
+  @ManyToOne(() => GoodsReceipt, (gr) => gr.items, {
+    onDelete: 'CASCADE',
+    nullable: true,
+  })
   @JoinColumn({ name: 'goodsReceiptId' })
   goodsReceipt: GoodsReceipt | null;
 
@@ -38,13 +50,29 @@ export class GoodsReceiptItem {
   @JoinColumn({ name: 'productId' })
   product: Product;
 
-  @Column({ type: 'numeric', precision: 12, scale: 2, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 12,
+    scale: 2,
+    transformer: new ColumnNumericTransformer(),
+  })
   quantityOrdered: number;
 
-  @Column({ type: 'numeric', precision: 12, scale: 2, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 12,
+    scale: 2,
+    transformer: new ColumnNumericTransformer(),
+  })
   quantityReceived: number;
 
-  @Column({ type: 'numeric', precision: 12, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 12,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   quantityRejected: number;
 
   @Column({ type: 'text', nullable: true })

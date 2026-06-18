@@ -6,6 +6,7 @@ import {
   Typography, Row, Col, Statistic, DatePicker,
   Tabs, theme, Badge, Alert,
 } from 'antd';
+import type { TableColumnsType } from 'antd';
 import {
   SearchOutlined, ReloadOutlined,
   BankOutlined, CalculatorOutlined,
@@ -49,6 +50,25 @@ interface ISummaryReport {
   netProfit: number;
 }
 
+type AccountingQueryParams = {
+  current: number;
+  pageSize: number;
+  startDate?: string;
+  endDate?: string;
+};
+
+type SummaryReportResponse = {
+  current?: Partial<ISummaryReport>;
+  previous?: Partial<ISummaryReport>;
+} & Partial<ISummaryReport>;
+
+type JournalListResponse = {
+  results?: IJournalEntry[];
+  meta?: {
+    total?: number;
+  };
+};
+
 const { Text } = Typography;
 const { RangePicker } = DatePicker;
 
@@ -62,6 +82,7 @@ const AccountingPage = () => {
   const [journals, setJournals] = useState<IJournalEntry[]>([]);
   const [summary, setSummary] = useState<ISummaryReport>({ revenue: 0, cogs: 0, expenses: 0, netProfit: 0 });
   const [loading, setLoading] = useState(true);
+  const [journalSearch, setJournalSearch] = useState('');
   const [meta, setMeta] = useState({ current: 1, pageSize: 10, total: 0 });
   const { current, pageSize } = meta;
   const [dateRange, setDateRange] = useState<[Dayjs | null, Dayjs | null] | null>(null);
@@ -70,7 +91,7 @@ const AccountingPage = () => {
     if (!accessToken) return;
     setLoading(true);
     try {
-      const queryParams: any = {
+      const queryParams: AccountingQueryParams = {
         current,
         pageSize,
       };
@@ -80,7 +101,7 @@ const AccountingPage = () => {
         queryParams.endDate = dateRange[1].endOf('day').toISOString();
       }
 
-      const summaryRes = await sendRequest<IBackendRes<any>>({
+      const summaryRes = await sendRequest<IBackendRes<SummaryReportResponse>>({
         url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/accounting/report/summary`,
         method: 'GET',
         queryParams,
@@ -91,15 +112,15 @@ const AccountingPage = () => {
         setSummary({ revenue: 0, cogs: 0, expenses: 0, netProfit: 0, ...summaryData });
       }
 
-      const journalRes = await sendRequest<IBackendRes<any>>({
+      const journalRes = await sendRequest<IBackendRes<JournalListResponse>>({
         url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/accounting/journal`,
         method: 'GET',
         queryParams,
         headers: { Authorization: `Bearer ${accessToken}` },
       });
       if (journalRes?.data) {
-        setJournals(journalRes.data.results);
-        setMeta((prev) => ({ ...prev, total: journalRes.data.meta.total }));
+        setJournals(journalRes.data.results || []);
+        setMeta((prev) => ({ ...prev, total: journalRes.data?.meta?.total || 0 }));
       }
     } finally {
       setLoading(false);
@@ -110,11 +131,60 @@ const AccountingPage = () => {
     fetchAccountingData();
   }, [fetchAccountingData]);
 
-  const columns = [
+  const normalizedJournalSearch = journalSearch.trim().toLowerCase();
+  const matchesJournalSearch = (value?: string | number | null) => (
+    String(value ?? '').toLowerCase().includes(normalizedJournalSearch)
+  );
+  const visibleJournals = normalizedJournalSearch
+    ? journals.filter((journal) => (
+        matchesJournalSearch(journal.entryNumber)
+        || matchesJournalSearch(journal.description)
+        || matchesJournalSearch(journal.referenceType)
+        || matchesJournalSearch(journal.referenceId)
+        || journal.items?.some((item) => (
+          matchesJournalSearch(item.accountCode) || matchesJournalSearch(item.partnerId)
+        ))
+      ))
+    : journals;
+
+  const getJournalTotal = (items: IJournalItem[] = [], side: 'debit' | 'credit') => (
+    items.reduce((total, item) => total + Number(item[side] || 0), 0)
+  );
+
+  const journalLineColumns: TableColumnsType<IJournalItem> = [
+    {
+      title: t('reports.columns.account'),
+      dataIndex: 'accountCode',
+      key: 'accountCode',
+      width: 180,
+      render: (accountCode: string) => <Text strong style={{ color: token.colorPrimary }}>{accountCode}</Text>,
+    },
+    {
+      title: t('workflows.closePolicy.totalDebit'),
+      dataIndex: 'debit',
+      key: 'debit',
+      align: 'right',
+      render: (value: number) => (
+        Number(value) > 0 ? <Text type="success">{Number(value).toLocaleString()}</Text> : '-'
+      ),
+    },
+    {
+      title: t('workflows.closePolicy.totalCredit'),
+      dataIndex: 'credit',
+      key: 'credit',
+      align: 'right',
+      render: (value: number) => (
+        Number(value) > 0 ? <Text type="danger">{Number(value).toLocaleString()}</Text> : '-'
+      ),
+    },
+  ];
+
+  const columns: TableColumnsType<IJournalEntry> = [
     {
       title: t('table.entryNumber'),
       dataIndex: 'entryNumber',
       key: 'entryNumber',
+      width: 220,
       render: (text: string, record: IJournalEntry) => (
         <Space orientation="vertical" size={0}>
           <Text strong>{text}</Text>
@@ -126,33 +196,27 @@ const AccountingPage = () => {
       title: t('table.description'),
       dataIndex: 'description',
       key: 'description',
-      width: '30%',
+      ellipsis: true,
     },
     {
       title: t('table.entryDetails'),
-      key: 'items',
-      render: (_: any, record: IJournalEntry) => (
-        <div style={{ background: '#fcfcfc', padding: '8px', borderRadius: '8px' }}>
-          {record.items?.map((item, index) => (
-            <Row key={`${item.accountCode}-${index}`} gutter={16} style={{ marginBottom: 4 }}>
-              <Col span={6}>
-                <Text strong style={{ color: token.colorPrimary }}>{item.accountCode}</Text>
-              </Col>
-              <Col span={9} style={{ textAlign: 'right' }}>
-                {item.debit > 0 && <Text type="success">{item.debit.toLocaleString()}</Text>}
-              </Col>
-              <Col span={9} style={{ textAlign: 'right' }}>
-                {item.credit > 0 && <Text type="danger">{item.credit.toLocaleString()}</Text>}
-              </Col>
-            </Row>
-          ))}
-        </div>
+      key: 'totals',
+      width: 260,
+      render: (_value: unknown, record: IJournalEntry) => (
+        <Space orientation="vertical" size={0} style={{ width: '100%' }}>
+          <Text type="secondary">{record.items?.length || 0} dòng định khoản</Text>
+          <Space orientation="horizontal" size={12} wrap>
+            <Text type="success">{getJournalTotal(record.items, 'debit').toLocaleString()}</Text>
+            <Text type="danger">{getJournalTotal(record.items, 'credit').toLocaleString()}</Text>
+          </Space>
+        </Space>
       ),
     },
     {
       title: t('table.reference'),
       key: 'ref',
-      render: (_: any, record: IJournalEntry) => (
+      width: 220,
+      render: (_value: unknown, record: IJournalEntry) => (
         record.referenceType ? <Tag color="blue">{record.referenceType}: {record.referenceId?.substring(0, 8)}</Tag> : '-'
       ),
     },
@@ -160,6 +224,7 @@ const AccountingPage = () => {
       title: t('table.status'),
       dataIndex: 'status',
       key: 'status',
+      width: 140,
       render: (status: string) => (
         <Badge status={status === 'POSTED' ? 'success' : 'processing'} text={status} />
       ),
@@ -188,9 +253,10 @@ const AccountingPage = () => {
               type="primary"
               icon={<CalculatorOutlined />}
               size="large"
+              disabled={!dateRange?.[0] || !dateRange?.[1]}
               onClick={async () => {
                 if (!accessToken) return;
-                const res = await sendRequest<IBackendRes<any>>({
+                const res = await sendRequest<IBackendRes<unknown>>({
                   url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/accounting/close-period`,
                   method: 'POST',
                   body: {
@@ -210,9 +276,9 @@ const AccountingPage = () => {
         </Col>
       </Row>
 
-      <Row gutter={16} style={{ marginBottom: '24px' }}>
-        <Col span={canViewCost ? 6 : 8}>
-          <Card variant="borderless" style={{ borderRadius: 16 }}>
+      <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
+        <Col xs={24} sm={12} xl={canViewCost ? 6 : 8}>
+          <Card size="small" variant="borderless" style={{ borderRadius: 12 }} styles={{ body: { padding: 16 } }}>
             <Statistic
               title={t('summary.revenue')}
               value={summary.revenue}
@@ -224,8 +290,8 @@ const AccountingPage = () => {
           </Card>
         </Col>
         {canViewCost ? <>
-        <Col span={6}>
-          <Card variant="borderless" style={{ borderRadius: 16 }}>
+        <Col xs={24} sm={12} xl={6}>
+          <Card size="small" variant="borderless" style={{ borderRadius: 12 }} styles={{ body: { padding: 16 } }}>
             <Statistic
               title={t('summary.cogs')}
               value={summary.cogs}
@@ -236,8 +302,8 @@ const AccountingPage = () => {
             />
           </Card>
         </Col>
-        <Col span={6}>
-          <Card variant="borderless" style={{ borderRadius: 16 }}>
+        <Col xs={24} sm={12} xl={6}>
+          <Card size="small" variant="borderless" style={{ borderRadius: 12 }} styles={{ body: { padding: 16 } }}>
             <Statistic
               title={t('summary.expenses')}
               value={summary.expenses}
@@ -248,8 +314,8 @@ const AccountingPage = () => {
             />
           </Card>
         </Col>
-        <Col span={6}>
-          <Card variant="borderless" style={{ borderRadius: 16, background: token.colorPrimaryBg }}>
+        <Col xs={24} sm={12} xl={6}>
+          <Card size="small" variant="borderless" style={{ borderRadius: 12, background: token.colorPrimaryBg }} styles={{ body: { padding: 16 } }}>
             <Statistic
               title={t('summary.netProfit')}
               value={summary.netProfit}
@@ -261,13 +327,13 @@ const AccountingPage = () => {
           </Card>
         </Col>
         </> : (
-          <Col span={16}>
-            <Card variant="borderless" style={{ borderRadius: 16, height: '100%' }}>
+          <Col xs={24} xl={16}>
+            <Card size="small" variant="borderless" style={{ borderRadius: 12, height: '100%' }} styles={{ body: { padding: 16 } }}>
               <Alert
                 type="info"
                 showIcon
-                title="Chỉ số giá vốn và lợi nhuận đang được ẩn"
-                description="Tài khoản hiện tại không có quyền read:cost_fields nên các KPI COGS, chi phí và lợi nhuận không được hiển thị trên admin."
+                title={t('alerts.costHiddenTitle')}
+                description={t('alerts.costHiddenDescription')}
               />
             </Card>
           </Col>
@@ -284,10 +350,16 @@ const AccountingPage = () => {
             label: <Space orientation="horizontal"><AuditOutlined />{t('tabs.journal')}</Space>,
             children: (
               <Card variant="borderless" style={{ borderRadius: '0 0 16px 16px', boxShadow: '0 4px 20px rgba(0,0,0,0.02)' }} styles={{ body: { padding: 0 } }}>
-                <div style={{ padding: '16px 24px', borderBottom: '1px solid rgba(0,0,0,0.05)', display: 'flex', justifyContent: 'space-between' }}>
+                <div style={{ padding: '12px 16px', borderBottom: '1px solid rgba(0,0,0,0.05)', display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
                   <Input
                     placeholder={t('filters.searchPlaceholder')}
                     prefix={<SearchOutlined />}
+                    value={journalSearch}
+                    onChange={(event) => {
+                      setJournalSearch(event.target.value);
+                      setMeta((prev) => ({ ...prev, current: 1 }));
+                    }}
+                    allowClear
                     style={{ width: 300, borderRadius: 8 }}
                   />
                   <Space orientation="horizontal">
@@ -296,14 +368,39 @@ const AccountingPage = () => {
                 </div>
                 <Table
                   columns={columns}
-                  dataSource={journals}
+                  dataSource={visibleJournals}
                   rowKey="_id"
                   loading={loading}
+                  size="middle"
+                  scroll={{ x: 1080 }}
+                  expandable={{
+                    expandedRowRender: (record) => (
+                      <div style={{ padding: '4px 16px 12px 48px' }}>
+                        <Table<IJournalItem>
+                          rowKey={(item) => `${record._id}-${item.accountCode}-${item.debit}-${item.credit}-${item.partnerId || 'none'}`}
+                          columns={journalLineColumns}
+                          dataSource={record.items || []}
+                          pagination={false}
+                          size="small"
+                        />
+                      </div>
+                    ),
+                    rowExpandable: (record) => Boolean(record.items?.length),
+                  }}
+                  locale={{ emptyText: t('empty.noJournal') }}
                   pagination={{
-                    current,
+                    current: normalizedJournalSearch ? 1 : current,
                     pageSize,
-                    total: meta.total,
-                    onChange: (page) => setMeta((prev) => ({ ...prev, current: page })),
+                    total: normalizedJournalSearch ? visibleJournals.length : meta.total,
+                    showSizeChanger: true,
+                    pageSizeOptions: ['10', '20', '50'],
+                    onChange: (page, nextPageSize) => {
+                      setMeta((prev) => ({
+                        ...prev,
+                        current: nextPageSize === prev.pageSize ? page : 1,
+                        pageSize: nextPageSize,
+                      }));
+                    },
                   }}
                 />
               </Card>
@@ -318,7 +415,7 @@ const AccountingPage = () => {
           },
           {
             key: '3',
-            label: <Space orientation="horizontal"><CalculatorOutlined />Workflow kế toán</Space>,
+            label: <Space orientation="horizontal"><CalculatorOutlined />{t('tabs.workflows')}</Space>,
             children: (
               <AccountingProductionWorkflows accessToken={accessToken ?? ''} />
             ),

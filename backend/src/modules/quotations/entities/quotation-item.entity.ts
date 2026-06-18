@@ -1,4 +1,14 @@
-import { BeforeInsert, Column, CreateDateColumn, DeleteDateColumn, Entity, JoinColumn, ManyToOne, PrimaryColumn, UpdateDateColumn } from 'typeorm';
+import {
+  BeforeInsert,
+  Column,
+  CreateDateColumn,
+  DeleteDateColumn,
+  Entity,
+  JoinColumn,
+  ManyToOne,
+  PrimaryColumn,
+  UpdateDateColumn,
+} from 'typeorm';
 import { Product } from '@/modules/products/entities/product.entity';
 import { Quotation } from './quotation.entity';
 import { ColumnNumericTransformer } from '@/helpers/typeorm.util';
@@ -19,7 +29,9 @@ export class QuotationItem {
   @Column()
   quotationId: string;
 
-  @ManyToOne(() => Quotation, (quotation) => quotation.items, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Quotation, (quotation) => quotation.items, {
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'quotationId' })
   quotation: Quotation;
 
@@ -30,16 +42,31 @@ export class QuotationItem {
   @JoinColumn({ name: 'productId' })
   product: Product;
 
-  @Column({ type: 'numeric', precision: 12, scale: 2, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 12,
+    scale: 2,
+    transformer: new ColumnNumericTransformer(),
+  })
   quantity: number;
 
   @Column({ nullable: true })
   unit: string;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    transformer: new ColumnNumericTransformer(),
+  })
   unitPrice: number;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    transformer: new ColumnNumericTransformer(),
+  })
   totalAmount: number;
 
   @Column({ type: 'text', nullable: true })

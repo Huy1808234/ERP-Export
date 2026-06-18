@@ -1,11 +1,21 @@
-import { BeforeInsert, Entity, PrimaryColumn, Column, CreateDateColumn, UpdateDateColumn, OneToMany, DeleteDateColumn, Index } from 'typeorm';
+import {
+  BeforeInsert,
+  Entity,
+  PrimaryColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  OneToMany,
+  DeleteDateColumn,
+  Index,
+} from 'typeorm';
 import { LedgerEntry } from './ledger-entry.entity';
 import { createEntityId } from '@/common/ids/entity-id.util';
 
 export enum JournalStatus {
   DRAFT = 'DRAFT',
   POSTED = 'POSTED',
-  CANCELLED = 'CANCELLED'
+  CANCELLED = 'CANCELLED',
 }
 
 @Entity('journal_entries')

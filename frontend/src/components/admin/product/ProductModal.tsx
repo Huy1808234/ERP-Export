@@ -10,7 +10,6 @@ import ProductForm from './ProductForm';
 import { IProduct } from "@/types/product";
 import { categoryService } from "@/services/category.service";
 import { useTranslations } from "next-intl";
-import { getAccessToken } from '@/lib/auth-token';
 import { canReadCostFields, sanitizeCostPayload } from "@/lib/field-access";
 
 interface IProps {
@@ -35,16 +34,13 @@ const ProductModal = ({ isOpen, setIsOpen, fetchData, dataUpdate, categories }: 
       url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/partners`,
       method: "GET",
       queryParams: { pageSize: 100, partnerType: "SUPPLIER" },
-      headers: {
-        Authorization: `Bearer ${getAccessToken(session)}`,
-      },
     });
     if (res?.data) {
       setSuppliers(
         res.data.results.map((s: any) => ({ label: s.name, value: s._id })),
       );
     }
-  }, [session]);
+  }, []);
 
   useEffect(() => {
     if (isOpen) {
@@ -64,9 +60,6 @@ const ProductModal = ({ isOpen, setIsOpen, fetchData, dataUpdate, categories }: 
   }, [isOpen, dataUpdate, form, loadSuppliers]);
 
   const onFinish = async (values: any) => {
-    const token = getAccessToken(session);
-    if (!token) return;
-
     setLoading(true);
     const isUpdate = !!dataUpdate?._id;
 
@@ -82,7 +75,7 @@ const ProductModal = ({ isOpen, setIsOpen, fetchData, dataUpdate, categories }: 
       const isExisting = categories.some(c => c.name.toLowerCase() === categoryName.toLowerCase());
 
       if (!isExisting && categoryName !== "") {
-        const catRes = await categoryService.createCategory(categoryName, token);
+        const catRes = await categoryService.createCategory(categoryName);
 
         if (catRes?.data) {
           notification.success({
@@ -104,7 +97,6 @@ const ProductModal = ({ isOpen, setIsOpen, fetchData, dataUpdate, categories }: 
       url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/products${isUpdate ? `/${dataUpdate._id}` : ""}`,
       method: isUpdate ? "PATCH" : "POST",
       body,
-      headers: { Authorization: `Bearer ${token}` },
     });
 
     if (res?.data) {

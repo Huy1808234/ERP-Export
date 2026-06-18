@@ -21,7 +21,7 @@ import type { ColumnsType } from 'antd/es/table';
 import { ExportOutlined, FileDoneOutlined, PlusOutlined, ReloadOutlined, StopOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useSession } from 'next-auth/react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { PageHeader } from '@/components/ui/PageHeader';
 import AdminPageScroll from '@/components/layout/admin.page-scroll';
 import { sendRequest } from '@/lib/api-client';
@@ -99,6 +99,7 @@ const statusColor: Record<ExportDeliveryStatus, string> = {
 
 const ExportDeliveriesPage = () => {
   const t = useTranslations('ExportDeliveries');
+  const locale = useLocale();
   const { data: session } = useSession();
   const { message } = App.useApp();
   const accessToken = getAccessToken(session);
@@ -267,7 +268,7 @@ const ExportDeliveriesPage = () => {
               cancelText={t('actions.cancel')}
             >
               <Button size="small" type="primary" icon={<ExportOutlined />}>
-                Issue
+                {t('actions.issue')}
               </Button>
             </Popconfirm>
           )}
@@ -291,13 +292,19 @@ const ExportDeliveriesPage = () => {
 
   const itemColumns: ColumnsType<IExportDeliveryItem> = [
     {
-      title: 'SKU',
-      render: (_, record) => (
-        <Space orientation="vertical" size={0}>
-          <Text strong>{record.product?.sku || record.productId}</Text>
-          <Text type="secondary">{record.product?.englishName || record.product?.vietnameseName || '-'}</Text>
-        </Space>
-      ),
+      title: t('itemTable.sku'),
+      render: (_, record) => {
+        const productName = locale === 'vi'
+          ? record.product?.vietnameseName || record.product?.englishName
+          : record.product?.englishName || record.product?.vietnameseName;
+
+        return (
+          <Space orientation="vertical" size={0}>
+            <Text strong>{record.product?.sku || record.productId}</Text>
+            <Text type="secondary">{productName || '-'}</Text>
+          </Space>
+        );
+      },
     },
     {
       title: t('itemTable.quantity'),
@@ -306,7 +313,7 @@ const ExportDeliveriesPage = () => {
       render: (value: number, record) => `${Number(value || 0).toLocaleString()} ${record.unit || ''}`,
     },
     {
-      title: 'Lot',
+      title: t('itemTable.lot'),
       dataIndex: 'lotNumber',
       render: (value?: string | null) => value ? <Tag color="blue">{value}</Tag> : '-',
     },
@@ -337,6 +344,7 @@ const ExportDeliveriesPage = () => {
           columns={columns}
           dataSource={rows}
           loading={loading}
+          locale={{ emptyText: t('empty.noDeliveries') }}
           pagination={{ pageSize: 10 }}
         />
       </Space>
@@ -411,6 +419,7 @@ const ExportDeliveriesPage = () => {
             columns={itemColumns}
             dataSource={selected?.items ?? []}
             pagination={false}
+            locale={{ emptyText: t('empty.noItems') }}
             size="small"
           />
 
@@ -428,6 +437,7 @@ const ExportDeliveriesPage = () => {
             ]}
             dataSource={selected?.auditTrail ?? []}
             pagination={false}
+            locale={{ emptyText: t('empty.noAudit') }}
             size="small"
           />
         </Space>

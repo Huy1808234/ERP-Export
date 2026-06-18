@@ -1,127 +1,68 @@
-'use client';
+"use client";
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { useSession } from 'next-auth/react';
-import { getSocket } from '@/lib/socket-client';
-import { sendRequest } from '@/lib/api-client';
-import { getAccessToken } from '@/lib/auth-token';
-
-type NotificationKind = 'INQUIRY' | 'APPROVAL';
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useSession } from "next-auth/react";
+import { getSocket } from "@/lib/socket-client";
+import { sendRequest } from "@/lib/api-client";
+import { getAccessToken } from "@/lib/auth-token";
 
 type BrowserAudioWindow = Window &
   typeof globalThis & {
     webkitAudioContext?: typeof AudioContext;
   };
 
-type InquiryApiItem = {
-  _id?: string;
-  id?: string;
-  customerName?: string;
-  customerEmail?: string;
-  productSnapshotName?: string;
-  createdAt?: string;
-  timestamp?: string | Date;
-  isRead?: boolean;
-};
-
-type InquiryUnreadPayload = {
-  data?: InquiryApiItem[];
-};
-
-type UnreadCountPayload = {
-  data?: number;
-};
-
-type InquirySocketPayload = {
-  id?: string;
-  _id?: string;
-  customerName?: string;
-  customerEmail?: string | null;
-  productSnapshotName?: string | null;
-  timestamp?: string | Date;
-};
-
-type ApprovalRequiredSocketPayload = {
-  requestId: string;
-  documentType: string;
-  documentId: string;
-  documentNumber: string | null;
-  title: string;
-  requesterUsername: string;
-  currentStepOrder: number;
-  approverRoleNames: string[];
-  approverUsernames: string[];
-  timestamp?: string | Date;
-};
-
 export interface AppNotification {
   id: string;
-  kind: NotificationKind;
+  kind: string; // Map to backend SystemNotificationType or legacy ones
   title: string;
   body: string;
   createdAt: string;
   isRead: boolean;
-  customerName?: string;
-  customerEmail?: string;
-  productSnapshotName?: string;
-  documentType?: string;
-  documentNumber?: string | null;
-  requesterUsername?: string;
   targetHref?: string;
+  // Legacy fields for backward compatibility
+  documentNumber?: string | null;
 }
 
-export type InquiryNotification = AppNotification;
+type SystemNotificationApiItem = {
+  _id: string;
+  userId?: string;
+  type: string;
+  title: string;
+  content: string;
+  targetUrl?: string;
+  isRead: boolean;
+  createdAt: string;
+};
+
+type FetchNotificationsPayload = {
+  data?: SystemNotificationApiItem[];
+  total?: number;
+};
 
 const toIsoString = (value?: string | Date) => {
   if (!value) return new Date().toISOString();
   return value instanceof Date ? value.toISOString() : value;
 };
 
-const normalizeInquiryItems = (
-  payload: InquiryUnreadPayload | InquiryApiItem[] | undefined,
-): InquiryApiItem[] => {
-  if (Array.isArray(payload)) return payload;
-  return Array.isArray(payload?.data) ? payload.data : [];
-};
-
-const normalizeUnreadCount = (payload: UnreadCountPayload | number | undefined) => {
-  if (typeof payload === 'number') return payload;
-  return typeof payload?.data === 'number' ? payload.data : 0;
-};
-
-const toInquiryNotification = (item: InquiryApiItem): AppNotification => {
-  const customerName = item.customerName || 'Buyer';
+const toAppNotification = (
+  item: SystemNotificationApiItem,
+): AppNotification => {
   return {
-    id: item._id || item.id || `INQ-${toIsoString(item.createdAt)}`,
-    kind: 'INQUIRY',
-    title: 'Yêu cầu báo giá mới',
-    body: `${customerName} đã gửi yêu cầu báo giá.`,
-    customerName,
-    customerEmail: item.customerEmail,
-    productSnapshotName: item.productSnapshotName,
-    createdAt: toIsoString(item.timestamp || item.createdAt),
+    id: item._id,
+    kind: item.type,
+    title: item.title,
+    body: item.content,
+    createdAt: toIsoString(item.createdAt),
     isRead: Boolean(item.isRead),
-    targetHref: '/dashboard/inquiry',
+    targetHref: item.targetUrl,
   };
 };
-
-const toApprovalNotification = (payload: ApprovalRequiredSocketPayload): AppNotification => ({
-  id: payload.requestId,
-  kind: 'APPROVAL',
-  title: 'Có yêu cầu cần phê duyệt',
-  body: `${payload.title} đang chờ ${payload.approverRoleNames.join(', ') || 'người duyệt'}.`,
-  documentType: payload.documentType,
-  documentNumber: payload.documentNumber,
-  requesterUsername: payload.requesterUsername,
-  createdAt: toIsoString(payload.timestamp),
-  isRead: false,
-  targetHref: '/dashboard/approvals',
-});
 
 const playNotificationSound = () => {
   try {
     const browserWindow = window as BrowserAudioWindow;
-    const AudioContextClass = browserWindow.AudioContext || browserWindow.webkitAudioContext;
+    const AudioContextClass =
+      browserWindow.AudioContext || browserWindow.webkitAudioContext;
     if (!AudioContextClass) return;
 
     const audioCtx = new AudioContextClass();
@@ -132,11 +73,14 @@ const playNotificationSound = () => {
     gainNode.connect(audioCtx.destination);
 
     oscillator.frequency.value = 880;
-    oscillator.type = 'sine';
+    oscillator.type = "sine";
     gainNode.gain.value = 0.15;
 
     oscillator.start();
-    gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.4);
+    gainNode.gain.exponentialRampToValueAtTime(
+      0.001,
+      audioCtx.currentTime + 0.4,
+    );
     oscillator.stop(audioCtx.currentTime + 0.4);
   } catch {
     // Browsers may block audio until user interaction; notifications should still render.
@@ -144,8 +88,8 @@ const playNotificationSound = () => {
 };
 
 const showBrowserNotification = (title: string, body: string, tag: string) => {
-  if ('Notification' in window && Notification.permission === 'granted') {
-    new Notification(title, { body, icon: '/favicon.ico', tag });
+  if ("Notification" in window && Notification.permission === "granted") {
+    new Notification(title, { body, icon: "/favicon.ico", tag });
   }
 };
 
@@ -165,95 +109,103 @@ export const useNotifications = () => {
     if (!accessToken) return;
     try {
       const headers = { Authorization: `Bearer ${accessToken}` };
-      const [unreadRes, countRes] = await Promise.all([
-        sendRequest<IBackendRes<InquiryUnreadPayload | InquiryApiItem[]>>({
-          url: `${backendUrl}/api/v1/inquiries/unread`,
-          method: 'GET',
+      const [listRes, countRes] = await Promise.all([
+        sendRequest<IBackendRes<FetchNotificationsPayload>>({
+          url: `${backendUrl}/api/v1/notifications`,
+          method: "GET",
           headers,
         }),
-        sendRequest<IBackendRes<UnreadCountPayload | number>>({
-          url: `${backendUrl}/api/v1/inquiries/unread/count`,
-          method: 'GET',
+        sendRequest<IBackendRes<{ data: number }>>({
+          url: `${backendUrl}/api/v1/notifications/unread-count`,
+          method: "GET",
           headers,
         }),
       ]);
 
-      const inquiryNotifications = normalizeInquiryItems(unreadRes?.data).map(toInquiryNotification);
-      const serverInquiryCount = normalizeUnreadCount(countRes?.data);
-      setNotifications((previous) => {
-        const approvalNotifications = previous.filter((notification) => notification.kind === 'APPROVAL');
-        const nextNotifications = [...approvalNotifications, ...inquiryNotifications].slice(0, 30);
-        const approvalUnreadCount = approvalNotifications.filter((notification) => !notification.isRead).length;
-        setUnreadCount(serverInquiryCount + approvalUnreadCount);
-        return nextNotifications;
-      });
+      const items = Array.isArray(listRes?.data?.data) ? listRes.data.data : [];
+      const appNotifications = items.map(toAppNotification);
+
+      setNotifications(appNotifications.slice(0, 30));
+      const count = countRes?.data?.data;
+      setUnreadCount(typeof count === "number" ? count : 0);
     } catch (error) {
-      console.error('Failed to fetch notification data:', error);
+      console.error("Failed to fetch notification data:", error);
     }
   }, [backendUrl, accessToken]);
 
   const requestBrowserPermission = useCallback(() => {
-    if ('Notification' in window && Notification.permission === 'default') {
+    if ("Notification" in window && Notification.permission === "default") {
       Notification.requestPermission();
     }
   }, []);
 
-  const markAsRead = useCallback(async (notificationId: string) => {
-    const target = notifications.find((notification) => notification.id === notificationId);
-    if (!target) return;
+  const markAsRead = useCallback(
+    async (notificationId: string) => {
+      const target = notifications.find((n) => n.id === notificationId);
+      if (!target) return;
 
-    if (target.kind === 'APPROVAL') {
-      setNotifications((previous) => previous.filter((notification) => notification.id !== notificationId));
-      setUnreadCount((previous) => Math.max(0, previous - 1));
-      return;
-    }
+      if (!accessToken) return;
 
-    if (!accessToken) return;
-    try {
-      await sendRequest({
-        url: `${backendUrl}/api/v1/inquiries/${notificationId}/read`,
-        method: 'PATCH',
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-      setNotifications((previous) => previous.filter((notification) => notification.id !== notificationId));
-      setUnreadCount((previous) => Math.max(0, previous - 1));
-    } catch (error) {
-      console.error('Failed to mark notification as read:', error);
-    }
-  }, [accessToken, backendUrl, notifications]);
+      // Optimistic update
+      setNotifications((prev) =>
+        prev.map((n) => (n.id === notificationId ? { ...n, isRead: true } : n)),
+      );
+      setUnreadCount((prev) => Math.max(0, prev - 1));
+
+      try {
+        await sendRequest({
+          url: `${backendUrl}/api/v1/notifications/${notificationId}/read`,
+          method: "PATCH",
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+      } catch (error) {
+        console.error("Failed to mark notification as read:", error);
+      }
+    },
+    [accessToken, backendUrl, notifications],
+  );
 
   const markAllAsRead = useCallback(async () => {
     if (!accessToken) return;
+
+    // Optimistic update
+    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+    setUnreadCount(0);
+    setHasNewNotification(false);
+
     try {
       await sendRequest({
-        url: `${backendUrl}/api/v1/inquiries/read-all`,
-        method: 'PATCH',
+        url: `${backendUrl}/api/v1/notifications/read-all`,
+        method: "PATCH",
         headers: { Authorization: `Bearer ${accessToken}` },
       });
-      setNotifications([]);
-      setUnreadCount(0);
-      setHasNewNotification(false);
     } catch (error) {
-      console.error('Failed to mark all as read:', error);
+      console.error("Failed to mark all as read:", error);
     }
   }, [backendUrl, accessToken]);
 
   const pushNotification = useCallback((notification: AppNotification) => {
-    setNotifications((previous) => [
-      notification,
-      ...previous.filter((item) => item.id !== notification.id),
-    ].slice(0, 30));
-    setUnreadCount((previous) => previous + 1);
+    setNotifications((prev) =>
+      [
+        notification,
+        ...prev.filter((item) => item.id !== notification.id),
+      ].slice(0, 30),
+    );
+    setUnreadCount((prev) => prev + 1);
     setHasNewNotification(true);
 
-    if (localStorage.getItem('notification_sound') !== 'false') {
+    if (localStorage.getItem("notification_sound") !== "false") {
       playNotificationSound();
     }
 
-    showBrowserNotification(notification.title, notification.body, notification.id);
+    showBrowserNotification(
+      notification.title,
+      notification.body,
+      notification.id,
+    );
   }, []);
 
-  const toggleSound = useCallback(() => setSoundEnabled((previous) => !previous), []);
+  const toggleSound = useCallback(() => setSoundEnabled((prev) => !prev), []);
   const clearNewFlag = useCallback(() => setHasNewNotification(false), []);
 
   useEffect(() => {
@@ -266,56 +218,86 @@ export const useNotifications = () => {
 
     requestBrowserPermission();
 
-    const savedSound = localStorage.getItem('notification_sound');
-    if (savedSound !== null) setSoundEnabled(savedSound === 'true');
+    const savedSound = localStorage.getItem("notification_sound");
+    if (savedSound !== null) setSoundEnabled(savedSound === "true");
 
     const socket = getSocket();
+    if (!socket) return undefined;
 
-    const handleInquiry = (payload: InquirySocketPayload) => {
-      pushNotification(toInquiryNotification({
-        _id: payload._id || payload.id,
-        customerName: payload.customerName,
-        customerEmail: payload.customerEmail || undefined,
-        productSnapshotName: payload.productSnapshotName || undefined,
-        timestamp: payload.timestamp,
+    // Listen to new system notifications
+    const handleNewSystemNotification = (
+      payload: SystemNotificationApiItem,
+    ) => {
+      pushNotification(toAppNotification(payload));
+    };
+
+    const handleUnreadCount = (payload: { userId?: string; count: number }) => {
+      setUnreadCount(payload.count);
+      if (payload.count === 0) {
+        setHasNewNotification(false);
+      }
+    };
+
+    // Legacy listeners (optional: keep if backend still emits them, but map them to AppNotification)
+    const handleLegacyInquiry = (payload: any) => {
+      pushNotification({
+        id: payload._id || payload.id,
+        kind: "INQUIRY",
+        title: "Yêu cầu báo giá mới",
+        body: `${payload.customerName || "Buyer"} đã gửi yêu cầu báo giá.`,
+        createdAt: toIsoString(payload.timestamp),
         isRead: false,
-      }));
-    };
-
-    const handleApprovalRequired = (payload: ApprovalRequiredSocketPayload) => {
-      pushNotification(toApprovalNotification(payload));
-    };
-
-    const handleUnreadCount = (payload: { count: number }) => {
-      setNotifications((previous) => {
-        const nextNotifications = payload.count === 0
-          ? previous.filter((notification) => notification.kind !== 'INQUIRY')
-          : previous;
-        const approvalUnreadCount = nextNotifications.filter(
-          (notification) => notification.kind === 'APPROVAL' && !notification.isRead,
-        ).length;
-        setUnreadCount(payload.count + approvalUnreadCount);
-        if (payload.count === 0 && approvalUnreadCount === 0) {
-          setHasNewNotification(false);
-        }
-        return nextNotifications;
+        targetHref: "/dashboard/inquiry",
       });
     };
 
-    socket.on('new_inquiry', handleInquiry);
-    socket.on('approval_required', handleApprovalRequired);
-    socket.on('unread_count', handleUnreadCount);
+    const handleLegacyApproval = (payload: any) => {
+      pushNotification({
+        id: payload.requestId,
+        kind: "APPROVAL",
+        title: "Có yêu cầu cần phê duyệt",
+        body: `${payload.title} đang chờ phê duyệt.`,
+        documentNumber: payload.documentNumber,
+        createdAt: toIsoString(payload.timestamp),
+        isRead: false,
+        targetHref: "/dashboard/approvals",
+      });
+    };
+
+    socket.on("new_system_notification", handleNewSystemNotification);
+    socket.on("unread_count", handleUnreadCount);
+    socket.on("new_inquiry", handleLegacyInquiry);
+    socket.on("approval_required", handleLegacyApproval);
 
     return () => {
-      socket.off('new_inquiry', handleInquiry);
-      socket.off('approval_required', handleApprovalRequired);
-      socket.off('unread_count', handleUnreadCount);
+      socket.off("new_system_notification", handleNewSystemNotification);
+      socket.off("unread_count", handleUnreadCount);
+      socket.off("new_inquiry", handleLegacyInquiry);
+      socket.off("approval_required", handleLegacyApproval);
     };
   }, [pushNotification, requestBrowserPermission]);
 
   useEffect(() => {
-    localStorage.setItem('notification_sound', String(soundEnabled));
+    localStorage.setItem("notification_sound", String(soundEnabled));
   }, [soundEnabled]);
+
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket || !session?.user?._id) return undefined;
+
+    const joinRoom = () => {
+      socket.emit("join", { userId: session.user._id });
+    };
+
+    if (socket.connected) {
+      joinRoom();
+    }
+
+    socket.on("connect", joinRoom);
+    return () => {
+      socket.off("connect", joinRoom);
+    };
+  }, [session]);
 
   return {
     notifications,
@@ -327,5 +309,6 @@ export const useNotifications = () => {
     toggleSound,
     requestBrowserPermission,
     clearNewFlag,
+    refreshNotifications: fetchInitialData,
   };
 };

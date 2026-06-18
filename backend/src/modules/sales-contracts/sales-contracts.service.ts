@@ -7,23 +7,42 @@ import {
 } from '@nestjs/common';
 import { MailerService } from '@nestjs-modules/mailer';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, EntityManager, Repository } from 'typeorm';
+import {
+  DataSource,
+  EntityManager,
+  FindOptionsWhere,
+  Repository,
+} from 'typeorm';
 import {
   SalesContract,
   SalesContractSignatureStatus,
   SalesContractStatus,
 } from './entities/sales-contract.entity';
 import { SalesContractItem } from './entities/sales-contract-item.entity';
-import { ContractSignature, ContractSignerType } from './entities/contract-signature.entity';
+import {
+  ContractSignature,
+  ContractSignerType,
+} from './entities/contract-signature.entity';
 import {
   ContractSignatureInvitation,
   ContractSignatureInvitationAuditEvent,
   ContractSignatureInvitationStatus,
 } from './entities/contract-signature-invitation.entity';
+import {
+  ContractSignatureActorType,
+  ContractSignatureEvent,
+  ContractSignatureEventType,
+} from './entities/contract-signature-event.entity';
 import { SignSalesContractDto } from './dto/sign-sales-contract.dto';
 import { RequestSignatureInvitationDto } from './dto/request-signature-invitation.dto';
 import { VerifySignatureOtpDto } from './dto/verify-signature-otp.dto';
 import { PortalSignSalesContractDto } from './dto/portal-sign-sales-contract.dto';
+import {
+  CreateSalesContractDto,
+  SalesContractItemDto,
+} from './dto/create-sales-contract.dto';
+import { UpdateSalesContractDto } from './dto/update-sales-contract.dto';
+import { CalculateSalesContractDto } from './dto/calculate-sales-contract.dto';
 import { InventoryService } from '../inventory/inventory.service';
 import { IncotermsService } from './incoterms.service';
 import { ProformaInvoice } from '../proforma-invoices/entities/proforma-invoice.entity';
@@ -33,13 +52,53 @@ import { PricingPoliciesService } from '../pricing-policies/pricing-policies.ser
 import { SalesPriceSourceType } from '../pricing-policies/entities/sales-price-history.entity';
 import { ApprovalMatrixService } from '../approval-matrix/approval-matrix.service';
 import { ApprovalDocumentType } from '../approval-matrix/entities/approval-rule.entity';
+import { renderPdfBuffer } from '@/common/pdfmake-server.util';
+import { PortsService } from '../ports/ports.service';
+import { UsersService } from '../users/users.service';
+import { AccountReceivablesService } from '../account-receivables/account-receivables.service';
+import { comparePasswordHelper } from '@/helpers/util';
 
-const PdfPrinter = require('pdfmake');
+import { UnauthorizedException } from '@nestjs/common';
 
 type RequestMeta = {
   ipAddress?: string | null;
   userAgent?: string | null;
 };
+
+type RequestUser = {
+  username?: string;
+};
+
+type SalesContractRouteInput = {
+  pol?: string | null;
+  pol_port_id?: string | null;
+  pod?: string | null;
+  pod_port_id?: string | null;
+};
+
+type SalesContractRoutePatchInput = SalesContractRouteInput & {
+  hasPol: boolean;
+  hasPolPortId: boolean;
+  hasPod: boolean;
+  hasPodPortId: boolean;
+  currentPol?: string | null;
+  currentPolPortId?: string | null;
+  currentPod?: string | null;
+  currentPodPortId?: string | null;
+};
+
+type SalesContractPricingContext = {
+  buyerId?: string;
+  incoterm?: Incoterm;
+  currencyCode?: string;
+  pol_port_id?: string | null;
+  pod_port_id?: string | null;
+};
+
+type SalesContractListQuery = Record<
+  string,
+  string | number | boolean | undefined
+>;
 
 type SignaturePacketEvent = {
   action: string;
@@ -51,6 +110,33 @@ type SignaturePacketEvent = {
 };
 
 type SignatureDeliveryStatus = 'EMAIL_SENT' | 'EMAIL_FAILED' | 'EMAIL_SKIPPED';
+
+type RecordSignatureEventInput = {
+  contractId: string;
+  invitationId?: string | null;
+  signatureId?: string | null;
+  eventType: ContractSignatureEventType;
+  actorType: ContractSignatureActorType;
+  actorUsername?: string | null;
+  signerEmail?: string | null;
+  ipAddress?: string | null;
+  userAgent?: string | null;
+  documentHash?: string | null;
+  note?: string | null;
+  metadata?: Record<string, unknown> | null;
+};
+
+type CreateBuyerSignatureInvitationInput = {
+  manager: EntityManager;
+  contract: SalesContract;
+  signerName: string;
+  signerTitle: string;
+  signerEmail: string;
+  actorUsername: string;
+  expiresInDays: number;
+  documentHash: string;
+  note?: string | null;
+};
 
 type SignatureInvitationResponse = {
   _id: string;
@@ -136,12 +222,17 @@ export class SalesContractsService {
     private readonly contractRepository: Repository<SalesContract>,
     @InjectRepository(ContractSignatureInvitation)
     private readonly signatureInvitationRepository: Repository<ContractSignatureInvitation>,
+    @InjectRepository(ContractSignatureEvent)
+    private readonly signatureEventRepository: Repository<ContractSignatureEvent>,
     private readonly dataSource: DataSource,
     private readonly mailerService: MailerService,
     private readonly inventoryService: InventoryService,
     private readonly incotermsService: IncotermsService,
     private readonly pricingPoliciesService: PricingPoliciesService,
     private readonly approvalMatrixService: ApprovalMatrixService,
+    private readonly portsService: PortsService,
+    private readonly usersService: UsersService,
+    private readonly arService: AccountReceivablesService,
   ) {}
 
   private getActorUsername(user?: { username?: string } | null) {
@@ -154,6 +245,54 @@ export class SalesContractsService {
 
   private hashOtp(otp: string, tokenHash: string) {
     return this.hashSecret(`${otp}:${tokenHash}`);
+  }
+
+  private async resolveContractPorts(
+    data: SalesContractRouteInput,
+  ): Promise<SalesContractRouteInput> {
+    const loading = await this.portsService.resolvePortSnapshot(
+      data.pol_port_id,
+      data.pol,
+    );
+    const discharge = await this.portsService.resolvePortSnapshot(
+      data.pod_port_id,
+      data.pod,
+    );
+
+    return {
+      pol_port_id: loading.port_id,
+      pol: loading.label,
+      pod_port_id: discharge.port_id,
+      pod: discharge.label,
+    };
+  }
+
+  private async resolveContractPortsForUpdate(
+    data: SalesContractRoutePatchInput,
+  ): Promise<SalesContractRouteInput> {
+    const loading = await this.portsService.resolvePortSnapshotPatch({
+      incomingPortRef: data.pol_port_id,
+      incomingLabel: data.pol,
+      currentPortRef: data.currentPolPortId,
+      currentLabel: data.currentPol,
+      hasIncomingPortRef: data.hasPolPortId,
+      hasIncomingLabel: data.hasPol,
+    });
+    const discharge = await this.portsService.resolvePortSnapshotPatch({
+      incomingPortRef: data.pod_port_id,
+      incomingLabel: data.pod,
+      currentPortRef: data.currentPodPortId,
+      currentLabel: data.currentPod,
+      hasIncomingPortRef: data.hasPodPortId,
+      hasIncomingLabel: data.hasPod,
+    });
+
+    return {
+      pol_port_id: loading.port_id,
+      pol: loading.label,
+      pod_port_id: discharge.port_id,
+      pod: discharge.label,
+    };
   }
 
   private generateSigningToken() {
@@ -187,14 +326,59 @@ export class SalesContractsService {
   }
 
   private buildFrontendSigningUrl(token: string) {
-    const frontendUrl = process.env.FRONTEND_URL || process.env.NEXT_PUBLIC_FRONTEND_URL || 'http://localhost:3000';
+    const frontendUrl =
+      process.env.FRONTEND_URL ||
+      process.env.NEXT_PUBLIC_FRONTEND_URL ||
+      'http://localhost:3000';
     return `${frontendUrl.replace(/\/$/g, '')}/vi/portal/sign/${token}`;
+  }
+
+  private getActiveInvitationStatuses(): ContractSignatureInvitationStatus[] {
+    return [
+      ContractSignatureInvitationStatus.CREATED,
+      ContractSignatureInvitationStatus.SENT,
+      ContractSignatureInvitationStatus.OPENED,
+      ContractSignatureInvitationStatus.OTP_VERIFIED,
+    ];
+  }
+
+  private isActiveInvitationStatus(status: ContractSignatureInvitationStatus) {
+    return this.getActiveInvitationStatuses().includes(status);
+  }
+
+  private async recordSignatureEvent(
+    input: RecordSignatureEventInput,
+    manager?: EntityManager,
+  ): Promise<void> {
+    const repository = manager
+      ? manager.getRepository(ContractSignatureEvent)
+      : this.signatureEventRepository;
+
+    await repository.save(
+      repository.create({
+        contractId: input.contractId,
+        invitationId: input.invitationId || null,
+        signatureId: input.signatureId || null,
+        eventType: input.eventType,
+        actorType: input.actorType,
+        actorUsername: input.actorUsername || null,
+        signerEmailMasked: this.maskEmail(input.signerEmail),
+        ipAddress: input.ipAddress || null,
+        userAgent: input.userAgent || null,
+        documentHash: input.documentHash || null,
+        note: input.note || null,
+        metadata: input.metadata || null,
+      }),
+    );
   }
 
   private appendInvitationAudit(
     invitation: ContractSignatureInvitation,
     action: string,
-    meta?: RequestMeta & { actorUsername?: string | null; note?: string | null },
+    meta?: RequestMeta & {
+      actorUsername?: string | null;
+      note?: string | null;
+    },
   ) {
     const event: ContractSignatureInvitationAuditEvent = {
       action,
@@ -208,6 +392,49 @@ export class SalesContractsService {
       ...(Array.isArray(invitation.auditTrail) ? invitation.auditTrail : []),
       event,
     ];
+  }
+
+  private async persistSignatureInvitation(
+    invitation: ContractSignatureInvitation,
+    manager?: EntityManager,
+  ): Promise<void> {
+    const contractId = invitation.contractId || invitation.contract?._id;
+    if (!contractId) {
+      throw new BadRequestException(
+        'Signature invitation is missing contract reference.',
+      );
+    }
+
+    invitation.contractId = contractId;
+    const repository = manager
+      ? manager.getRepository(ContractSignatureInvitation)
+      : this.signatureInvitationRepository;
+
+    await repository.update(
+      { _id: invitation._id },
+      {
+        contractId,
+        signerName: invitation.signerName,
+        signerTitle: invitation.signerTitle,
+        signerEmail: invitation.signerEmail,
+        status: invitation.status,
+        otpHash: invitation.otpHash,
+        otpExpiresAt: invitation.otpExpiresAt,
+        otpAttemptCount: invitation.otpAttemptCount,
+        expiresAt: invitation.expiresAt,
+        sentByUsername: invitation.sentByUsername,
+        sentAt: invitation.sentAt,
+        openedAt: invitation.openedAt,
+        verifiedAt: invitation.verifiedAt,
+        signedAt: invitation.signedAt,
+        revokedAt: invitation.revokedAt,
+        revokedByUsername: invitation.revokedByUsername,
+        revokeReason: invitation.revokeReason,
+        certificateNumber: invitation.certificateNumber,
+        certificateHash: invitation.certificateHash,
+        auditTrail: invitation.auditTrail,
+      },
+    );
   }
 
   private toInvitationResponse(
@@ -232,12 +459,15 @@ export class SalesContractsService {
     };
   }
 
-  private toSigningSessionResponse(invitation: ContractSignatureInvitation): SigningSessionResponse {
+  private toSigningSessionResponse(
+    invitation: ContractSignatureInvitation,
+  ): SigningSessionResponse {
     const contract = invitation.contract;
     return {
       invitation: {
         ...this.toInvitationResponse(invitation),
-        otpVerified: invitation.status === ContractSignatureInvitationStatus.OTP_VERIFIED,
+        otpVerified:
+          invitation.status === ContractSignatureInvitationStatus.OTP_VERIFIED,
       },
       contract: {
         _id: contract._id,
@@ -255,14 +485,16 @@ export class SalesContractsService {
         notes: contract.notes || null,
         items: (contract.items || []).map((item) => ({
           _id: item._id,
-          productName: item.product?.vietnameseName || item.product?.englishName || null,
+          productName:
+            item.product?.vietnameseName || item.product?.englishName || null,
           sku: item.product?.sku || null,
           quantity: Number(item.quantity || 0),
           unitPrice: Number(item.unitPrice || 0),
           totalPrice: Number(item.totalPrice || 0),
         })),
       },
-      documentHash: this.buildContractHash(contract),
+      documentHash:
+        contract.signatureDocumentHash || this.buildContractHash(contract),
     };
   }
 
@@ -277,6 +509,52 @@ export class SalesContractsService {
     ];
   }
 
+  private getContractSignatureRelations() {
+    return [
+      'buyer',
+      'items',
+      'items.product',
+      'signatures',
+      'signatureInvitations',
+    ];
+  }
+
+  private async findContractWithSignatureRelations(
+    manager: EntityManager,
+    recordId: string,
+  ): Promise<SalesContract> {
+    const contract = await manager.findOne(SalesContract, {
+      where: { _id: recordId },
+      relations: this.getContractSignatureRelations(),
+    });
+    if (!contract) throw new NotFoundException('Sales contract not found');
+    return contract;
+  }
+
+  private async findBuyerInvitations(
+    manager: EntityManager,
+    contractId: string,
+  ): Promise<ContractSignatureInvitation[]> {
+    return manager.find(ContractSignatureInvitation, {
+      where: { contractId, signerType: ContractSignerType.BUYER },
+    });
+  }
+
+  private getActiveBuyerInvitations(
+    invitations: ContractSignatureInvitation[] = [],
+  ): ContractSignatureInvitation[] {
+    return invitations
+      .filter(
+        (item) =>
+          item.signerType === ContractSignerType.BUYER &&
+          this.isActiveInvitationStatus(item.status),
+      )
+      .sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      );
+  }
+
   private async findInvitationByToken(
     token: string,
     manager?: EntityManager,
@@ -285,10 +563,32 @@ export class SalesContractsService {
     const repository = manager
       ? manager.getRepository(ContractSignatureInvitation)
       : this.signatureInvitationRepository;
+
+    if (lock) {
+      const lockedInvitation = await repository.findOne({
+        where: { tokenHash: this.hashSecret(token) },
+        lock: { mode: 'pessimistic_write' as const },
+      });
+
+      if (!lockedInvitation) {
+        throw new NotFoundException('Signature invitation not found.');
+      }
+
+      const invitationWithRelations = await repository.findOne({
+        where: { _id: lockedInvitation._id },
+        relations: this.getSignatureInvitationRelations(),
+      });
+
+      if (!invitationWithRelations) {
+        throw new NotFoundException('Signature invitation not found.');
+      }
+
+      return invitationWithRelations;
+    }
+
     const invitation = await repository.findOne({
       where: { tokenHash: this.hashSecret(token) },
       relations: this.getSignatureInvitationRelations(),
-      ...(lock ? { lock: { mode: 'pessimistic_write' as const } } : {}),
     });
 
     if (!invitation) {
@@ -306,16 +606,32 @@ export class SalesContractsService {
       throw new BadRequestException('Signature invitation has been revoked.');
     }
     if (invitation.status === ContractSignatureInvitationStatus.SIGNED) {
-      throw new BadRequestException('Signature invitation has already been signed.');
+      throw new BadRequestException(
+        'Signature invitation has already been signed.',
+      );
     }
-    if (invitation.status === ContractSignatureInvitationStatus.EXPIRED || invitation.expiresAt.getTime() < Date.now()) {
+    if (
+      invitation.status === ContractSignatureInvitationStatus.EXPIRED ||
+      invitation.expiresAt.getTime() < Date.now()
+    ) {
       if (invitation.status !== ContractSignatureInvitationStatus.EXPIRED) {
         invitation.status = ContractSignatureInvitationStatus.EXPIRED;
-        this.appendInvitationAudit(invitation, 'EXPIRED', { note: 'Invitation expired before signing' });
-        const repository = manager
-          ? manager.getRepository(ContractSignatureInvitation)
-          : this.signatureInvitationRepository;
-        await repository.save(invitation);
+        this.appendInvitationAudit(invitation, 'EXPIRED', {
+          note: 'Invitation expired before signing',
+        });
+        await this.persistSignatureInvitation(invitation, manager);
+        await this.recordSignatureEvent(
+          {
+            contractId: invitation.contractId,
+            invitationId: invitation._id,
+            eventType: ContractSignatureEventType.EXPIRED,
+            actorType: ContractSignatureActorType.SYSTEM,
+            signerEmail: invitation.signerEmail,
+            documentHash: invitation.contract?.signatureDocumentHash || null,
+            note: 'Invitation expired before signing',
+          },
+          manager,
+        );
       }
       throw new BadRequestException('Signature invitation has expired.');
     }
@@ -347,9 +663,142 @@ export class SalesContractsService {
     }
   }
 
-  private buildSignatureAuditPacket(contract: SalesContract): SignatureAuditPacket {
+  private async createBuyerSignatureInvitation(
+    input: CreateBuyerSignatureInvitationInput,
+  ): Promise<{
+    invitation: ContractSignatureInvitation;
+    signingUrl: string;
+    deliveryStatus: SignatureDeliveryStatus;
+  }> {
+    const now = new Date();
+    const rawToken = this.generateSigningToken();
+    const rawOtp = this.generateOtp();
+    const tokenHash = this.hashSecret(rawToken);
+    const invitation = input.manager.create(ContractSignatureInvitation, {
+      contractId: input.contract._id,
+      signerType: ContractSignerType.BUYER,
+      signerName: input.signerName,
+      signerTitle: input.signerTitle,
+      signerEmail: input.signerEmail,
+      status: ContractSignatureInvitationStatus.CREATED,
+      tokenHash,
+      otpHash: this.hashOtp(rawOtp, tokenHash),
+      otpExpiresAt: this.addMinutes(now, 15),
+      expiresAt: this.addDays(now, input.expiresInDays),
+      sentByUsername: input.actorUsername,
+      sentAt: now,
+      auditTrail: [],
+    });
+
+    this.appendInvitationAudit(invitation, 'INVITATION_CREATED', {
+      actorUsername: input.actorUsername,
+      note: input.note || `Invitation expires in ${input.expiresInDays} day(s)`,
+    });
+
+    const savedInvitation = await input.manager.save(invitation);
+    await this.recordSignatureEvent(
+      {
+        contractId: input.contract._id,
+        invitationId: savedInvitation._id,
+        eventType: ContractSignatureEventType.INVITATION_CREATED,
+        actorType: ContractSignatureActorType.INTERNAL,
+        actorUsername: input.actorUsername,
+        signerEmail: savedInvitation.signerEmail,
+        documentHash: input.documentHash,
+        note: input.note || null,
+        metadata: { expiresInDays: input.expiresInDays },
+      },
+      input.manager,
+    );
+
+    const signingUrl = this.buildFrontendSigningUrl(rawToken);
+    const deliveryStatus = await this.deliverSignatureInvitation(
+      savedInvitation,
+      input.contract,
+      signingUrl,
+      rawOtp,
+    );
+    const deliveryEventType: Record<
+      SignatureDeliveryStatus,
+      ContractSignatureEventType
+    > = {
+      EMAIL_SENT: ContractSignatureEventType.EMAIL_SENT,
+      EMAIL_FAILED: ContractSignatureEventType.EMAIL_FAILED,
+      EMAIL_SKIPPED: ContractSignatureEventType.EMAIL_SKIPPED,
+    };
+
+    savedInvitation.status = ContractSignatureInvitationStatus.SENT;
+    this.appendInvitationAudit(savedInvitation, deliveryStatus, {
+      actorUsername: input.actorUsername,
+      note:
+        deliveryStatus === 'EMAIL_SENT'
+          ? 'Signer invitation email sent'
+          : 'Email delivery failed or SMTP not configured',
+    });
+    await this.persistSignatureInvitation(savedInvitation, input.manager);
+    await this.recordSignatureEvent(
+      {
+        contractId: input.contract._id,
+        invitationId: savedInvitation._id,
+        eventType: deliveryEventType[deliveryStatus],
+        actorType:
+          deliveryStatus === 'EMAIL_SKIPPED'
+            ? ContractSignatureActorType.SYSTEM
+            : ContractSignatureActorType.INTERNAL,
+        actorUsername:
+          deliveryStatus === 'EMAIL_SKIPPED' ? null : input.actorUsername,
+        signerEmail: savedInvitation.signerEmail,
+        documentHash: input.documentHash,
+        note:
+          deliveryStatus === 'EMAIL_SENT'
+            ? 'Signer invitation email sent'
+            : 'Email delivery failed or SMTP not configured',
+        metadata: { deliveryStatus },
+      },
+      input.manager,
+    );
+
+    return { invitation: savedInvitation, signingUrl, deliveryStatus };
+  }
+
+  private async revokeSignatureInvitationEntity(
+    manager: EntityManager,
+    invitation: ContractSignatureInvitation,
+    actorUsername: string,
+    reason: string,
+    documentHash?: string | null,
+  ): Promise<void> {
+    invitation.status = ContractSignatureInvitationStatus.REVOKED;
+    invitation.revokedAt = new Date();
+    invitation.revokedByUsername = actorUsername;
+    invitation.revokeReason = reason;
+    this.appendInvitationAudit(invitation, 'REVOKED', {
+      actorUsername,
+      note: reason,
+    });
+    await this.persistSignatureInvitation(invitation, manager);
+    await this.recordSignatureEvent(
+      {
+        contractId: invitation.contractId,
+        invitationId: invitation._id,
+        eventType: ContractSignatureEventType.REVOKED,
+        actorType: ContractSignatureActorType.INTERNAL,
+        actorUsername,
+        signerEmail: invitation.signerEmail,
+        documentHash: documentHash || null,
+        note: reason,
+      },
+      manager,
+    );
+  }
+
+  private buildSignatureAuditPacket(
+    contract: SalesContract,
+    signatureEvents: ContractSignatureEvent[] = [],
+  ): SignatureAuditPacket {
     const invitations = [...(contract.signatureInvitations || [])].sort(
-      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+      (a, b) =>
+        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
     );
     const signatures = [...(contract.signatures || [])].sort(
       (a, b) => new Date(a.signedAt).getTime() - new Date(b.signedAt).getTime(),
@@ -371,32 +820,66 @@ export class SalesContractsService {
       });
     }
 
-    for (const invitation of invitations) {
-      for (const event of invitation.auditTrail || []) {
+    if (signatureEvents.length) {
+      const eventSignatureIds = new Set(
+        signatureEvents
+          .map((event) => event.signatureId)
+          .filter((signatureId): signatureId is string => Boolean(signatureId)),
+      );
+      for (const event of signatureEvents) {
         timeline.push({
-          action: event.action,
-          at: event.at,
-          actor: event.actorUsername || null,
+          action: event.eventType,
+          at: event.createdAt,
+          actor: event.actorUsername || event.actorType || null,
           ipAddress: event.ipAddress || null,
           userAgent: event.userAgent || null,
           note: event.note || null,
         });
       }
+      for (const signature of signatures.filter(
+        (item) => !eventSignatureIds.has(item._id),
+      )) {
+        timeline.push({
+          action: `${signature.signerType}_SIGNED`,
+          at: signature.signedAt,
+          actor: signature.signedByUsername,
+          ipAddress: signature.ipAddress,
+          userAgent: signature.userAgent,
+          note: signature.signerName,
+        });
+      }
+    } else {
+      for (const invitation of invitations) {
+        for (const event of invitation.auditTrail || []) {
+          timeline.push({
+            action: event.action,
+            at: event.at,
+            actor: event.actorUsername || null,
+            ipAddress: event.ipAddress || null,
+            userAgent: event.userAgent || null,
+            note: event.note || null,
+          });
+        }
+      }
+
+      for (const signature of signatures) {
+        timeline.push({
+          action: `${signature.signerType}_SIGNED`,
+          at: signature.signedAt,
+          actor: signature.signedByUsername,
+          ipAddress: signature.ipAddress,
+          userAgent: signature.userAgent,
+          note: signature.signerName,
+        });
+      }
     }
 
-    for (const signature of signatures) {
-      timeline.push({
-        action: `${signature.signerType}_SIGNED`,
-        at: signature.signedAt,
-        actor: signature.signedByUsername,
-        ipAddress: signature.ipAddress,
-        userAgent: signature.userAgent,
-        note: signature.signerName,
-      });
-    }
-
-    timeline.sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
-    const signedInvitation = [...invitations].reverse().find((item) => item.status === ContractSignatureInvitationStatus.SIGNED);
+    timeline.sort(
+      (a, b) => new Date(a.at).getTime() - new Date(b.at).getTime(),
+    );
+    const signedInvitation = [...invitations]
+      .reverse()
+      .find((item) => item.status === ContractSignatureInvitationStatus.SIGNED);
     const packetPayload = {
       contractId: contract._id,
       contractNumber: contract.contractNumber,
@@ -445,14 +928,24 @@ export class SalesContractsService {
         ipAddress: signature.ipAddress,
         userAgent: signature.userAgent,
       })),
-      invitations: invitations.map((invitation) => this.toInvitationResponse(invitation)),
+      invitations: invitations.map((invitation) =>
+        this.toInvitationResponse(invitation),
+      ),
       timeline,
     };
   }
 
   private buildContractHash(contract: SalesContract) {
     const itemPayload = (contract.items || [])
-      .map((item) => `${item.productId}:${item.quantity}:${item.unitPrice}:${item.totalPrice}`)
+      .sort((a, b) =>
+        String(a._id || a.productId).localeCompare(
+          String(b._id || b.productId),
+        ),
+      )
+      .map(
+        (item) =>
+          `${item._id || ''}:${item.productId}:${item.quantity}:${item.unitPrice}:${item.totalPrice}`,
+      )
       .join('|');
 
     return createHash('sha256')
@@ -467,16 +960,25 @@ export class SalesContractsService {
           contract.totalAmountVnd,
           contract.paymentTerms || '',
           contract.deliveryDate || '',
+          contract.pol_port_id || '',
+          contract.pol || '',
+          contract.pod_port_id || '',
+          contract.pod || '',
+          contract.bookingNumber || '',
+          contract.notes || '',
           itemPayload,
         ].join('::'),
       )
       .digest('hex');
   }
 
-  private async applyPricingPolicies(items: any[], contractData: any) {
+  private async applyPricingPolicies(
+    items: SalesContractItemDto[],
+    contractData: SalesContractPricingContext,
+  ): Promise<SalesContractItemDto[]> {
     const incoterm = contractData.incoterm || Incoterm.FOB;
     const currency = contractData.currencyCode || 'USD';
-    const normalizedItems: any[] = [];
+    const normalizedItems: SalesContractItemDto[] = [];
 
     for (const item of items || []) {
       if (Number(item.unitPrice || 0) > 0) {
@@ -490,6 +992,8 @@ export class SalesContractsService {
         quantity: Number(item.quantity),
         incoterm,
         currency,
+        origin_port_id: contractData.pol_port_id || undefined,
+        destination_port_id: contractData.pod_port_id || undefined,
       });
 
       normalizedItems.push({
@@ -501,26 +1005,63 @@ export class SalesContractsService {
     return normalizedItems;
   }
 
-  calculate(dto: any) {
+  calculate(dto: CalculateSalesContractDto) {
     return this.incotermsService.calculateTotal(dto);
   }
 
-  async create(dto: any, user: any) {
-    const existing = await this.contractRepository.findOne({ where: { contractNumber: dto.contractNumber } });
+  async create(dto: CreateSalesContractDto, user: RequestUser) {
+    const existing = await this.contractRepository.findOne({
+      where: { contractNumber: dto.contractNumber },
+    });
     if (existing) {
-      throw new ConflictException(`Sales contract number already exists: ${dto.contractNumber}`);
+      throw new ConflictException(
+        `Sales contract number already exists: ${dto.contractNumber}`,
+      );
     }
 
     return this.dataSource.transaction(async (manager) => {
       const { items, ...data } = dto;
-      const normalizedItems = await this.applyPricingPolicies(items || [], data);
+      let sourcePi: ProformaInvoice | null = null;
 
       if (data.proformaInvoiceId) {
-        const pi = await manager.findOne(ProformaInvoice, { where: { _id: data.proformaInvoiceId } });
-        if (pi?.salesContractId) {
-          throw new ConflictException(`Proforma Invoice ${pi.piNumber} already has a sales contract.`);
+        sourcePi = await manager.findOne(ProformaInvoice, {
+          where: { _id: data.proformaInvoiceId },
+        });
+        if (sourcePi?.salesContractId) {
+          throw new ConflictException(
+            `Proforma Invoice ${sourcePi.piNumber} already has a sales contract.`,
+          );
         }
       }
+
+      if (!data.paymentTerms) {
+        if (sourcePi?.paymentTerms) {
+          data.paymentTerms = sourcePi.paymentTerms;
+        } else if (data.buyerId) {
+          const partner = await manager.findOne(Partner, {
+            where: { _id: data.buyerId },
+          });
+          if (partner?.defaultPaymentTerm) {
+            data.paymentTerms = partner.defaultPaymentTerm;
+          }
+        }
+      }
+
+      Object.assign(
+        data,
+        await this.resolveContractPorts({
+          pol_port_id:
+            data.pol_port_id ?? sourcePi?.portOfLoading_port_id ?? undefined,
+          pol: data.pol ?? sourcePi?.portOfLoading ?? undefined,
+          pod_port_id:
+            data.pod_port_id ?? sourcePi?.portOfDischarge_port_id ?? undefined,
+          pod: data.pod ?? sourcePi?.portOfDischarge ?? undefined,
+        }),
+      );
+      const normalizedItems = await this.applyPricingPolicies(
+        items || [],
+        data,
+      );
 
       const contract = manager.create(SalesContract, {
         ...data,
@@ -528,21 +1069,23 @@ export class SalesContractsService {
         signatureStatus: SalesContractSignatureStatus.NOT_SENT,
       });
 
-      const { totalAmount, totalAmountVnd } = this.incotermsService.calculateTotal({
-        ...data,
-        items: normalizedItems,
-      });
+      const { totalAmount, totalAmountVnd } =
+        this.incotermsService.calculateTotal({
+          ...data,
+          items: normalizedItems,
+        });
       contract.totalAmount = totalAmount;
       contract.totalAmountVnd = totalAmountVnd;
 
       const saved = await manager.save(contract);
 
       if (normalizedItems.length > 0) {
-        const contractItems = normalizedItems.map((item: any) =>
+        const contractItems = normalizedItems.map((item) =>
           manager.create(SalesContractItem, {
             ...item,
             salesContractId: saved._id,
-            totalPrice: Number(item.quantity || 0) * Number(item.unitPrice || 0),
+            totalPrice:
+              Number(item.quantity || 0) * Number(item.unitPrice || 0),
           }),
         );
 
@@ -559,29 +1102,49 @@ export class SalesContractsService {
         currency: saved.currencyCode,
         exchangeRate: saved.exchangeRate,
         createdByUsername: this.getActorUsername(user),
+        origin_port_id: saved.pol_port_id,
+        destination_port_id: saved.pod_port_id,
         items: normalizedItems,
       });
 
       if (data.proformaInvoiceId) {
-        await manager.update(ProformaInvoice, { _id: data.proformaInvoiceId }, { salesContractId: saved._id });
+        await manager.update(
+          ProformaInvoice,
+          { _id: data.proformaInvoiceId },
+          { salesContractId: saved._id },
+        );
       }
 
       return manager.findOne(SalesContract, {
         where: { _id: saved._id },
-        relations: ['buyer', 'items', 'items.product', 'signatures', 'signatureInvitations'],
+        relations: [
+          'buyer',
+          'items',
+          'items.product',
+          'signatures',
+          'signatureInvitations',
+        ],
       });
     });
   }
 
-  async findAll(query: any) {
-    const current = +query.current || 1;
-    const pageSize = +query.pageSize || 10;
+  async findAll(query: SalesContractListQuery) {
+    const current = Number(query.current) || 1;
+    const pageSize = Number(query.pageSize) || 10;
     const filters = { ...query };
-    ['current', 'pageSize', 'limit', 'skip'].forEach((key) => delete filters[key]);
+    ['current', 'pageSize', 'limit', 'skip'].forEach(
+      (key) => delete filters[key],
+    );
 
     const [results, total] = await this.contractRepository.findAndCount({
-      where: filters,
-      relations: ['buyer', 'items', 'items.product', 'signatures', 'signatureInvitations'],
+      where: filters as FindOptionsWhere<SalesContract>,
+      relations: [
+        'buyer',
+        'items',
+        'items.product',
+        'signatures',
+        'signatureInvitations',
+      ],
       skip: (current - 1) * pageSize,
       take: pageSize,
       order: { createdAt: 'DESC' },
@@ -601,26 +1164,100 @@ export class SalesContractsService {
   async findOne(recordId: string) {
     const contract = await this.contractRepository.findOne({
       where: { _id: recordId },
-      relations: ['buyer', 'items', 'items.product', 'signatures', 'signatureInvitations'],
+      relations: [
+        'buyer',
+        'items',
+        'items.product',
+        'signatures',
+        'signatureInvitations',
+      ],
       order: { signatures: { signedAt: 'ASC' } },
     });
     if (!contract) throw new NotFoundException('Sales contract not found');
+
+    if (contract.approvedByUsername) {
+      const user = await this.usersService.findByUsername(
+        contract.approvedByUsername,
+      );
+      if (user) {
+        (contract as any).approvedByName = user.name;
+      }
+    }
+
+    if (contract.submittedForApprovalByUsername) {
+      const user = await this.usersService.findByUsername(
+        contract.submittedForApprovalByUsername,
+      );
+      if (user) {
+        (contract as any).submittedForApprovalByName = user.name;
+      }
+    }
+
     return contract;
   }
 
-  async update(recordId: string, dto: any) {
+  async update(recordId: string, dto: UpdateSalesContractDto) {
     return this.dataSource.transaction(async (manager) => {
-      const contract = await manager.findOne(SalesContract, { where: { _id: recordId } });
+      const contract = await manager.findOne(SalesContract, {
+        where: { _id: recordId },
+      });
       if (!contract) throw new NotFoundException('Sales contract not found');
-      if (![SalesContractStatus.DRAFT, SalesContractStatus.REJECTED].includes(contract.status)) {
-        throw new BadRequestException('Only DRAFT or REJECTED sales contracts can be updated.');
+      if (
+        ![SalesContractStatus.DRAFT, SalesContractStatus.REJECTED].includes(
+          contract.status,
+        )
+      ) {
+        throw new BadRequestException(
+          'Only DRAFT or REJECTED sales contracts can be updated.',
+        );
       }
 
       const { items, ...data } = dto;
-      const calculationInput = { ...contract, ...data };
-      calculationInput.items = items || await manager.find(SalesContractItem, { where: { salesContractId: recordId } });
+      const hasPolPortId = Object.prototype.hasOwnProperty.call(
+        data,
+        'pol_port_id',
+      );
+      const hasPol = Object.prototype.hasOwnProperty.call(data, 'pol');
+      const hasPodPortId = Object.prototype.hasOwnProperty.call(
+        data,
+        'pod_port_id',
+      );
+      const hasPod = Object.prototype.hasOwnProperty.call(data, 'pod');
+      Object.assign(
+        data,
+        await this.resolveContractPortsForUpdate({
+          pol_port_id: data.pol_port_id,
+          pol: data.pol,
+          pod_port_id: data.pod_port_id,
+          pod: data.pod,
+          currentPolPortId: contract.pol_port_id,
+          currentPol: contract.pol,
+          currentPodPortId: contract.pod_port_id,
+          currentPod: contract.pod,
+          hasPolPortId,
+          hasPol,
+          hasPodPortId,
+          hasPod,
+        }),
+      );
+      const pricingContext = { ...contract, ...data };
+      const existingItems = items
+        ? []
+        : await manager.find(SalesContractItem, {
+            where: { salesContractId: recordId },
+          });
+      const calculationItems = items
+        ? await this.applyPricingPolicies(items, pricingContext)
+        : existingItems.map((item) => ({
+            quantity: Number(item.quantity || 0),
+            unitPrice: Number(item.unitPrice || 0),
+          }));
 
-      const { totalAmount, totalAmountVnd } = this.incotermsService.calculateTotal(calculationInput);
+      const { totalAmount, totalAmountVnd } =
+        this.incotermsService.calculateTotal({
+          ...pricingContext,
+          items: calculationItems,
+        });
 
       Object.assign(contract, {
         ...data,
@@ -641,26 +1278,56 @@ export class SalesContractsService {
 
       if (items) {
         await manager.delete(SalesContractItem, { salesContractId: recordId });
-        const contractItems = items.map((item: any) =>
+        const contractItems = calculationItems.map((item) =>
           manager.create(SalesContractItem, {
             ...item,
             salesContractId: saved._id,
-            totalPrice: Number(item.quantity || 0) * Number(item.unitPrice || 0),
+            totalPrice:
+              Number(item.quantity || 0) * Number(item.unitPrice || 0),
           }),
         );
         await manager.save(SalesContractItem, contractItems);
       }
 
-      if (data.logisticsPartnerId || data.bookingNumber) {
-        const updateData: any = {};
-        if (data.logisticsPartnerId) updateData.logisticsPartnerId = data.logisticsPartnerId;
+      if (
+        data.logisticsPartnerId ||
+        data.bookingNumber ||
+        data.pol !== undefined ||
+        data.pod !== undefined ||
+        data.pol_port_id !== undefined ||
+        data.pod_port_id !== undefined
+      ) {
+        const updateData: {
+          logisticsPartnerId?: string | null;
+          bookingNumber?: string | null;
+          pol?: string | null;
+          pod?: string | null;
+          pol_port_id?: string | null;
+          pod_port_id?: string | null;
+        } = {};
+        if (data.logisticsPartnerId)
+          updateData.logisticsPartnerId = data.logisticsPartnerId;
         if (data.bookingNumber) updateData.bookingNumber = data.bookingNumber;
-        await manager.getRepository('Shipment').update({ salesContractId: recordId }, updateData);
+        if (data.pol !== undefined) updateData.pol = data.pol;
+        if (data.pod !== undefined) updateData.pod = data.pod;
+        if (data.pol_port_id !== undefined)
+          updateData.pol_port_id = data.pol_port_id;
+        if (data.pod_port_id !== undefined)
+          updateData.pod_port_id = data.pod_port_id;
+        await manager
+          .getRepository('Shipment')
+          .update({ salesContractId: recordId }, updateData);
       }
 
       return manager.findOne(SalesContract, {
         where: { _id: saved._id },
-        relations: ['buyer', 'items', 'items.product', 'signatures', 'signatureInvitations'],
+        relations: [
+          'buyer',
+          'items',
+          'items.product',
+          'signatures',
+          'signatureInvitations',
+        ],
       });
     });
   }
@@ -668,10 +1335,18 @@ export class SalesContractsService {
   async submitForApproval(recordId: string, user?: { username?: string }) {
     const contract = await this.findOne(recordId);
     if (contract.status === SalesContractStatus.PENDING_APPROVAL) {
-      throw new BadRequestException('Sales contract is already pending approval.');
+      throw new BadRequestException(
+        'Sales contract is already pending approval.',
+      );
     }
-    if (![SalesContractStatus.DRAFT, SalesContractStatus.REJECTED].includes(contract.status)) {
-      throw new BadRequestException('Only DRAFT or REJECTED sales contracts can be submitted for approval.');
+    if (
+      ![SalesContractStatus.DRAFT, SalesContractStatus.REJECTED].includes(
+        contract.status,
+      )
+    ) {
+      throw new BadRequestException(
+        'Only DRAFT or REJECTED sales contracts can be submitted for approval.',
+      );
     }
 
     const matchingRule = await this.approvalMatrixService.findMatchingRule(
@@ -724,9 +1399,16 @@ export class SalesContractsService {
     };
   }
 
-  async completeApprovalWorkflow(recordId: string, requestId: string, username: string) {
-    const contract = await this.contractRepository.findOne({ where: { _id: recordId } });
-    if (!contract || contract.status !== SalesContractStatus.PENDING_APPROVAL) return contract;
+  async completeApprovalWorkflow(
+    recordId: string,
+    requestId: string,
+    username: string,
+  ) {
+    const contract = await this.contractRepository.findOne({
+      where: { _id: recordId },
+    });
+    if (!contract || contract.status !== SalesContractStatus.PENDING_APPROVAL)
+      return contract;
 
     contract.status = SalesContractStatus.APPROVED;
     contract.approvalWorkflowRequestId = requestId;
@@ -738,9 +1420,17 @@ export class SalesContractsService {
     return this.contractRepository.save(contract);
   }
 
-  async rejectApprovalWorkflow(recordId: string, requestId: string, username: string, reason?: string | null) {
-    const contract = await this.contractRepository.findOne({ where: { _id: recordId } });
-    if (!contract || contract.status !== SalesContractStatus.PENDING_APPROVAL) return contract;
+  async rejectApprovalWorkflow(
+    recordId: string,
+    requestId: string,
+    username: string,
+    reason?: string | null,
+  ) {
+    const contract = await this.contractRepository.findOne({
+      where: { _id: recordId },
+    });
+    if (!contract || contract.status !== SalesContractStatus.PENDING_APPROVAL)
+      return contract;
 
     contract.status = SalesContractStatus.REJECTED;
     contract.approvalWorkflowRequestId = requestId;
@@ -764,14 +1454,19 @@ export class SalesContractsService {
     ];
 
     if (contract.status === SalesContractStatus.PENDING_CANCEL_APPROVAL) {
-      throw new BadRequestException('Sales contract is already pending cancel approval.');
+      throw new BadRequestException(
+        'Sales contract is already pending cancel approval.',
+      );
     }
     if (!cancellableStatuses.includes(contract.status)) {
-      throw new BadRequestException('Only approved/signed/confirmed contracts can request cancellation.');
+      throw new BadRequestException(
+        'Only approved/signed/confirmed contracts can request cancellation.',
+      );
     }
 
     const reason = dto.reason?.trim();
-    if (!reason) throw new BadRequestException('Cancellation reason is required.');
+    if (!reason)
+      throw new BadRequestException('Cancellation reason is required.');
 
     const matchingRule = await this.approvalMatrixService.findMatchingRule(
       ApprovalDocumentType.SALES_CONTRACT_CANCEL,
@@ -836,18 +1531,31 @@ export class SalesContractsService {
         where: { _id: recordId },
         lock: { mode: 'pessimistic_write' },
       });
-      if (!contract || contract.status !== SalesContractStatus.PENDING_CANCEL_APPROVAL) return contract;
+      if (
+        !contract ||
+        contract.status !== SalesContractStatus.PENDING_CANCEL_APPROVAL
+      )
+        return contract;
 
-      contract.items = await manager.find(SalesContractItem, { where: { salesContractId: recordId } });
+      contract.items = await manager.find(SalesContractItem, {
+        where: { salesContractId: recordId },
+      });
       const previousStatus =
         typeof metadata?.previousStatus === 'string' &&
-        Object.values(SalesContractStatus).includes(metadata.previousStatus as SalesContractStatus)
+        Object.values(SalesContractStatus).includes(
+          metadata.previousStatus as SalesContractStatus,
+        )
           ? (metadata.previousStatus as SalesContractStatus)
           : null;
 
       if (previousStatus === SalesContractStatus.CONFIRMED) {
         for (const item of contract.items) {
-          await this.inventoryService.releaseStock(item.productId, item.quantity, contract._id, manager);
+          await this.inventoryService.releaseStock(
+            item.productId,
+            item.quantity,
+            contract._id,
+            manager,
+          );
         }
       }
 
@@ -874,12 +1582,20 @@ export class SalesContractsService {
     reason?: string | null,
     metadata?: Record<string, unknown>,
   ) {
-    const contract = await this.contractRepository.findOne({ where: { _id: recordId } });
-    if (!contract || contract.status !== SalesContractStatus.PENDING_CANCEL_APPROVAL) return contract;
+    const contract = await this.contractRepository.findOne({
+      where: { _id: recordId },
+    });
+    if (
+      !contract ||
+      contract.status !== SalesContractStatus.PENDING_CANCEL_APPROVAL
+    )
+      return contract;
 
     const previousStatus =
       typeof metadata?.previousStatus === 'string' &&
-      Object.values(SalesContractStatus).includes(metadata.previousStatus as SalesContractStatus)
+      Object.values(SalesContractStatus).includes(
+        metadata.previousStatus as SalesContractStatus,
+      )
         ? (metadata.previousStatus as SalesContractStatus)
         : SalesContractStatus.APPROVED;
 
@@ -887,7 +1603,8 @@ export class SalesContractsService {
     contract.approvalWorkflowRequestId = requestId;
     contract.rejectedByUsername = username;
     contract.rejectedAt = new Date();
-    contract.rejectionReason = reason || 'Cancel request rejected by approval workflow';
+    contract.rejectionReason =
+      reason || 'Cancel request rejected by approval workflow';
     return this.contractRepository.save(contract);
   }
 
@@ -897,92 +1614,104 @@ export class SalesContractsService {
     user?: { username?: string },
   ) {
     return this.dataSource.transaction(async (manager) => {
-      const contract = await manager.findOne(SalesContract, {
+      const lockedContract = await manager.findOne(SalesContract, {
         where: { _id: recordId },
-        relations: ['buyer', 'items', 'items.product', 'signatures', 'signatureInvitations'],
         lock: { mode: 'pessimistic_write' },
       });
-      if (!contract) throw new NotFoundException('Sales contract not found');
+      if (!lockedContract)
+        throw new NotFoundException('Sales contract not found');
+
+      const contract = await this.findContractWithSignatureRelations(
+        manager,
+        lockedContract._id,
+      );
       if (contract.status !== SalesContractStatus.APPROVED) {
-        throw new BadRequestException('Only APPROVED sales contracts can be sent for signature.');
+        throw new BadRequestException(
+          'Only APPROVED sales contracts can be sent for signature.',
+        );
       }
 
-      const signerName = dto.signerName?.trim() || contract.buyer?.contactName || contract.buyer?.name;
+      const signerName =
+        dto.signerName?.trim() ||
+        contract.buyer?.contactName ||
+        contract.buyer?.name;
       const signerEmail = dto.signerEmail?.trim() || contract.buyer?.email;
-      if (!signerName) throw new BadRequestException('Buyer signer name is required.');
-      if (!signerEmail) throw new BadRequestException('Buyer signer email is required for secure signing invitation.');
+      if (!signerName)
+        throw new BadRequestException('Buyer signer name is required.');
+      if (!signerEmail)
+        throw new BadRequestException(
+          'Buyer signer email is required for secure signing invitation.',
+        );
 
-      const activeStatuses = [
-        ContractSignatureInvitationStatus.CREATED,
-        ContractSignatureInvitationStatus.SENT,
-        ContractSignatureInvitationStatus.OPENED,
-        ContractSignatureInvitationStatus.OTP_VERIFIED,
-      ];
-      const previousInvitations = await manager.find(ContractSignatureInvitation, {
-        where: { contractId: recordId, signerType: ContractSignerType.BUYER },
-      });
-      for (const invitation of previousInvitations.filter((item) => activeStatuses.includes(item.status))) {
-        invitation.status = ContractSignatureInvitationStatus.REVOKED;
-        invitation.revokedAt = new Date();
-        invitation.revokedByUsername = this.getActorUsername(user);
-        invitation.revokeReason = 'Superseded by a new buyer signature invitation';
-        this.appendInvitationAudit(invitation, 'REVOKED', {
-          actorUsername: this.getActorUsername(user),
-          note: invitation.revokeReason,
-        });
-        await manager.save(invitation);
+      const actorUsername = this.getActorUsername(user);
+      const documentHash = this.buildContractHash(contract);
+      const previousInvitations = await this.findBuyerInvitations(
+        manager,
+        recordId,
+      );
+      for (const invitation of this.getActiveBuyerInvitations(
+        previousInvitations,
+      )) {
+        await this.revokeSignatureInvitationEntity(
+          manager,
+          invitation,
+          actorUsername,
+          'Superseded by a new buyer signature invitation',
+          documentHash,
+        );
       }
 
       const now = new Date();
-      const rawToken = this.generateSigningToken();
-      const rawOtp = this.generateOtp();
-      const tokenHash = this.hashSecret(rawToken);
       const expiresInDays = dto.expiresInDays || 7;
-      const invitation = manager.create(ContractSignatureInvitation, {
-        contractId: recordId,
-        signerType: ContractSignerType.BUYER,
+      await this.recordSignatureEvent(
+        {
+          contractId: contract._id,
+          eventType: ContractSignatureEventType.CONTRACT_FROZEN,
+          actorType: ContractSignatureActorType.INTERNAL,
+          actorUsername,
+          signerEmail,
+          documentHash,
+          note: 'Sales contract snapshot frozen before buyer signature invitation',
+        },
+        manager,
+      );
+
+      const {
+        invitation: savedInvitation,
+        signingUrl,
+        deliveryStatus,
+      } = await this.createBuyerSignatureInvitation({
+        manager,
+        contract,
         signerName,
         signerTitle: dto.signerTitle?.trim() || 'Authorized Representative',
         signerEmail,
-        status: ContractSignatureInvitationStatus.CREATED,
-        tokenHash,
-        otpHash: this.hashOtp(rawOtp, tokenHash),
-        otpExpiresAt: this.addMinutes(now, 15),
-        expiresAt: this.addDays(now, expiresInDays),
-        sentByUsername: this.getActorUsername(user),
-        sentAt: now,
-        auditTrail: [],
+        actorUsername,
+        expiresInDays,
+        documentHash,
       });
-      this.appendInvitationAudit(invitation, 'INVITATION_CREATED', {
-        actorUsername: this.getActorUsername(user),
-        note: `Invitation expires in ${expiresInDays} day(s)`,
-      });
-
-      const savedInvitation = await manager.save(invitation);
-      const signingUrl = this.buildFrontendSigningUrl(rawToken);
-      const deliveryStatus = await this.deliverSignatureInvitation(
-        savedInvitation,
-        contract,
-        signingUrl,
-        rawOtp,
-      );
-      savedInvitation.status = ContractSignatureInvitationStatus.SENT;
-      this.appendInvitationAudit(savedInvitation, deliveryStatus, {
-        actorUsername: this.getActorUsername(user),
-        note: deliveryStatus === 'EMAIL_SENT' ? 'Signer invitation email sent' : 'Email delivery failed or SMTP not configured',
-      });
-      await manager.save(savedInvitation);
 
       contract.status = SalesContractStatus.PENDING_BUYER_SIGNATURE;
       contract.signatureStatus = SalesContractSignatureStatus.PENDING_BUYER;
-      contract.signatureRequestedByUsername = this.getActorUsername(user);
+      contract.signatureRequestedByUsername = actorUsername;
       contract.signatureRequestedAt = now;
-      await manager.save(contract);
+      contract.signatureDocumentHash = documentHash;
+      await manager.update(
+        SalesContract,
+        { _id: contract._id },
+        {
+          status: contract.status,
+          signatureStatus: contract.signatureStatus,
+          signatureRequestedByUsername: contract.signatureRequestedByUsername,
+          signatureRequestedAt: contract.signatureRequestedAt,
+          signatureDocumentHash: contract.signatureDocumentHash,
+        },
+      );
 
-      const refreshed = await manager.findOne(SalesContract, {
-        where: { _id: recordId },
-        relations: ['buyer', 'items', 'items.product', 'signatures', 'signatureInvitations'],
-      });
+      const refreshed = await this.findContractWithSignatureRelations(
+        manager,
+        recordId,
+      );
 
       return {
         contract: refreshed,
@@ -992,7 +1721,10 @@ export class SalesContractsService {
     });
   }
 
-  async getSigningSession(token: string, meta?: RequestMeta): Promise<SigningSessionResponse> {
+  async getSigningSession(
+    token: string,
+    meta?: RequestMeta,
+  ): Promise<SigningSessionResponse> {
     const invitation = await this.findInvitationByToken(token);
     await this.ensureInvitationUsable(invitation);
 
@@ -1004,7 +1736,18 @@ export class SalesContractsService {
         userAgent: meta?.userAgent || null,
         note: 'Buyer opened signing portal',
       });
-      await this.signatureInvitationRepository.save(invitation);
+      await this.persistSignatureInvitation(invitation);
+      await this.recordSignatureEvent({
+        contractId: invitation.contractId,
+        invitationId: invitation._id,
+        eventType: ContractSignatureEventType.OPENED,
+        actorType: ContractSignatureActorType.BUYER,
+        signerEmail: invitation.signerEmail,
+        ipAddress: meta?.ipAddress || null,
+        userAgent: meta?.userAgent || null,
+        documentHash: invitation.contract?.signatureDocumentHash || null,
+        note: 'Buyer opened signing portal',
+      });
     }
 
     return this.toSigningSessionResponse(invitation);
@@ -1022,15 +1765,29 @@ export class SalesContractsService {
       return this.toSigningSessionResponse(invitation);
     }
     if (invitation.otpAttemptCount >= 5) {
-      throw new BadRequestException('OTP attempt limit exceeded. Please request a new signing invitation.');
+      throw new BadRequestException(
+        'OTP attempt limit exceeded. Please request a new signing invitation.',
+      );
     }
     if (invitation.otpExpiresAt.getTime() < Date.now()) {
       this.appendInvitationAudit(invitation, 'OTP_EXPIRED', {
         ipAddress: meta?.ipAddress || null,
         userAgent: meta?.userAgent || null,
       });
-      await this.signatureInvitationRepository.save(invitation);
-      throw new BadRequestException('OTP has expired. Please request a new signing invitation.');
+      await this.persistSignatureInvitation(invitation);
+      await this.recordSignatureEvent({
+        contractId: invitation.contractId,
+        invitationId: invitation._id,
+        eventType: ContractSignatureEventType.OTP_EXPIRED,
+        actorType: ContractSignatureActorType.BUYER,
+        signerEmail: invitation.signerEmail,
+        ipAddress: meta?.ipAddress || null,
+        userAgent: meta?.userAgent || null,
+        documentHash: invitation.contract?.signatureDocumentHash || null,
+      });
+      throw new BadRequestException(
+        'OTP has expired. Please request a new signing invitation.',
+      );
     }
 
     const incomingHash = this.hashOtp(dto.otp.trim(), invitation.tokenHash);
@@ -1041,7 +1798,19 @@ export class SalesContractsService {
         userAgent: meta?.userAgent || null,
         note: `Attempt ${invitation.otpAttemptCount}/5`,
       });
-      await this.signatureInvitationRepository.save(invitation);
+      await this.persistSignatureInvitation(invitation);
+      await this.recordSignatureEvent({
+        contractId: invitation.contractId,
+        invitationId: invitation._id,
+        eventType: ContractSignatureEventType.OTP_FAILED,
+        actorType: ContractSignatureActorType.BUYER,
+        signerEmail: invitation.signerEmail,
+        ipAddress: meta?.ipAddress || null,
+        userAgent: meta?.userAgent || null,
+        documentHash: invitation.contract?.signatureDocumentHash || null,
+        note: `Attempt ${invitation.otpAttemptCount}/5`,
+        metadata: { otpAttemptCount: invitation.otpAttemptCount },
+      });
       throw new BadRequestException('OTP is invalid.');
     }
 
@@ -1052,7 +1821,18 @@ export class SalesContractsService {
       userAgent: meta?.userAgent || null,
       note: 'Buyer verified OTP',
     });
-    await this.signatureInvitationRepository.save(invitation);
+    await this.persistSignatureInvitation(invitation);
+    await this.recordSignatureEvent({
+      contractId: invitation.contractId,
+      invitationId: invitation._id,
+      eventType: ContractSignatureEventType.OTP_VERIFIED,
+      actorType: ContractSignatureActorType.BUYER,
+      signerEmail: invitation.signerEmail,
+      ipAddress: meta?.ipAddress || null,
+      userAgent: meta?.userAgent || null,
+      documentHash: invitation.contract?.signatureDocumentHash || null,
+      note: 'Buyer verified OTP',
+    });
 
     return this.toSigningSessionResponse(invitation);
   }
@@ -1061,20 +1841,45 @@ export class SalesContractsService {
     token: string,
     dto: PortalSignSalesContractDto,
     meta?: RequestMeta,
-  ): Promise<{ session: SigningSessionResponse; auditPacket: SignatureAuditPacket }> {
+  ): Promise<{
+    session: SigningSessionResponse;
+    auditPacket: SignatureAuditPacket;
+  }> {
     const result = await this.dataSource.transaction(async (manager) => {
       const invitation = await this.findInvitationByToken(token, manager, true);
       await this.ensureInvitationUsable(invitation, manager);
 
-      if (dto.otp && invitation.status !== ContractSignatureInvitationStatus.OTP_VERIFIED) {
+      if (
+        dto.otp &&
+        invitation.status !== ContractSignatureInvitationStatus.OTP_VERIFIED
+      ) {
         const incomingHash = this.hashOtp(dto.otp.trim(), invitation.tokenHash);
-        if (incomingHash !== invitation.otpHash || invitation.otpExpiresAt.getTime() < Date.now()) {
-          invitation.otpAttemptCount = Number(invitation.otpAttemptCount || 0) + 1;
+        if (
+          incomingHash !== invitation.otpHash ||
+          invitation.otpExpiresAt.getTime() < Date.now()
+        ) {
+          invitation.otpAttemptCount =
+            Number(invitation.otpAttemptCount || 0) + 1;
           this.appendInvitationAudit(invitation, 'OTP_FAILED_AT_SIGNING', {
             ipAddress: meta?.ipAddress || null,
             userAgent: meta?.userAgent || null,
           });
-          await manager.save(invitation);
+          await this.persistSignatureInvitation(invitation, manager);
+          await this.recordSignatureEvent(
+            {
+              contractId: invitation.contractId,
+              invitationId: invitation._id,
+              eventType: ContractSignatureEventType.OTP_FAILED,
+              actorType: ContractSignatureActorType.BUYER,
+              signerEmail: invitation.signerEmail,
+              ipAddress: meta?.ipAddress || null,
+              userAgent: meta?.userAgent || null,
+              documentHash: invitation.contract?.signatureDocumentHash || null,
+              note: 'OTP failed during signing submit',
+              metadata: { otpAttemptCount: invitation.otpAttemptCount },
+            },
+            manager,
+          );
           throw new BadRequestException('OTP is invalid or expired.');
         }
         invitation.status = ContractSignatureInvitationStatus.OTP_VERIFIED;
@@ -1084,27 +1889,66 @@ export class SalesContractsService {
           userAgent: meta?.userAgent || null,
           note: 'OTP verified during signing submit',
         });
+        await this.recordSignatureEvent(
+          {
+            contractId: invitation.contractId,
+            invitationId: invitation._id,
+            eventType: ContractSignatureEventType.OTP_VERIFIED,
+            actorType: ContractSignatureActorType.BUYER,
+            signerEmail: invitation.signerEmail,
+            ipAddress: meta?.ipAddress || null,
+            userAgent: meta?.userAgent || null,
+            documentHash: invitation.contract?.signatureDocumentHash || null,
+            note: 'OTP verified during signing submit',
+          },
+          manager,
+        );
       }
 
-      if (invitation.status !== ContractSignatureInvitationStatus.OTP_VERIFIED) {
-        throw new BadRequestException('OTP verification is required before signing.');
+      if (
+        invitation.status !== ContractSignatureInvitationStatus.OTP_VERIFIED
+      ) {
+        throw new BadRequestException(
+          'OTP verification is required before signing.',
+        );
       }
 
       const contract = invitation.contract;
       if (contract.status !== SalesContractStatus.PENDING_BUYER_SIGNATURE) {
-        throw new BadRequestException('Sales contract is not pending buyer signature.');
+        throw new BadRequestException(
+          'Sales contract is not pending buyer signature.',
+        );
       }
 
       const signatures = await manager.find(ContractSignature, {
         where: { contractId: contract._id },
         order: { signedAt: 'ASC' },
       });
-      if (signatures.some((signature) => signature.signerType === ContractSignerType.BUYER)) {
+      if (
+        signatures.some(
+          (signature) => signature.signerType === ContractSignerType.BUYER,
+        )
+      ) {
         throw new BadRequestException('Buyer signature already exists.');
       }
       contract.signatures = signatures;
 
-      const documentHash = this.buildContractHash(contract);
+      let documentHash = contract.signatureDocumentHash || null;
+      if (!documentHash) {
+        documentHash = this.buildContractHash(contract);
+        await this.recordSignatureEvent(
+          {
+            contractId: contract._id,
+            invitationId: invitation._id,
+            eventType: ContractSignatureEventType.CONTRACT_FROZEN,
+            actorType: ContractSignatureActorType.SYSTEM,
+            signerEmail: invitation.signerEmail,
+            documentHash,
+            note: 'Legacy pending contract snapshot frozen at buyer signing',
+          },
+          manager,
+        );
+      }
       const now = new Date();
       const signature = manager.create(ContractSignature, {
         contractId: contract._id,
@@ -1121,12 +1965,40 @@ export class SalesContractsService {
         documentHash,
       });
       const savedSignature = await manager.save(signature);
+      await this.recordSignatureEvent(
+        {
+          contractId: contract._id,
+          invitationId: invitation._id,
+          signatureId: savedSignature._id,
+          eventType: ContractSignatureEventType.BUYER_SIGNED,
+          actorType: ContractSignatureActorType.BUYER,
+          signerEmail: savedSignature.signerEmail,
+          ipAddress: meta?.ipAddress || null,
+          userAgent: meta?.userAgent || null,
+          documentHash,
+          note: savedSignature.signerName,
+          metadata: {
+            signerName: savedSignature.signerName,
+            signerTitle: savedSignature.signerTitle,
+          },
+        },
+        manager,
+      );
 
       contract.status = SalesContractStatus.BUYER_SIGNED;
       contract.signatureStatus = SalesContractSignatureStatus.BUYER_SIGNED;
       contract.buyerSignedAt = now;
       contract.signatureDocumentHash = documentHash;
-      await manager.save(contract);
+      await manager.update(
+        SalesContract,
+        { _id: contract._id },
+        {
+          status: contract.status,
+          signatureStatus: contract.signatureStatus,
+          buyerSignedAt: contract.buyerSignedAt,
+          signatureDocumentHash: contract.signatureDocumentHash,
+        },
+      );
 
       invitation.status = ContractSignatureInvitationStatus.SIGNED;
       invitation.signerName = savedSignature.signerName;
@@ -1134,24 +2006,30 @@ export class SalesContractsService {
       invitation.signerEmail = savedSignature.signerEmail;
       invitation.signedAt = now;
       invitation.certificateNumber = `SC-CERT-${contract.contractNumber.replace(/[^A-Za-z0-9]/g, '')}-${now.getTime()}`;
-      invitation.certificateHash = this.hashSecret([
-        invitation._id,
-        savedSignature._id,
-        documentHash,
-        invitation.certificateNumber,
-      ].join('::'));
+      invitation.certificateHash = this.hashSecret(
+        [
+          invitation._id,
+          savedSignature._id,
+          documentHash,
+          invitation.certificateNumber,
+        ].join('::'),
+      );
       this.appendInvitationAudit(invitation, 'CONTRACT_SIGNED', {
         ipAddress: meta?.ipAddress || null,
         userAgent: meta?.userAgent || null,
         note: `Certificate ${invitation.certificateNumber}`,
       });
-      await manager.save(invitation);
+      await this.persistSignatureInvitation(invitation, manager);
 
-      const refreshedInvitation = await manager.findOne(ContractSignatureInvitation, {
-        where: { _id: invitation._id },
-        relations: this.getSignatureInvitationRelations(),
-      });
-      if (!refreshedInvitation) throw new NotFoundException('Signature invitation not found.');
+      const refreshedInvitation = await manager.findOne(
+        ContractSignatureInvitation,
+        {
+          where: { _id: invitation._id },
+          relations: this.getSignatureInvitationRelations(),
+        },
+      );
+      if (!refreshedInvitation)
+        throw new NotFoundException('Signature invitation not found.');
 
       return refreshedInvitation;
     });
@@ -1159,14 +2037,16 @@ export class SalesContractsService {
     const session = this.toSigningSessionResponse(result);
     return {
       session,
-      auditPacket: this.buildSignatureAuditPacket(result.contract),
+      auditPacket: await this.getSignatureAuditPacket(result.contract._id),
     };
   }
 
-  async getSignatureAuditPacket(recordId: string): Promise<SignatureAuditPacket> {
+  async getSignatureAuditPacket(
+    recordId: string,
+  ): Promise<SignatureAuditPacket> {
     const contract = await this.contractRepository.findOne({
       where: { _id: recordId },
-      relations: ['buyer', 'items', 'items.product', 'signatures', 'signatureInvitations'],
+      relations: this.getContractSignatureRelations(),
       order: {
         signatures: { signedAt: 'ASC' },
         signatureInvitations: { createdAt: 'ASC' },
@@ -1174,7 +2054,12 @@ export class SalesContractsService {
     });
     if (!contract) throw new NotFoundException('Sales contract not found');
 
-    return this.buildSignatureAuditPacket(contract);
+    const signatureEvents = await this.signatureEventRepository.find({
+      where: { contractId: recordId },
+      order: { createdAt: 'ASC' },
+    });
+
+    return this.buildSignatureAuditPacket(contract, signatureEvents);
   }
 
   private getSignatureAuditPacketPdfDefinition(packet: SignatureAuditPacket) {
@@ -1200,22 +2085,34 @@ export class SalesContractsService {
 
     return {
       content: [
-        { text: 'SIGNATURE AUDIT PACKET', style: 'header', alignment: 'center' },
+        {
+          text: 'SIGNATURE AUDIT PACKET',
+          style: 'header',
+          alignment: 'center',
+        },
         {
           columns: [
             {
               width: '*',
               stack: [
-                { text: `Contract: ${packet.contract.contractNumber}`, bold: true },
+                {
+                  text: `Contract: ${packet.contract.contractNumber}`,
+                  bold: true,
+                },
                 { text: `Contract _id: ${packet.contract._id}` },
                 { text: `Buyer: ${packet.contract.buyerName || '-'}` },
-                { text: `Amount: ${packet.contract.totalAmount} ${packet.contract.currencyCode}` },
+                {
+                  text: `Amount: ${packet.contract.totalAmount} ${packet.contract.currencyCode}`,
+                },
               ],
             },
             {
               width: '*',
               stack: [
-                { text: `Certificate: ${packet.certificate.certificateNumber || '-'}`, bold: true },
+                {
+                  text: `Certificate: ${packet.certificate.certificateNumber || '-'}`,
+                  bold: true,
+                },
                 { text: `Generated: ${packet.certificate.generatedAt}` },
                 { text: `Packet hash: ${packet.certificate.packetHash}` },
               ],
@@ -1244,10 +2141,7 @@ export class SalesContractsService {
           table: {
             headerRows: 1,
             widths: ['*', 'auto', '*', 'auto', '*'],
-            body: [
-              ['Action', 'At', 'Actor', 'IP', 'Note'],
-              ...timelineRows,
-            ],
+            body: [['Action', 'At', 'Actor', 'IP', 'Note'], ...timelineRows],
           },
           layout: 'lightHorizontalLines',
         },
@@ -1269,28 +2163,192 @@ export class SalesContractsService {
 
   async getSignatureAuditPacketPdf(recordId: string): Promise<Buffer> {
     const packet = await this.getSignatureAuditPacket(recordId);
-    const fonts = {
-      Helvetica: {
-        normal: 'Helvetica',
-        bold: 'Helvetica-Bold',
-        italics: 'Helvetica-Oblique',
-        bolditalics: 'Helvetica-BoldOblique',
-      },
-      Courier: {
-        normal: 'Courier',
-        bold: 'Courier-Bold',
-      },
-    };
+    return renderPdfBuffer(this.getSignatureAuditPacketPdfDefinition(packet));
+  }
 
-    const printer = new PdfPrinter(fonts);
-    const pdfDoc = printer.createPdfKitDocument(this.getSignatureAuditPacketPdfDefinition(packet));
+  async revokeSignatureInvitation(
+    recordId: string,
+    invitationId: string,
+    dto: { reason?: string | null } = {},
+    user?: { username?: string },
+  ) {
+    return this.dataSource.transaction(async (manager) => {
+      const contract = await manager.findOne(SalesContract, {
+        where: { _id: recordId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!contract) throw new NotFoundException('Sales contract not found');
+      if (contract.status !== SalesContractStatus.PENDING_BUYER_SIGNATURE) {
+        throw new BadRequestException(
+          'Only pending buyer signature contracts can have invitations revoked.',
+        );
+      }
 
-    return new Promise((resolve, reject) => {
-      const chunks: Buffer[] = [];
-      pdfDoc.on('data', (chunk: Buffer) => chunks.push(chunk));
-      pdfDoc.on('end', () => resolve(Buffer.concat(chunks)));
-      pdfDoc.on('error', (error: Error) => reject(error));
-      pdfDoc.end();
+      const targetInvitation = await manager.findOne(
+        ContractSignatureInvitation,
+        {
+          where: {
+            _id: invitationId,
+            contractId: recordId,
+            signerType: ContractSignerType.BUYER,
+          },
+        },
+      );
+      if (!targetInvitation)
+        throw new NotFoundException('Signature invitation not found.');
+      if (!this.isActiveInvitationStatus(targetInvitation.status)) {
+        throw new BadRequestException(
+          'Only active buyer signature invitations can be revoked.',
+        );
+      }
+
+      const actorUsername = this.getActorUsername(user);
+      const revokeReason =
+        dto.reason?.trim() ||
+        'Buyer signature invitation revoked by internal user';
+      const buyerInvitations = await this.findBuyerInvitations(
+        manager,
+        recordId,
+      );
+      for (const invitation of this.getActiveBuyerInvitations(
+        buyerInvitations,
+      )) {
+        await this.revokeSignatureInvitationEntity(
+          manager,
+          invitation,
+          actorUsername,
+          invitation._id === invitationId
+            ? revokeReason
+            : `Revoked with invitation ${invitationId}`,
+          contract.signatureDocumentHash,
+        );
+      }
+
+      await manager.update(
+        SalesContract,
+        { _id: recordId },
+        {
+          status: SalesContractStatus.APPROVED,
+          signatureStatus: SalesContractSignatureStatus.NOT_SENT,
+          signatureRequestedByUsername: null,
+          signatureRequestedAt: null,
+          signatureDocumentHash: null,
+          buyerSignedAt: null,
+        },
+      );
+
+      return this.findContractWithSignatureRelations(manager, recordId);
+    });
+  }
+
+  async resendSignatureInvitation(
+    recordId: string,
+    user?: { username?: string },
+  ) {
+    return this.dataSource.transaction(async (manager) => {
+      const lockedContract = await manager.findOne(SalesContract, {
+        where: { _id: recordId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!lockedContract)
+        throw new NotFoundException('Sales contract not found');
+
+      const contract = await this.findContractWithSignatureRelations(
+        manager,
+        recordId,
+      );
+      if (contract.status !== SalesContractStatus.PENDING_BUYER_SIGNATURE) {
+        throw new BadRequestException(
+          'Only pending buyer signature contracts can be resent.',
+        );
+      }
+
+      const activeInvitations = this.getActiveBuyerInvitations(
+        contract.signatureInvitations,
+      );
+      const currentInvitation = activeInvitations[0];
+      if (!currentInvitation) {
+        throw new BadRequestException(
+          'No active buyer signature invitation found to resend.',
+        );
+      }
+      if (!currentInvitation.signerEmail) {
+        throw new BadRequestException(
+          'Buyer signer email is required to resend signature invitation.',
+        );
+      }
+
+      const actorUsername = this.getActorUsername(user);
+      let documentHash = contract.signatureDocumentHash || null;
+      if (!documentHash) {
+        documentHash = this.buildContractHash(contract);
+        await this.recordSignatureEvent(
+          {
+            contractId: contract._id,
+            eventType: ContractSignatureEventType.CONTRACT_FROZEN,
+            actorType: ContractSignatureActorType.INTERNAL,
+            actorUsername,
+            signerEmail: currentInvitation.signerEmail,
+            documentHash,
+            note: 'Legacy pending contract snapshot frozen before resend',
+          },
+          manager,
+        );
+        await manager.update(
+          SalesContract,
+          { _id: recordId },
+          { signatureDocumentHash: documentHash },
+        );
+        contract.signatureDocumentHash = documentHash;
+      }
+
+      for (const invitation of activeInvitations) {
+        await this.revokeSignatureInvitationEntity(
+          manager,
+          invitation,
+          actorUsername,
+          'Superseded by resent buyer signature invitation',
+          documentHash,
+        );
+      }
+
+      const {
+        invitation: savedInvitation,
+        signingUrl,
+        deliveryStatus,
+      } = await this.createBuyerSignatureInvitation({
+        manager,
+        contract,
+        signerName: currentInvitation.signerName,
+        signerTitle:
+          currentInvitation.signerTitle || 'Authorized Representative',
+        signerEmail: currentInvitation.signerEmail,
+        actorUsername,
+        expiresInDays: 7,
+        documentHash,
+        note: `Resent from invitation ${currentInvitation._id}`,
+      });
+
+      await manager.update(
+        SalesContract,
+        { _id: recordId },
+        {
+          signatureRequestedByUsername: actorUsername,
+          signatureRequestedAt: new Date(),
+          signatureDocumentHash: documentHash,
+        },
+      );
+
+      const refreshed = await this.findContractWithSignatureRelations(
+        manager,
+        recordId,
+      );
+
+      return {
+        contract: refreshed,
+        invitation: this.toInvitationResponse(savedInvitation, signingUrl),
+        deliveryStatus,
+      };
     });
   }
 
@@ -1307,31 +2365,54 @@ export class SalesContractsService {
       });
       if (!contract) throw new NotFoundException('Sales contract not found');
 
-      contract.items = await manager.find(SalesContractItem, { where: { salesContractId: recordId } });
+      contract.items = await manager.find(SalesContractItem, {
+        where: { salesContractId: recordId },
+      });
       contract.signatures = await manager.find(ContractSignature, {
         where: { contractId: recordId },
         order: { signedAt: 'ASC' },
       });
 
       const signerType = dto.signerType;
-      const hasBuyerSignature = contract.signatures.some((signature) => signature.signerType === ContractSignerType.BUYER);
-      const hasInternalSignature = contract.signatures.some((signature) => signature.signerType === ContractSignerType.INTERNAL);
+      const hasInternalSignature = contract.signatures.some(
+        (signature) => signature.signerType === ContractSignerType.INTERNAL,
+      );
 
       if (signerType === ContractSignerType.BUYER) {
-        if (contract.status !== SalesContractStatus.PENDING_BUYER_SIGNATURE) {
-          throw new BadRequestException('Buyer can only sign contracts pending buyer signature.');
-        }
-        if (hasBuyerSignature) throw new BadRequestException('Buyer signature already exists.');
+        throw new BadRequestException(
+          'Buyer signatures must be completed through the secure signing portal invitation.',
+        );
       }
 
       if (signerType === ContractSignerType.INTERNAL) {
         if (contract.status !== SalesContractStatus.BUYER_SIGNED) {
-          throw new BadRequestException('Internal counter-signature requires buyer-signed status first.');
+          throw new BadRequestException(
+            'Internal counter-signature requires buyer-signed status first.',
+          );
         }
-        if (hasInternalSignature) throw new BadRequestException('Internal signature already exists.');
+        if (hasInternalSignature)
+          throw new BadRequestException('Internal signature already exists.');
+        if (!dto.password) {
+          throw new BadRequestException(
+            'Password is required for internal signing.',
+          );
+        }
+        const username = this.getActorUsername(user);
+        const internalUser = await this.usersService.findByUsername(username);
+        if (!internalUser) {
+          throw new UnauthorizedException('User not found.');
+        }
+        const isValidPassword = await comparePasswordHelper(
+          dto.password,
+          internalUser.password,
+        );
+        if (!isValidPassword) {
+          throw new UnauthorizedException('Invalid password.');
+        }
       }
 
-      const documentHash = this.buildContractHash(contract);
+      const documentHash =
+        contract.signatureDocumentHash || this.buildContractHash(contract);
       const now = new Date();
       const signature = manager.create(ContractSignature, {
         contractId: recordId,
@@ -1340,60 +2421,94 @@ export class SalesContractsService {
         signerTitle: dto.signerTitle?.trim() || null,
         signerEmail: dto.signerEmail?.trim() || null,
         signatureImageFileId: dto.signatureImageFileId?.trim() || null,
-        signedByUsername: signerType === ContractSignerType.INTERNAL ? this.getActorUsername(user) : user?.username || null,
+        signedByUsername:
+          signerType === ContractSignerType.INTERNAL
+            ? this.getActorUsername(user)
+            : user?.username || null,
         ipAddress: meta?.ipAddress || null,
         userAgent: meta?.userAgent || null,
         signedAt: now,
-        consentText: dto.consentText?.trim() || 'Signer confirms agreement to the sales contract terms.',
+        consentText:
+          dto.consentText?.trim() ||
+          'Signer confirms agreement to the sales contract terms.',
         documentHash,
       });
-      await manager.save(signature);
-
-      if (signerType === ContractSignerType.BUYER) {
-        contract.status = SalesContractStatus.BUYER_SIGNED;
-        contract.signatureStatus = SalesContractSignatureStatus.BUYER_SIGNED;
-        contract.buyerSignedAt = now;
-        contract.signatureDocumentHash = documentHash;
-        await manager.save(contract);
-        return manager.findOne(SalesContract, {
-          where: { _id: recordId },
-          relations: ['buyer', 'items', 'items.product', 'signatures', 'signatureInvitations'],
-        });
+      const savedSignature = await manager.save(signature);
+      if (contract.signatures) {
+        contract.signatures.push(savedSignature);
       }
+
+      await this.recordSignatureEvent(
+        {
+          contractId: recordId,
+          signatureId: savedSignature._id,
+          eventType: ContractSignatureEventType.INTERNAL_SIGNED,
+          actorType: ContractSignatureActorType.INTERNAL,
+          actorUsername: this.getActorUsername(user),
+          signerEmail: savedSignature.signerEmail,
+          ipAddress: meta?.ipAddress || null,
+          userAgent: meta?.userAgent || null,
+          documentHash,
+          note: savedSignature.signerName,
+          metadata: {
+            signerName: savedSignature.signerName,
+            signerTitle: savedSignature.signerTitle,
+          },
+        },
+        manager,
+      );
 
       contract.counterSignedAt = now;
       contract.signatureStatus = SalesContractSignatureStatus.COMPLETED;
       contract.signatureDocumentHash = documentHash;
       await this.reserveAndConfirm(contract, manager);
 
-      return manager.findOne(SalesContract, {
-        where: { _id: recordId },
-        relations: ['buyer', 'items', 'items.product', 'signatures', 'signatureInvitations'],
-      });
+      return this.findContractWithSignatureRelations(manager, recordId);
     });
   }
 
-  private async reserveAndConfirm(contract: SalesContract, manager: EntityManager) {
-    if (![SalesContractStatus.APPROVED, SalesContractStatus.BUYER_SIGNED].includes(contract.status)) {
-      throw new BadRequestException('Sales contract must be APPROVED or BUYER_SIGNED before confirmation.');
+  private async reserveAndConfirm(
+    contract: SalesContract,
+    manager: EntityManager,
+  ) {
+    if (
+      ![
+        SalesContractStatus.APPROVED,
+        SalesContractStatus.BUYER_SIGNED,
+      ].includes(contract.status)
+    ) {
+      throw new BadRequestException(
+        'Sales contract must be APPROVED or BUYER_SIGNED before confirmation.',
+      );
     }
 
     contract.items = contract.items?.length
       ? contract.items
-      : await manager.find(SalesContractItem, { where: { salesContractId: contract._id } });
-    if (!contract.items.length) throw new BadRequestException('Sales contract has no items to confirm.');
+      : await manager.find(SalesContractItem, {
+          where: { salesContractId: contract._id },
+        });
+    if (!contract.items.length)
+      throw new BadRequestException('Sales contract has no items to confirm.');
 
     // Stock reservation is the irreversible operational handoff from commercial
     // contract to warehouse execution, so it runs only after approval/signature.
     for (const item of contract.items) {
-      await this.inventoryService.reserveStock(item.productId, item.quantity, contract._id, manager);
+      await this.inventoryService.reserveStock(
+        item.productId,
+        item.quantity,
+        contract._id,
+        manager,
+      );
     }
 
     contract.status = SalesContractStatus.CONFIRMED;
     return manager.save(contract);
   }
 
-  async confirmContract(recordId: string, user?: { username?: string }): Promise<SalesContract> {
+  async confirmContract(
+    recordId: string,
+    user?: { username?: string },
+  ): Promise<SalesContract> {
     return this.dataSource.transaction(async (manager) => {
       const contract = await manager.findOne(SalesContract, {
         where: { _id: recordId },
@@ -1401,23 +2516,45 @@ export class SalesContractsService {
       });
 
       if (!contract) throw new NotFoundException('Sales contract not found');
-      contract.items = await manager.find(SalesContractItem, { where: { salesContractId: recordId } });
+      contract.items = await manager.find(SalesContractItem, {
+        where: { salesContractId: recordId },
+      });
 
       await this.reserveAndConfirm(contract, manager);
-      if (contract.status === SalesContractStatus.CONFIRMED && contract.approvedByUsername === null) {
+      if (
+        contract.status === SalesContractStatus.CONFIRMED &&
+        contract.approvedByUsername === null
+      ) {
         contract.approvedByUsername = this.getActorUsername(user);
         contract.approvedAt = new Date();
         await manager.save(contract);
       }
 
+      await this.arService.createFromSalesContract(
+        contract,
+        null,
+        manager,
+        this.getActorUsername(user),
+      );
+
       return manager.findOne(SalesContract, {
         where: { _id: recordId },
-        relations: ['buyer', 'items', 'items.product', 'signatures', 'signatureInvitations'],
+        relations: [
+          'buyer',
+          'items',
+          'items.product',
+          'signatures',
+          'signatureInvitations',
+        ],
       }) as Promise<SalesContract>;
     });
   }
 
-  async shipContract(recordId: string, user?: { username?: string }): Promise<SalesContract> {
+  async shipContract(
+    recordId: string,
+    user?: { username?: string },
+  ): Promise<SalesContract> {
+    void user;
     return this.dataSource.transaction(async (manager) => {
       const contract = await manager.findOne(SalesContract, {
         where: { _id: recordId },
@@ -1425,11 +2562,20 @@ export class SalesContractsService {
       });
 
       if (!contract) throw new NotFoundException('Sales contract not found');
-      contract.items = await manager.find(SalesContractItem, { where: { salesContractId: recordId } });
-      contract.buyer = await manager.findOne(Partner, { where: { _id: contract.buyerId } }) as any;
+      contract.items = await manager.find(SalesContractItem, {
+        where: { salesContractId: recordId },
+      });
+      const buyer = await manager.findOne(Partner, {
+        where: { _id: contract.buyerId },
+      });
+      if (buyer) {
+        contract.buyer = buyer;
+      }
 
       if (contract.status !== SalesContractStatus.CONFIRMED) {
-        throw new BadRequestException('Sales contract must be CONFIRMED before shipment.');
+        throw new BadRequestException(
+          'Sales contract must be CONFIRMED before shipment.',
+        );
       }
 
       contract.status = SalesContractStatus.SHIPPED;
@@ -1439,6 +2585,7 @@ export class SalesContractsService {
 
   async cancelContract(recordId: string): Promise<SalesContract> {
     void recordId;
+    await Promise.resolve();
     throw new BadRequestException(
       'Sales contract cancellation phai di qua approval-matrix request',
     );

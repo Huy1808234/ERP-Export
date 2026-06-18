@@ -1,4 +1,13 @@
-import { Controller, Get, Post, Body, Patch, Param, Query, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { CurrenciesService } from './currencies.service';
 import { CreateCurrencyDto } from './dto/create-currency.dto';
 import { UpdateCurrencyDto } from './dto/update-currency.dto';
@@ -35,7 +44,11 @@ export class CurrenciesController {
     @Query('to') to: string,
     @Query('rateType') rateType?: ExchangeRateType,
   ) {
-    return this.currenciesService.getCrossRate(from, to, rateType ?? ExchangeRateType.TRANSFER);
+    return this.currenciesService.getCrossRate(
+      from,
+      to,
+      rateType ?? ExchangeRateType.TRANSFER,
+    );
   }
 
   @Get(':_id')
@@ -45,7 +58,10 @@ export class CurrenciesController {
 
   @Patch(':_id')
   @Roles('ADMIN')
-  updateCurrency(@Param('_id') recordId: string, @Body() updateCurrencyDto: UpdateCurrencyDto) {
+  updateCurrency(
+    @Param('_id') recordId: string,
+    @Body() updateCurrencyDto: UpdateCurrencyDto,
+  ) {
     return this.currenciesService.updateCurrency(recordId, updateCurrencyDto);
   }
 
@@ -60,7 +76,10 @@ export class CurrenciesController {
     @Param('_id') currency_id: string,
     @Query('rateType') rateType?: ExchangeRateType,
   ) {
-    return this.currenciesService.findExchangeRatesByCurrency(currency_id, rateType);
+    return this.currenciesService.findExchangeRatesByCurrency(
+      currency_id,
+      rateType,
+    );
   }
 
   @Get(':_id/rates/latest')
@@ -68,6 +87,9 @@ export class CurrenciesController {
     @Param('_id') currency_id: string,
     @Query('rateType') rateType?: ExchangeRateType,
   ) {
-    return this.currenciesService.getLatestExchangeRate(currency_id, rateType ?? ExchangeRateType.TRANSFER);
+    return this.currenciesService.getLatestExchangeRate(
+      currency_id,
+      rateType ?? ExchangeRateType.TRANSFER,
+    );
   }
 }

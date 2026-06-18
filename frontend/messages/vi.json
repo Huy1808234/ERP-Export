@@ -48,6 +48,18 @@
     "searchTypeExportDocument": "Chứng từ",
     "searchTypeAr": "AR",
     "searchTypeAp": "AP",
+    "searchTypeInquiry": "Yêu cầu báo giá",
+    "searchTypePricingPolicy": "Chính sách giá",
+    "searchTypeGoodsReceipt": "Phiếu nhập kho",
+    "searchTypeVendorInvoice": "Hóa đơn NCC",
+    "searchTypePurchaseReturn": "Trả hàng mua",
+    "searchTypeInventoryCount": "Kiểm kê kho",
+    "searchTypeExportDelivery": "Phiếu xuất kho",
+    "searchTypeCustomerReturn": "Trả hàng buyer",
+    "searchTypeLc": "L/C",
+    "searchTypeCollection": "Nhờ thu",
+    "searchTypePayment": "Thanh toán",
+    "searchTypeJournal": "Bút toán",
     "role": "Vai Trò",
     "lightMode": "Chế độ sáng",
     "darkMode": "Chế độ tối"
@@ -86,17 +98,21 @@
       "purchaseExceptions": "Ngoại Lệ P2P/QC",
       "threeWayMatching": "Đối Chiếu 3 Bên",
       "shipments": "Logistics Toàn Cầu",
+      "ports": "Cảng Biển",
       "exportDocuments": "Bộ Chứng Từ XK",
       "lc": "Tín Dụng Thư (L/C)",
       "collections": "Nhờ Thu (D/P, D/A)",
       "paymentTT": "Thanh Toán (T/T)",
       "accountReceivables": "Công Nợ Buyer",
+      "accountPayables": "Công Nợ NCC",
       "finance": "Kế Toán & Thuế",
       "users": "Quản Lý Đội Ngũ",
+      "rolePermissions": "Phân Quyền",
       "settings": "Cài Đặt",
       "systemSettings": "Cài Đặt Hệ Thống",
       "currencies": "Quản Lý Tỷ Giá",
-      "exportDeliveries": "Phieu Xuat Kho",
+      "countries": "Quản lý Quốc gia",
+      "exportDeliveries": "Phiếu Xuất Kho",
       "commercialInvoices": "Hóa đơn thương mại",
       "inventoryAdjustments": "Điều Chỉnh Kho",
       "inventoryPeriodSnapshots": "Định Kỳ Kho"
@@ -142,7 +158,780 @@
     "approvals": "Phê duyệt thông minh",
     "currencies": "Quản lý tỷ giá",
     "pricing-policies": "Chính sách giá",
-    "commercial-invoices": "Hóa đơn thương mại"
+    "commercial-invoices": "Hóa đơn thương mại",
+    "approval-matrix": "Ma trận phê duyệt",
+    "counts": "Kiểm kê kho",
+    "export-deliveries": "Phiếu xuất kho",
+    "returns": "Trả hàng Buyer",
+    "matching": "Đối chiếu 3 bên",
+    "document": "Bộ chứng từ XK",
+    "account-receivables": "Công nợ Buyer",
+    "account-payables": "Công nợ NCC"
+  },
+  "Ports": {
+    "title": "Quản lý Cảng biển",
+    "description": "Chuẩn hóa cảng đi, cảng đến cho báo giá, hợp đồng, shipment và bộ chứng từ xuất khẩu",
+    "actions": {
+      "reload": "Tải lại",
+      "create": "Thêm cảng biển",
+      "createFirst": "Thêm cảng biển đầu tiên",
+      "edit": "Sửa",
+      "deactivate": "Ngưng hoạt động",
+      "activate": "Bật lại",
+      "cancel": "Hủy",
+      "save": "Lưu",
+      "reset": "Đặt lại",
+      "resetFilters": "Đặt lại bộ lọc"
+    },
+    "units": {
+      "ports": "cảng",
+      "countries": "nước"
+    },
+    "stats": {
+      "filteredTotal": "Tổng theo bộ lọc",
+      "activeOnPage": "Đang hiển thị hoạt động",
+      "inactiveOnPage": "Đã ngưng trong trang",
+      "countriesOnPage": "Quốc gia trong trang"
+    },
+    "filters": {
+      "searchPlaceholder": "Tìm mã cảng, tên cảng, thành phố...",
+      "country": "Quốc gia",
+      "type": "Loại cảng",
+      "status": "Trạng thái"
+    },
+    "countries": {
+      "VN": "Việt Nam",
+      "US": "Hoa Kỳ",
+      "JP": "Nhật Bản",
+      "NL": "Hà Lan",
+      "SG": "Singapore"
+    },
+    "types": {
+      "SEA": "Cảng biển",
+      "INLAND": "ICD / depot nội địa",
+      "AIR": "Sân bay hàng hóa"
+    },
+    "status": {
+      "active": "Hoạt động",
+      "inactive": "Đã ngưng"
+    },
+    "table": {
+      "code": "Mã cảng (UN/LOCODE)",
+      "name": "Tên cảng biển",
+      "country": "Quốc gia",
+      "type": "Loại",
+      "status": "Trạng thái",
+      "actions": "Thao tác"
+    },
+    "messages": {
+      "sessionNotReadyDescription": "Phiên đăng nhập chưa sẵn sàng. Vui lòng đăng nhập lại nếu lỗi vẫn còn.",
+      "sessionNotReady": "Phiên đăng nhập chưa sẵn sàng",
+      "loadError": "Không thể tải dữ liệu cảng biển",
+      "createSuccess": "Đã tạo cảng biển",
+      "updateSuccess": "Đã cập nhật cảng biển",
+      "saveError": "Không lưu được cảng biển",
+      "activateSuccess": "Đã bật lại cảng biển",
+      "activateError": "Không bật lại được cảng biển",
+      "deactivateSuccess": "Đã ngưng hoạt động cảng biển",
+      "deactivateError": "Không ngưng được cảng biển"
+    },
+    "confirm": {
+      "deactivateTitle": "Ngưng hoạt động cảng biển?",
+      "deactivateContent": "{port} sẽ không còn xuất hiện trong dropdown nghiệp vụ mới. Chứng từ cũ vẫn giữ snapshot cảng này."
+    },
+    "empty": {
+      "noMatch": "Không có cảng biển phù hợp bộ lọc",
+      "noPorts": "Chưa có cảng biển nào"
+    },
+    "labels": {
+      "lastLoadedAt": "Đồng bộ lần cuối: {time}",
+      "masterDataHint": "Dữ liệu cảng được dùng làm master data cho POL/POD.",
+      "formHint": "Mã UN/LOCODE được dùng để chuẩn hóa POL/POD trên báo giá, hợp đồng, shipment và bộ chứng từ."
+    },
+    "modal": {
+      "createTitle": "Thêm cảng biển",
+      "editTitle": "Sửa cảng biển"
+    },
+    "form": {
+      "code": "Mã UN/LOCODE",
+      "countryCode": "Mã quốc gia",
+      "type": "Loại cảng",
+      "name": "Tên tiếng Anh / tên chuẩn",
+      "localName": "Tên hiển thị nội bộ",
+      "city": "Thành phố",
+      "country": "Quốc gia",
+      "timezone": "Múi giờ",
+      "aliases": "Alias tìm kiếm",
+      "notes": "Ghi chú",
+      "active": "Đang hoạt động"
+    },
+    "placeholders": {
+      "code": "VD: VNSGN",
+      "countryCode": "VN",
+      "name": "Port of Singapore",
+      "localName": "Cảng Cát Lái (TP.HCM)",
+      "city": "Ho Chi Minh City",
+      "country": "Vietnam",
+      "timezone": "Asia/Ho_Chi_Minh",
+      "aliases": "Cat Lai, Sai Gon, Ho Chi Minh Port",
+      "notes": "Ghi chú nội bộ về cảng, terminal, điều kiện vận hành..."
+    },
+    "validation": {
+      "codeRequired": "Nhập mã cảng",
+      "codePattern": "Mã cần theo dạng VNSGN, USLAX...",
+      "countryCodeRequired": "Chọn mã quốc gia",
+      "countryCodeLength": "Mã quốc gia cần có 2 ký tự",
+      "typeRequired": "Chọn loại cảng",
+      "nameRequired": "Nhập tên cảng",
+      "countryRequired": "Nhập quốc gia"
+    },
+    "select": {
+      "placeholder": "Chọn cảng biển",
+      "sessionNotReady": "Phiên đăng nhập chưa sẵn sàng",
+      "loadError": "Không tải được danh sách cảng",
+      "loading": "Đang tải...",
+      "notFound": "Không có cảng phù hợp",
+      "legacy": "Đang giữ dữ liệu cũ"
+    }
+  },
+  "Countries": {
+    "title": "Quản lý Quốc gia",
+    "description": "Quản lý danh sách mã quốc gia, tên và vùng thị trường (dữ liệu nguồn)",
+    "actions": {
+      "reload": "Tải lại",
+      "create": "Thêm Quốc gia",
+      "createFirst": "Thêm quốc gia đầu tiên",
+      "edit": "Chỉnh sửa",
+      "deactivate": "Ngừng hoạt động",
+      "activate": "Kích hoạt lại",
+      "cancel": "Hủy",
+      "save": "Lưu",
+      "reset": "Đặt lại",
+      "resetFilters": "Xóa bộ lọc"
+    },
+    "units": {
+      "countries": "quốc gia"
+    },
+    "stats": {
+      "filteredTotal": "Tổng sau khi lọc",
+      "activeOnPage": "Đang hoạt động (trang này)",
+      "inactiveOnPage": "Ngừng hoạt động (trang này)"
+    },
+    "filters": {
+      "searchPlaceholder": "Tìm mã, tên...",
+      "region": "Vùng thị trường",
+      "status": "Trạng thái"
+    },
+    "regions": {
+      "ASEAN": "Đông Nam Á (ASEAN)",
+      "EU": "Châu Âu (EU)",
+      "US": "Hoa Kỳ (US)",
+      "APAC": "Châu Á - Thái Bình Dương (APAC)",
+      "MIDDLE_EAST": "Trung Đông",
+      "OTHER": "Khu vực khác (OTHER)"
+    },
+    "status": {
+      "active": "Hoạt động",
+      "inactive": "Ngừng hoạt động"
+    },
+    "table": {
+      "code": "Mã",
+      "name": "Tên tiếng Anh",
+      "nameVi": "Tên tiếng Việt",
+      "region": "Vùng thị trường",
+      "aliases": "Tên khác",
+      "status": "Trạng thái",
+      "actions": "Thao tác"
+    },
+    "messages": {
+      "sessionNotReadyDescription": "Phiên đăng nhập chưa sẵn sàng. Vui lòng thử lại.",
+      "sessionNotReady": "Phiên đăng nhập chưa sẵn sàng",
+      "loadError": "Không thể tải danh sách quốc gia",
+      "createSuccess": "Thêm quốc gia thành công",
+      "updateSuccess": "Cập nhật quốc gia thành công",
+      "saveError": "Không thể lưu quốc gia",
+      "activateSuccess": "Đã kích hoạt lại quốc gia",
+      "activateError": "Không thể kích hoạt lại quốc gia",
+      "deactivateSuccess": "Đã ngừng hoạt động quốc gia",
+      "deactivateError": "Không thể ngừng hoạt động quốc gia"
+    },
+    "confirm": {
+      "deactivateTitle": "Ngừng hoạt động quốc gia này?",
+      "deactivateContent": "{country} sẽ không còn xuất hiện trong các form lựa chọn nữa."
+    },
+    "empty": {
+      "noMatch": "Không có quốc gia nào khớp với bộ lọc",
+      "noCountries": "Chưa có quốc gia nào"
+    },
+    "labels": {
+      "lastLoadedAt": "Đồng bộ lần cuối lúc: {time}",
+      "masterDataHint": "Dữ liệu quốc gia được sử dụng làm master data trên toàn hệ thống."
+    },
+    "modal": {
+      "createTitle": "Thêm Quốc Gia Mới",
+      "editTitle": "Chỉnh Sửa Quốc Gia"
+    },
+    "form": {
+      "code": "Mã quốc gia (2 ký tự)",
+      "name": "Tên tiếng Anh",
+      "nameVi": "Tên tiếng Việt",
+      "region": "Vùng thị trường",
+      "aliases": "Tên tìm kiếm khác (Aliases)",
+      "active": "Trạng thái hoạt động"
+    },
+    "placeholders": {
+      "code": "VD: VN, US, JP",
+      "name": "VD: Vietnam",
+      "nameVi": "VD: Việt Nam",
+      "region": "Chọn vùng",
+      "aliases": "Nhập các tên gọi khác cách nhau bởi dấu phẩy"
+    },
+    "validation": {
+      "codeRequired": "Vui lòng nhập mã quốc gia",
+      "codeLength": "Mã quốc gia phải bao gồm đúng 2 ký tự",
+      "nameRequired": "Vui lòng nhập tên tiếng Anh",
+      "nameViRequired": "Vui lòng nhập tên tiếng Việt",
+      "regionRequired": "Vui lòng chọn vùng thị trường"
+    }
+  },
+  "AccountReceivables": {
+    "title": "Công nợ phải thu Buyer",
+    "description": "Theo dõi công nợ xuất khẩu theo Commercial Invoice đã phát hành, phân bổ tiền T/T, aging và DSO.",
+    "actions": {
+      "reload": "Tải lại",
+      "openCommercialInvoices": "Mở Commercial Invoice"
+    },
+    "units": {
+      "days": "ngày"
+    },
+    "stats": {
+      "openAr": "AR còn mở",
+      "dsoWindow": "DSO {days} ngày",
+      "over90": "Quá hạn > 90 ngày",
+      "totalAging": "Tổng aging"
+    },
+    "aging": {
+      "title": "AR Aging",
+      "current": "Trong hạn",
+      "days30": "1-30",
+      "days60": "31-60",
+      "days90": "61-90",
+      "over90": ">90"
+    },
+    "table": {
+      "title": "Danh sách công nợ phải thu",
+      "invoiceContract": "Hóa đơn / Hợp đồng",
+      "buyer": "Buyer",
+      "amount": "Giá trị",
+      "paid": "Đã thu",
+      "dueDate": "Hạn thu",
+      "status": "Trạng thái",
+      "createdBy": "Người tạo",
+      "invoiceDate": "Invoice: {date}",
+      "searchPlaceholder": "Tìm hóa đơn, buyer, hợp đồng"
+    },
+    "payments": {
+      "transaction": "Giao dịch",
+      "foreignAmount": "Ngoại tệ",
+      "exchangeRate": "Tỷ giá",
+      "allocatedAt": "Ngày phân bổ",
+      "allocatedBy": "Người xử lý"
+    },
+    "status": {
+      "UNPAID": "Chưa thu",
+      "PARTIAL": "Thu một phần",
+      "PAID": "Đã thu đủ",
+      "OVERDUE": "Quá hạn",
+      "CANCELLED": "Đã hủy"
+    },
+    "allocationStages": {
+      "ADVANCE": "T/T Advance",
+      "BALANCE": "T/T Balance",
+      "COLLECTION": "D/P D/A",
+      "MANUAL": "Thủ công"
+    },
+    "empty": {
+      "noReceivables": "Chưa có công nợ phải thu",
+      "noPayments": "Chưa có phân bổ thu tiền"
+    },
+    "fallback": {
+      "commercialInvoice": "Commercial Invoice",
+      "manual": "Thủ công",
+      "system": "system"
+    }
+  },
+  "AccountPayables": {
+    "title": "Công nợ phải trả NCC",
+    "description": "Theo dõi AP, gom batch thanh toán và hạch toán chi tiền nhà cung cấp.",
+    "actions": {
+      "reload": "Tải lại",
+      "searchPlaceholder": "Tìm hóa đơn hoặc nhà cung cấp",
+      "approvePayment": "Duyệt chi",
+      "recordPayment": "Ghi chi",
+      "createBatch": "Tạo batch chi",
+      "submit": "Gửi duyệt",
+      "approve": "Duyệt",
+      "reject": "Từ chối",
+      "record": "Ghi nhận",
+      "cancel": "Hủy",
+      "confirm": "Xác nhận",
+      "reversePayment": "Đảo thanh toán",
+      "viewProof": "Xem chứng từ",
+      "viewFile": "Xem file",
+      "uploadProof": "Upload chứng từ",
+      "markPaidAndAudit": "Ghi chi & tạo audit"
+    },
+    "tabs": {
+      "payables": "Công nợ AP",
+      "batches": "Batch thanh toán",
+      "settlementAudit": "Audit tất toán"
+    },
+    "columns": {
+      "invoice": "Hóa đơn",
+      "amount": "Giá trị",
+      "dueDate": "Hạn trả",
+      "status": "Trạng thái",
+      "approvedBy": "Người duyệt",
+      "actions": "Thao tác",
+      "batch": "Batch",
+      "totalPayment": "Tổng chi",
+      "approvalFlow": "Luồng duyệt",
+      "settlementAmount": "Số tiền tất toán",
+      "bank": "Ngân hàng",
+      "settledBy": "Người ghi chi",
+      "invoiceVendor": "Invoice / Vendor",
+      "currentAp": "AP hiện tại",
+      "settled": "Đã tất toán",
+      "reversed": "Đã đảo",
+      "netSettlement": "Net settlement",
+      "latest": "Lần cuối",
+      "paymentAmount": "Số tiền chi",
+      "remainingAmount": "Còn lại",
+      "reversalStatus": "Trạng thái đảo"
+    },
+    "labels": {
+      "remaining": "Còn lại: {amount}",
+      "approvedForPayment": "Đã duyệt chi",
+      "waitingPaymentApproval": "Chờ duyệt chi",
+      "createdBy": "Tạo bởi {username}",
+      "submittedBy": "Gửi: {username}",
+      "levelOneBy": "Cấp 1: {username}",
+      "finalBy": "Cuối: {username}",
+      "reversalFrom": "Đảo từ {audit}",
+      "reversedAt": "Đã đảo {date}",
+      "effective": "Còn hiệu lực"
+    },
+    "selection": {
+      "summary": "Đã chọn {count} dòng, tổng {amount}"
+    },
+    "modal": {
+      "recordPaymentTitle": "Ghi nhận thanh toán AP",
+      "markPaidTitle": "Ghi chi batch AP",
+      "createBatchTitle": "Tạo batch thanh toán AP"
+    },
+    "form": {
+      "paymentAmount": "Số tiền thanh toán",
+      "note": "Ghi chú",
+      "paymentNotePlaceholder": "Số lệnh chi, chứng từ ngân hàng, ghi chú nội bộ...",
+      "paymentDate": "Ngày ghi chi",
+      "bankTransferAt": "Thời điểm ngân hàng",
+      "paymentMethod": "Phương thức",
+      "exchangeRate": "Tỷ giá",
+      "bankReference": "Số tham chiếu ngân hàng",
+      "bankReferencePlaceholder": "Mã giao dịch ngân hàng hoặc số ủy nhiệm chi",
+      "bankProofUrl": "File chứng từ ngân hàng",
+      "settlementNote": "Ghi chú tất toán",
+      "settlementNotePlaceholder": "Nội dung chuyển khoản, invoice được tất toán, ghi chú kiểm soát...",
+      "accountingNote": "Ghi chú hạch toán",
+      "accountingNotePlaceholder": "Ghi chú bổ sung đưa vào batch",
+      "plannedPaymentDate": "Ngày dự kiến chi",
+      "batchBankReferencePlaceholder": "Ủy nhiệm chi / số giao dịch ngân hàng",
+      "batchNotePlaceholder": "Lý do chi, nhóm hóa đơn, lưu ý phê duyệt..."
+    },
+    "validation": {
+      "paymentAmount": "Nhập số tiền thanh toán",
+      "paymentDate": "Chọn ngày ghi chi",
+      "bankTransferAt": "Chọn thời điểm chuyển tiền",
+      "paymentMethod": "Nhập phương thức thanh toán",
+      "bankReference": "Nhập số giao dịch/ủy nhiệm chi"
+    },
+    "messages": {
+      "approveSuccess": "Đã duyệt thanh toán công nợ",
+      "approveError": "Không duyệt được công nợ",
+      "paymentSuccess": "Đã ghi nhận thanh toán AP",
+      "paymentError": "Không ghi nhận được thanh toán",
+      "selectOpenPayable": "Chọn ít nhất một công nợ còn mở để tạo batch",
+      "sameCurrencyOnly": "Một batch chỉ gom các công nợ cùng loại tiền",
+      "batchCreateSuccess": "Đã tạo batch thanh toán AP",
+      "batchCreateError": "Không tạo được batch thanh toán",
+      "uploadSuccess": "Đã upload {file}",
+      "uploadError": "Upload chứng từ thanh toán thất bại",
+      "missingAccessToken": "Thiếu access token",
+      "markPaidSuccess": "Đã ghi chi batch và tạo settlement audit",
+      "markPaidError": "Không ghi chi được batch",
+      "reverseSuccess": "Đã đảo thanh toán và ghi audit reversal",
+      "reverseError": "Không đảo được thanh toán",
+      "batchWorkflowSuccess": "Đã cập nhật batch thanh toán",
+      "batchWorkflowError": "Không cập nhật được batch"
+    },
+    "confirm": {
+      "reverseTitle": "Đảo thanh toán AP?",
+      "reverseContent": "{invoice} - {amount}. Hệ thống sẽ giảm paidAmount, mở lại AP nếu cần và tạo bút toán đảo.",
+      "submitBatchTitle": "Gửi duyệt batch?",
+      "approveBatchTitle": "Duyệt batch thanh toán?",
+      "rejectBatchTitle": "Từ chối batch thanh toán?"
+    },
+    "status": {
+      "UNPAID": "Chưa thanh toán",
+      "PARTIAL": "Thanh toán một phần",
+      "PAID": "Đã thanh toán",
+      "VOID": "Đã void"
+    },
+    "batchStatus": {
+      "DRAFT": "Nháp",
+      "SUBMITTED": "Chờ duyệt",
+      "APPROVED_LEVEL_1": "Đã duyệt cấp 1",
+      "APPROVED": "Đã duyệt chi",
+      "REJECTED": "Từ chối",
+      "PAID": "Đã chi tiền",
+      "CANCELLED": "Đã hủy"
+    },
+    "empty": {
+      "noData": "Không có dữ liệu",
+      "noFile": "Chưa có file"
+    }
+  },
+  "PurchaseExceptions": {
+    "title": "Ngoại lệ P2P / QC",
+    "description": "Theo dõi hàng nhận thiếu, hàng bị reject QC, quarantine, purchase return và claim/backorder với nhà cung cấp.",
+    "actions": {
+      "reload": "Tải lại",
+      "createQc": "Tạo ngoại lệ QC",
+      "waitingGrn": "Chờ nhập kho",
+      "sendClaim": "Gửi claim",
+      "cancel": "Hủy",
+      "resolve": "Xử lý"
+    },
+    "units": {
+      "unit": "đơn vị",
+      "claim": "claim",
+      "line": "dòng"
+    },
+    "stats": {
+      "openExceptions": "Ngoại lệ đang mở",
+      "rejectedQuantity": "Tổng hàng reject",
+      "sentClaims": "Khiếu nại đã gửi NCC",
+      "pendingSources": "Nguồn chờ QC",
+      "backorderQuantity": "Cần giao bù/backorder",
+      "overdueReplacement": "Replacement quá hạn"
+    },
+    "sections": {
+      "overview": "Tổng quan xử lý",
+      "vendorBackorder": "Claim/backorder theo NCC",
+      "productBackorder": "Backorder theo sản phẩm",
+      "pendingSources": "Nguồn ngoại lệ cần xử lý",
+      "activeClaims": "Ngoại lệ QC / claim đang theo dõi"
+    },
+    "empty": {
+      "noVendor": "Không có vendor cần xử lý",
+      "noProduct": "Không có sản phẩm backorder",
+      "noCandidates": "Không có GRN/PO nào cần tạo ngoại lệ QC",
+      "noExceptions": "Không có ngoại lệ QC đang mở"
+    },
+    "alerts": {
+      "openTitle": "{count} ngoại lệ chưa đóng",
+      "openDescription": "Purchasing cần theo dõi claim với NCC; Kế toán chỉ ghi AP cho phần hàng đã nhập kho hợp lệ.",
+      "clearTitle": "Không có ngoại lệ P2P/QC đang mở",
+      "clearDescription": "Nếu vẫn thấy thiếu dữ liệu, hãy kiểm tra các GRN chưa có dòng hàng hoặc PO chưa phát sinh nhận hàng."
+    },
+    "vendorTable": {
+      "vendor": "NCC",
+      "open": "Open",
+      "claim": "Claim",
+      "backorder": "Backorder"
+    },
+    "productTable": {
+      "sku": "SKU",
+      "product": "Hàng",
+      "open": "Open",
+      "backorder": "Backorder"
+    },
+    "candidateTable": {
+      "source": "Nguồn",
+      "product": "Sản phẩm",
+      "vendor": "NCC",
+      "quantity": "Số lượng",
+      "reason": "Lý do",
+      "actions": "Thao tác"
+    },
+    "exceptionTable": {
+      "qc": "QC / Hàng lỗi",
+      "source": "PO / GRN / NCC",
+      "quantity": "Số lượng",
+      "claim": "Return / Claim",
+      "settlement": "Settlement",
+      "notes": "Ghi chú QC",
+      "actions": "Thao tác"
+    },
+    "labels": {
+      "ordered": "Đặt",
+      "received": "Đã nhận",
+      "rejected": "Loại",
+      "backorder": "Backorder",
+      "noReturn": "Chưa có return",
+      "sentBy": "Gửi bởi {username} ngày {date}",
+      "credit": "Credit",
+      "replacementDue": "Hạn giao bù"
+    },
+    "sourceTypes": {
+      "GRN_REJECTED_LINE": "GRN bị loại",
+      "PO_SHORT_RECEIPT": "PO nhận thiếu"
+    },
+    "results": {
+      "PASSED": "Đạt",
+      "FAILED": "Không đạt",
+      "CONDITIONAL": "Có điều kiện"
+    },
+    "exceptionStatus": {
+      "NONE": "Không có",
+      "QUARANTINED": "Cách ly",
+      "RETURN_CREATED": "Đã tạo return",
+      "CLAIM_OPEN": "Claim mở",
+      "CLOSED": "Đã đóng"
+    },
+    "claimStatus": {
+      "NONE": "Không có",
+      "OPEN": "Mở",
+      "SENT": "Đã gửi",
+      "RESOLVED": "Đã xử lý",
+      "CANCELLED": "Đã hủy"
+    },
+    "resolutionTypes": {
+      "NONE": "Chưa xử lý",
+      "REPLACEMENT": "Giao bù",
+      "CREDIT_NOTE": "Credit note / giảm trừ công nợ",
+      "ACCEPT_AS_IS": "Chấp nhận có điều kiện",
+      "CANCELLED": "Hủy claim",
+      "OTHER": "Khác"
+    },
+    "confirm": {
+      "resolveTitle": "Mở form resolve exception này?",
+      "openForm": "Mở form"
+    },
+    "modal": {
+      "createTitle": "Tạo ngoại lệ QC từ GRN",
+      "createOk": "Tạo ngoại lệ",
+      "resolveTitle": "Xử lý ngoại lệ {number}",
+      "resolveOk": "Xác nhận xử lý"
+    },
+    "form": {
+      "defaultBackorderAction": "Theo dõi backorder / yêu cầu NCC giao bù",
+      "defaultRejectAction": "Trả hàng, giao bù hoặc giảm trừ công nợ",
+      "defaultResolutionNote": "NCC đã xác nhận credit/replacement",
+      "grnLine": "Dòng phiếu nhập kho",
+      "selectGrnLine": "Chọn dòng GRN",
+      "selectedLineDescription": "{sku} {product} | Đã nhận {received} | Đã loại {rejected}",
+      "qcResult": "Kết quả QC",
+      "receivedQuantity": "Số lượng đã nhận",
+      "rejectedQuantity": "Số lượng reject",
+      "defectRate": "Defect %",
+      "correctiveAction": "Hướng xử lý",
+      "correctiveActionPlaceholder": "Trả hàng, giao bù, credit note...",
+      "inspectorNotes": "Ghi chú QC",
+      "inspectorNotesPlaceholder": "Mô tả lỗi, sai quy cách, biên bản kiểm hàng...",
+      "resolutionType": "Loại settlement",
+      "creditAmount": "Credit amount",
+      "replacementDueDate": "Ngày giao bù",
+      "resolutionNote": "Kết quả xử lý",
+      "resolutionNotePlaceholder": "NCC đã giao bổ sung / credit note / chấp nhận claim..."
+    },
+    "validation": {
+      "selectGrnLine": "Chọn dòng GRN cần QC",
+      "rejectedQuantity": "Nhập số lượng reject",
+      "inspectorNotes": "Nhập lý do reject",
+      "resolutionType": "Chọn cách xử lý",
+      "resolutionNote": "Nhập kết quả xử lý"
+    },
+    "messages": {
+      "createSuccess": "Đã tạo ngoại lệ QC và liên kết purchase return/claim",
+      "createError": "Không tạo được ngoại lệ QC",
+      "claimNote": "Gửi từ exception board cho {number}",
+      "claimSuccess": "Đã gửi claim cho NCC",
+      "claimError": "Không gửi được claim",
+      "resolveSuccess": "Đã xử lý ngoại lệ",
+      "resolveError": "Không đóng được ngoại lệ"
+    }
+  },
+  "VendorEvaluations": {
+    "title": "Đánh giá nhà cung cấp",
+    "description": "Theo dõi điểm nhà cung cấp/logistics, workflow duyệt đánh giá và cảnh báo công nợ phải trả sắp đến hạn.",
+    "actions": {
+      "reload": "Tải lại",
+      "create": "Tạo đánh giá",
+      "details": "Chi tiết",
+      "submit": "Gửi duyệt",
+      "approve": "Duyệt",
+      "reject": "Từ chối",
+      "cancel": "Hủy",
+      "searchPlaceholder": "Tìm NCC hoặc ghi chú"
+    },
+    "stats": {
+      "vendorCount": "Tổng NCC",
+      "evaluatedVendors": "Đã đánh giá",
+      "avgScore": "Điểm TB",
+      "submittedCount": "Chờ duyệt",
+      "dueSoonCount": "AP sắp hạn",
+      "overdueCount": "AP quá hạn",
+      "onTimePoGrn": "PO/GRN đúng hạn",
+      "claimQc": "Claim/QC NCC",
+      "latestScore": "Điểm mới nhất",
+      "scoreTrend": "Xu hướng điểm",
+      "grnOnTimeLate": "GRN đúng/trễ",
+      "openClaims": "Claim đang mở",
+      "remainingAp": "AP còn lại",
+      "openSent": "Mở/đã gửi"
+    },
+    "sections": {
+      "scorecard": "Scorecard NCC",
+      "apAlerts": "Cảnh báo AP sắp/quá hạn",
+      "workflow": "Workflow đánh giá",
+      "scoreTrend": "Xu hướng điểm 6 tháng",
+      "claimAging": "Tuổi claim",
+      "claimHistory": "Lịch sử claim/reject",
+      "poGrnDrilldown": "Chi tiết PO/GRN đúng hạn",
+      "vendorOpenAp": "AP đang mở của NCC"
+    },
+    "columns": {
+      "month": "Tháng",
+      "total": "Tổng",
+      "componentScores": "Q/D/P",
+      "onTime": "Đúng hạn",
+      "defect": "Lỗi",
+      "poGrn": "PO/GRN",
+      "deliveryDate": "Ngày giao",
+      "onTimeStatus": "Đúng hạn",
+      "quantityQc": "SL/QC",
+      "status": "Trạng thái",
+      "claimQc": "Claim/QC",
+      "source": "Nguồn",
+      "aging": "Tuổi nợ",
+      "defectQuantity": "SL lỗi",
+      "resolution": "Xử lý",
+      "vendor": "Nhà cung cấp",
+      "totalScore": "Tổng điểm",
+      "quality": "Chất lượng",
+      "delivery": "Giao hàng",
+      "price": "Giá cả",
+      "kpiPoGrn": "KPI PO/GRN",
+      "drilldown": "Chi tiết",
+      "evaluationProfile": "Hồ sơ đánh giá",
+      "score": "Điểm",
+      "actor": "Người xử lý",
+      "actions": "Thao tác",
+      "apInvoice": "Hóa đơn AP",
+      "remainingAmount": "Còn phải trả",
+      "dueDate": "Hạn thanh toán"
+    },
+    "labels": {
+      "expectedDate": "Dự kiến: {date}",
+      "receivedDate": "Nhận: {date}",
+      "unmeasured": "Chưa đo",
+      "onTime": "Đúng hạn",
+      "lateDays": "Trễ {days} ngày",
+      "receivedQuantity": "Nhập: {quantity}",
+      "rejectedAndIssue": "Reject: {rejected} | Lỗi: {issue}",
+      "days": "{days} ngày",
+      "rejectedQuantity": "Reject: {quantity}",
+      "backorderQuantity": "Backorder: {quantity}",
+      "noScore": "Chưa có",
+      "noApprovedScore": "Chưa duyệt",
+      "viewMonth": "Tháng xem",
+      "onTimeValue": "Đúng hạn: {value}%",
+      "defectValue": "Lỗi: {value}%",
+      "claimCount": "Claim: {count}",
+      "rejectCount": "Reject: {count}",
+      "onTimeDefect": "Đúng hạn {onTime}% | Lỗi {defect}%",
+      "approvedBy": "Duyệt: {username}",
+      "overdueDays": "Quá hạn {days} ngày",
+      "dueInDays": "Còn {days} ngày",
+      "bucket0To7": "0-7 ngày: {count}",
+      "bucket8To14": "8-14 ngày: {count}",
+      "bucket15To30": "15-30 ngày: {count}",
+      "bucketOver30": ">30 ngày: {count}",
+      "resolvedCancelled": "Đã xử lý: {resolved} | Đã hủy: {cancelled}"
+    },
+    "fallback": {
+      "noGrn": "Chưa có GRN"
+    },
+    "empty": {
+      "noData": "Không có dữ liệu",
+      "noScorecardDetail": "Chưa có dữ liệu scorecard NCC"
+    },
+    "alerts": {
+      "overdueTitle": "{count} khoản AP đã quá hạn",
+      "overdueDescription": "Kế toán và Purchasing cần kiểm tra điều kiện thanh toán, trạng thái duyệt chi và liên hệ nhà cung cấp.",
+      "oldClaimTitle": "Claim đang mở lâu nhất {days} ngày",
+      "oldClaimDescription": "Purchasing/QC cần theo dõi xử lý với NCC để tránh trễ credit note, replacement hoặc purchase return.",
+      "workflowHintTitle": "Scorecard chỉ cập nhật sau khi đánh giá được duyệt",
+      "workflowHintDescription": "Bản vừa lưu ở trạng thái Nháp. Hãy Gửi duyệt, sau đó ADMIN/MANAGER bấm Duyệt để hệ thống đồng bộ điểm chính thức của NCC."
+    },
+    "confirm": {
+      "approveTitle": "Duyệt đánh giá này?",
+      "rejectTitle": "Từ chối đánh giá này?"
+    },
+    "modal": {
+      "createTitle": "Tạo đánh giá nhà cung cấp",
+      "save": "Lưu đánh giá"
+    },
+    "form": {
+      "vendor": "Nhà cung cấp",
+      "vendorPlaceholder": "Chọn supplier/logistics",
+      "periodStart": "Từ ngày",
+      "periodEnd": "Đến ngày",
+      "evaluationMonth": "Kỳ đánh giá",
+      "qualityScore": "Chất lượng",
+      "deliveryScore": "Giao hàng",
+      "priceScore": "Giá cả",
+      "communicationScore": "Phản hồi",
+      "onTimeRate": "Đúng hạn %",
+      "defectRate": "Tỷ lệ lỗi %",
+      "note": "Ghi chú",
+      "notePlaceholder": "Nhận xét chất lượng, giao hàng, giá cả, sự cố nếu có..."
+    },
+    "validation": {
+      "vendor": "Chọn nhà cung cấp",
+      "month": "Chọn kỳ đánh giá",
+      "score": "Nhập điểm"
+    },
+    "messages": {
+      "createSuccess": "Đã lưu bản nháp đánh giá. Vào Workflow đánh giá để gửi duyệt.",
+      "createError": "Không tạo được đánh giá",
+      "workflowSuccess": "Đã cập nhật workflow đánh giá",
+      "submitSuccess": "Đã gửi duyệt đánh giá. Scorecard sẽ cập nhật sau khi được duyệt.",
+      "approveSuccess": "Đã duyệt đánh giá và cập nhật scorecard NCC.",
+      "rejectSuccess": "Đã từ chối đánh giá.",
+      "workflowError": "Không cập nhật được đánh giá",
+      "detailError": "Không tải được scorecard NCC"
+    },
+    "status": {
+      "DRAFT": "Nháp",
+      "SUBMITTED": "Chờ duyệt",
+      "APPROVED": "Đã duyệt",
+      "REJECTED": "Từ chối"
+    },
+    "apStatus": {
+      "UNPAID": "Chưa trả",
+      "PARTIAL": "Trả một phần",
+      "PAID": "Đã trả",
+      "OVERDUE": "Quá hạn",
+      "CANCELLED": "Đã hủy"
+    },
+    "format": {
+      "percent": "{value}%"
+    },
+    "drawer": {
+      "titleWithVendor": "Scorecard NCC - {vendor}"
+    }
   },
   "Auth": {
     "login": {
@@ -355,7 +1144,7 @@
       "risk": "RỦI RO & ĐÁNH GIÁ",
       "status": "TRẠNG THÁI",
       "actions": "THAO TÁC",
-      "history": "Xem lịch sử thay đổi",
+      "history": "Xem chứng từ liên quan",
       "searchPlaceholder": "Tìm kiếm theo tên, mã số thuế...",
       "advancedFilter": "Bộ lọc nâng cao",
       "selectedCount": "Đã chọn {count} đối tác",
@@ -374,7 +1163,8 @@
       "allStatus": "Tất cả trạng thái",
       "country": "Quốc gia/Vùng lãnh thổ",
       "taxCode": "Mã số thuế",
-      "historyTitle": "Lịch sử thay đổi Đối tác"
+      "historyTitle": "Chứng từ liên quan & Lịch sử giao dịch",
+      "countryCode": "Mã quốc gia"
     },
     "types": {
       "customer": "Khách hàng",
@@ -401,6 +1191,23 @@
       "noAssessment": "Chưa có đánh giá"
     },
     "history": {
+      "subtitle": "Các chứng từ ERP phát sinh gần nhất với đối tác này. Audit thay đổi được theo dõi riêng.",
+      "lastActivity": "Hoạt động gần nhất",
+      "searchPlaceholder": "Tìm số chứng từ, trạng thái, tiền tệ...",
+      "periodAll": "Tất cả thời gian",
+      "period30Days": "30 ngày qua",
+      "periodThisYear": "Năm nay",
+      "noMatch": "Không có chứng từ phù hợp với bộ lọc",
+      "viewAll": "Xem tất cả",
+      "openDetail": "Mở",
+      "recentSummary": "Hiển thị {shown}/{total} bản ghi gần nhất",
+      "filteredSummary": "Hiển thị {shown}/{loaded} bản ghi đã tải sau khi lọc",
+      "createPurchaseOrder": "Tạo PO",
+      "createVendorInvoice": "Ghi nhận hóa đơn",
+      "purchaseOrderRef": "PO",
+      "createShipment": "Tạo lô hàng",
+      "createQuotation": "Tạo báo giá",
+      "createPI": "Tạo PI",
       "shipments": "Lô hàng đã đi",
       "noShipments": "Chưa có dữ liệu vận tải",
       "payables": "Công nợ phải trả",
@@ -593,13 +1400,17 @@
       "orderStatusLabel": "Trạng thái đơn hàng:",
       "printTitle": "ĐƠN ĐẶT HÀNG",
       "poNumberLabel": "Số PO",
+      "orderInfoTitle": "Thông tin đơn hàng",
       "vendorLabel": "Nhà cung cấp",
+      "addressLabel": "Địa chỉ",
       "phoneLabel": "Điện thoại",
       "orderDateLabel": "Ngày đặt hàng",
       "expectedDeliveryLabel": "Ngày giao hàng dự kiến",
       "currencyLabel": "Tiền tệ",
       "prRefLabel": "Tham chiếu PR",
       "itemsTitle": "Chi tiết mặt hàng",
+      "lineCountLabel": "Số dòng hàng",
+      "receiptProgressLabel": "Tiến độ nhận hàng",
       "subtotalLabel": "Tổng tiền hàng (Chưa thuế)",
       "vatLabel": "Thuế VAT",
       "totalLabel": "Tổng giá trị đơn hàng",
@@ -695,11 +1506,14 @@
       }
     },
     "departments": {
+      "KINHDOANH_XK": "Kinh doanh xuất khẩu",
       "KHO": "Kho vận",
       "SANXUAT": "Sản xuất",
-      "MARKETING": "Marketing / Kinh doanh",
+      "MUAHANG": "Mua hàng",
+      "VANHANH": "Vận hành / Hành chính",
+      "MARKETING": "Marketing",
       "HANHCHINH": "Nhân sự / Hành chính",
-      "KETOAN": "Kế toán",
+      "KETOAN": "Kế toán / Tài chính",
       "KYTHUAT": "Kỹ thuật / IT",
       "NEW": " (Mới)"
     },
@@ -861,7 +1675,14 @@
       "CANCELLED": "Đã hủy"
     },
     "tooltips": {
-      "viewDetail": "Xem chi tiết"
+      "viewDetail": "Xem chi tiết",
+      "reverse": "Đảo phiếu nhập kho"
+    },
+    "reverseModal": {
+      "title": "Đảo phiếu nhập {grnNumber}",
+      "reasonPlaceholder": "Nhập lý do đảo phiếu nhập",
+      "okText": "Đảo GRN",
+      "cancelText": "Hủy"
     },
     "notifications": {
       "fetchPODetailError": "Lỗi khi tải thông tin PO",
@@ -874,11 +1695,18 @@
       "businessError": "Lỗi nghiệp vụ",
       "businessErrorDesc": "Không thể tạo phiếu nhập kho",
       "systemError": "Lỗi hệ thống",
-      "systemErrorDesc": "Vui lòng kiểm tra lại kết nối"
+      "systemErrorDesc": "Vui lòng kiểm tra lại kết nối",
+      "reverseReasonRequired": "Vui lòng nhập lý do đảo phiếu nhập",
+      "reverseSuccess": "Đã đảo phiếu nhập kho thành công",
+      "reverseFailed": "Không thể đảo phiếu nhập kho",
+      "reverseCompletedOnlyError": "Chỉ phiếu nhập đã hoàn tất mới được đảo",
+      "reverseActiveVendorInvoiceError": "PO đã có hóa đơn nhà cung cấp đang hiệu lực. Vui lòng hủy hoặc tạo credit cho hóa đơn trước khi đảo GRN."
     },
     "poSelect": {
       "modalTitle": "Chọn Đơn Mua Hàng Để Nhập Kho",
       "searchPlaceholder": "Tìm theo mã PO (VD: PO-2026...)",
+      "dateFromPlaceholder": "Từ ngày",
+      "dateToPlaceholder": "Đến ngày",
       "columns": {
         "poNumber": "MÃ PO",
         "vendor": "NHÀ CUNG CẤP",
@@ -997,9 +1825,13 @@
     "poSelect": {
       "modalTitle": "Chọn Đơn Mua Hàng Để Lập Hóa Đơn",
       "searchPlaceholder": "Tìm theo mã PO...",
+      "dateFromPlaceholder": "Từ ngày",
+      "dateToPlaceholder": "Đến ngày",
+      "emptyEligible": "Không có PO đã nhập kho còn đủ điều kiện lập hóa đơn",
       "columns": {
         "poNumber": "MÃ PO",
         "vendor": "NHÀ CUNG CẤP",
+        "date": "NGÀY ĐẶT",
         "status": "TRẠNG THÁI",
         "actions": "THAO TÁC"
       },
@@ -1016,10 +1848,17 @@
         "returnDate": "NGÀY TRẢ",
         "poNumber": "ĐƠN HÀNG LIÊN QUAN",
         "reason": "LÝ DO",
-        "actions": "THAO TÁC"
+        "actions": "THAO TÁC",
+        "status": "TRẠNG THÁI"
       },
       "tooltips": {
-        "viewDetail": "Xem chi tiết"
+        "viewDetail": "Xem chi tiết",
+        "submit": "Gửi duyệt",
+        "send": "Gửi nhà cung cấp",
+        "credited": "Xác nhận đã bồi thường",
+        "replaced": "Xác nhận đã đổi hàng",
+        "close": "Đóng phiếu",
+        "cancel": "Hủy phiếu"
       }
     },
     "modal": {
@@ -1029,22 +1868,55 @@
         "returnDate": "Ngày trả hàng",
         "reason": "Lý do trả hàng",
         "reasonPlaceholder": "VD: Hàng lỗi kỹ thuật, sai quy cách...",
+        "purchaseOrder": "PO đã nhập hàng",
+        "purchaseOrderPlaceholder": "Chọn PO đã có hàng nhập",
+        "vendor": "NCC: {vendor}",
         "itemsDivider": "Danh Sách Hàng Hóa Trả Lại",
         "product": "Sản phẩm",
         "productPlaceholder": "Chọn sản phẩm",
         "quantity": "Số lượng",
         "unit": "Đơn vị",
+        "receivedHint": "Đã nhận: {quantity}",
         "addLineBtn": "Thêm mặt hàng trả"
       },
       "rules": {
+        "purchaseOrderRequired": "Vui lòng chọn PO",
         "productRequired": "Vui lòng chọn sản phẩm",
         "qtyRequired": "SL",
+        "qtyMax": "Không vượt quá số đã nhận: {max}",
         "unitRequired": "ĐVT"
       }
     },
     "notifications": {
       "createSuccess": "Tạo phiếu trả hàng thành công",
-      "createError": "Lỗi khi tạo phiếu trả hàng"
+      "createError": "Lỗi khi tạo phiếu trả hàng",
+      "submitted": "Đã gửi duyệt phiếu trả hàng",
+      "sent": "Đã gửi yêu cầu cho nhà cung cấp",
+      "credited": "Đã xác nhận bồi thường",
+      "replaced": "Đã xác nhận đổi hàng",
+      "closed": "Đã đóng phiếu trả hàng",
+      "cancelPrompt": "Hủy phiếu {id}",
+      "cancelReason": "Lý do hủy",
+      "cancelReasonRequired": "Bắt buộc nhập lý do hủy",
+      "cancelled": "Đã hủy phiếu trả hàng"
+    },
+    "detail": {
+      "status": "Trạng thái",
+      "po": "Đơn hàng (PO)",
+      "reason": "Lý do",
+      "product": "Sản phẩm",
+      "sku": "Mã SKU",
+      "qty": "SL",
+      "unit": "ĐVT"
+    },
+    "status": {
+      "DRAFT": "Bản nháp",
+      "PENDING_VENDOR": "Chờ NCC xử lý",
+      "SENT": "Đã gửi NCC",
+      "CREDITED": "Đã bồi thường tiền",
+      "REPLACED": "Đã đổi hàng",
+      "CLOSED": "Đã đóng",
+      "CANCELLED": "Đã hủy"
     }
   },
   "ThreeWayMatching": {
@@ -1253,7 +2125,9 @@
       "SALES_DISPATCH": "Xuất khẩu",
       "ADJUSTMENT": "Điều chỉnh kho",
       "RETURN": "Hàng trả lại",
-      "REJECTION": "Hàng lỗi / Trả NCC"
+      "REJECTION": "Hàng lỗi / Trả NCC",
+      "RESERVE": "Giữ hàng",
+      "RELEASE": "Giải phóng"
     },
     "drawer": {
       "title": "Thẻ Kho Chi Tiết",
@@ -1263,7 +2137,16 @@
       "lot": "Lô: {lot}",
       "systemUser": "Hệ thống",
       "balance": "Tồn",
-      "empty": "Chưa có lịch sử giao dịch cho sản phẩm này"
+      "empty": "Chưa có lịch sử giao dịch cho sản phẩm này",
+      "filters": {
+        "searchPlaceholder": "Tìm mã, lô, ghi chú...",
+        "transactionTypePlaceholder": "Loại giao dịch",
+        "startDatePlaceholder": "Từ ngày",
+        "endDatePlaceholder": "Đến ngày"
+      },
+      "showing": "Đang hiển thị {count}/{total} dòng",
+      "loadMore": "Tải thêm",
+      "noFilterResults": "Không có dòng phù hợp bộ lọc"
     }
   },
   "ProductTable": {
@@ -1363,16 +2246,45 @@
   "PricingPolicy": {
     "title": "Chính sách giá",
     "description": "Quản lý bảng giá theo market, buyer, incoterm và tier số lượng",
-    "searchPlaceholder": "Tìm SKU, sản phẩm, buyer, country",
+    "searchPlaceholder": "Tìm SKU, sản phẩm, khách hàng, quốc gia",
+    "historySearchPlaceholder": "Tìm SKU, khách hàng, số chứng từ hoặc Incoterm",
     "actions": {
       "reload": "Tải lại",
       "create": "Tạo bảng giá",
+      "edit": "Sửa",
+      "deactivate": "Ngưng",
+      "test": "Kiểm tra giá",
+      "resolve": "Tính giá",
+      "reset": "Đặt lại",
       "save": "Lưu",
       "cancel": "Hủy"
     },
     "messages": {
-      "createSuccess": "Đã tạo pricing policy",
-      "createError": "Không tạo được pricing policy"
+      "createSuccess": "Đã tạo chính sách giá",
+      "updateSuccess": "Đã cập nhật chính sách giá",
+      "deactivateSuccess": "Đã ngưng hiệu lực chính sách giá",
+      "resolveSuccess": "Đã tính giá áp dụng",
+      "createError": "Không tạo được chính sách giá",
+      "saveError": "Không lưu được chính sách giá",
+      "validationError": "Vui lòng kiểm tra các trường bắt buộc trước khi lưu",
+      "deactivateError": "Không ngưng được chính sách giá",
+      "resolveError": "Không tìm thấy giá phù hợp"
+    },
+    "summary": {
+      "total": "Tổng chính sách",
+      "visibleActive": "Đang dùng trong trang",
+      "visibleBuyer": "Chính sách theo khách hàng",
+      "history": "Lịch sử giá"
+    },
+    "filters": {
+      "incoterm": "Incoterm",
+      "currency": "Tiền tệ",
+      "status": "Trạng thái",
+      "effectiveOn": "Hiệu lực ngày"
+    },
+    "confirmDeactivate": {
+      "title": "Ngưng hiệu lực bảng giá?",
+      "content": "Chính sách này sẽ không còn được chọn khi tính giá mới, nhưng lịch sử chứng từ vẫn được giữ."
     },
     "tabs": {
       "policies": "Bảng giá",
@@ -1384,20 +2296,25 @@
     },
     "policyTable": {
       "product": "Sản phẩm",
-      "marketBuyer": "Market / Buyer",
-      "globalPolicy": "Global policy",
-      "allMarkets": "Tất cả market",
+      "marketBuyer": "Thị trường / Khách hàng",
+      "globalPolicy": "Chính sách toàn cục",
+      "allMarkets": "Tất cả thị trường",
+      "route": "Tuyến cảng",
+      "allRoutes": "Tất cả tuyến",
       "incoterm": "Incoterm",
-      "tier": "Tier",
+      "tier": "Bậc số lượng",
       "infinity": "∞",
       "price": "Giá",
+      "derivation": "Cộng chi phí",
+      "noDerivation": "Không cộng chi phí",
       "effective": "Hiệu lực",
       "unlimited": "Không giới hạn",
-      "status": "Trạng thái"
+      "status": "Trạng thái",
+      "actions": "Thao tác"
     },
     "historyTable": {
       "product": "Sản phẩm",
-      "buyer": "Buyer",
+      "buyer": "Khách hàng",
       "source": "Nguồn",
       "incoterm": "Incoterm",
       "quantity": "Số lượng",
@@ -1406,24 +2323,62 @@
       "createdBy": "Người tạo"
     },
     "modal": {
-      "title": "Tạo pricing policy"
+      "title": "Tạo chính sách giá",
+      "editTitle": "Sửa chính sách giá"
     },
     "form": {
       "product": "Sản phẩm",
       "productPlaceholder": "Chọn sản phẩm",
-      "buyer": "Buyer cụ thể",
-      "buyerPlaceholder": "Để trống nếu áp dụng theo market/global",
-      "region": "Region",
-      "country": "Country",
+      "buyer": "Khách hàng cụ thể",
+      "buyerPlaceholder": "Để trống nếu áp dụng theo thị trường/toàn cục",
+      "region": "Khu vực",
+      "countryCode": "Mã quốc gia",
+      "country": "Quốc gia",
+      "originPort": "Cảng đi (POL)",
+      "destinationPort": "Cảng đến (POD)",
       "incoterm": "Incoterm",
-      "currency": "Currency",
-      "unitPrice": "Unit price",
-      "minQuantity": "Min qty",
-      "maxQuantity": "Max qty",
-      "effectiveFrom": "Effective from",
-      "effectiveTo": "Effective to",
+      "currency": "Tiền tệ",
+      "unitPrice": "Đơn giá",
+      "minQuantity": "SL tối thiểu",
+      "maxQuantity": "SL tối đa",
+      "derivationCosts": "Chi phí cộng thêm theo Incoterm",
+      "inlandCostPerUnit": "Vận chuyển nội địa đầu đi / đơn vị",
+      "portChargePerUnit": "Phí cảng đầu đi / đơn vị",
+      "freightCostPerUnit": "Cước biển / đơn vị",
+      "insuranceCostPerUnit": "Bảo hiểm / đơn vị",
+      "destinationDeliveryCostPerUnit": "Giao hàng đầu đến / đơn vị",
+      "customsCostPerUnit": "Hải quan/thuế DDP / đơn vị",
+      "derivationHint": "Đơn giá {incoterm} là giá áp dụng trực tiếp cho {incoterm}. Các khoản còn bật chỉ dùng để derive lên Incoterm cao hơn khi chưa có chính sách exact; khoản không dùng sẽ tự về 0 để tránh tính hai lần.",
+      "effectiveFrom": "Hiệu lực từ",
+      "effectiveTo": "Hiệu lực đến",
       "active": "Đang dùng",
       "note": "Ghi chú"
+    },
+    "resolver": {
+      "title": "Kiểm tra giá áp dụng",
+      "priceDate": "Ngày áp giá",
+      "result": "Kết quả tính giá",
+      "source": "Nguồn giá",
+      "price": "Giá áp dụng",
+      "unitPrice": "Đơn giá áp dụng",
+      "quantity": "Số lượng tính",
+      "estimatedAmount": "Thành tiền dự kiến",
+      "policy": "Chính sách nguồn",
+      "route": "Tuyến cảng",
+      "productDefaultSource": "Giá mặc định sản phẩm",
+      "productDefaultWarningTitle": "Không tìm thấy chính sách giá phù hợp",
+      "productDefaultWarningDesc": "Số lượng {quantity} không nằm trong bảng giá active theo sản phẩm, khách hàng, Incoterm, tiền tệ và ngày áp giá. Hệ thống đang dùng giá mặc định của sản phẩm."
+    },
+    "breakdown": {
+      "component": "Thành phần",
+      "amount": "Số tiền",
+      "base": "Giá gốc",
+      "inland": "Vận chuyển nội địa",
+      "port": "Phí cảng",
+      "freight": "Cước biển",
+      "insurance": "Bảo hiểm",
+      "destinationDelivery": "Giao hàng đầu đến",
+      "customs": "Hải quan/thuế DDP"
     }
   },
   "PaymentTerms": {
@@ -1535,6 +2490,8 @@
       "submitApproval": "Gửi duyệt",
       "sendSignature": "Gửi ký",
       "buyerSign": "Buyer ký",
+      "resendSignature": "Gửi lại link",
+      "revokeSignature": "Hủy link ký",
       "internalSign": "Ký nội bộ",
       "ship": "XUẤT KHO",
       "view": "Chi tiết",
@@ -1544,12 +2501,18 @@
       "fetchError": "Không thể tải danh sách hợp đồng",
       "submitApprovalSuccess": "Đã gửi hợp đồng vào luồng phê duyệt",
       "sendSignatureSuccess": "Đã chuyển hợp đồng sang trạng thái chờ buyer ký",
+      "resendSignatureSuccess": "Đã gửi lại link ký cho buyer",
+      "revokeSignatureSuccess": "Đã hủy link ký và đưa hợp đồng về trạng thái đã phê duyệt",
       "buyerSignSuccess": "Buyer đã ký hợp đồng",
       "internalSignSuccess": "Đã ký nội bộ và chốt hợp đồng",
       "confirmSuccess": "Đã duyệt và giữ hàng thành công",
       "shipSuccess": "Đã xác nhận xuất kho",
       "actionFailed": "Thao tác thất bại",
+      "portalLinkCopied": "Đã copy link portal. Trạng thái gửi: {delivery}",
+      "portalLinkFallback": "Link portal: {url}",
+      "noActiveSignatureInvitation": "Không tìm thấy link ký buyer đang hoạt động",
       "submitApprovalTitle": "Gửi hợp đồng vào approval matrix?",
+      "revokeSignatureTitle": "Hủy link ký buyer hiện tại?",
       "confirmTitle": "Hệ thống sẽ tự động RESERVE hàng trong kho. Bạn chắc chắn?",
       "shipTitle": "Xác nhận xuất kho cho lô hàng này?",
       "confirmOk": "Duyệt ngay",
@@ -1577,6 +2540,10 @@
       "incoterm": "Điều kiện (Incoterms)",
       "currency": "Đồng tiền",
       "rate": "Tỷ giá",
+      "paymentTerms": "Điều khoản thanh toán",
+      "paymentTermsPlaceholder": "Chọn phương thức thanh toán",
+      "deliveryDate": "Ngày giao hàng",
+      "deliveryDatePlaceholder": "Chọn ngày giao hàng",
       "logisticsDivider": "Chi Phí Logistics (Sẽ tự động tính vào HĐ tùy Incoterm)",
       "transport": "Vận tải nội địa",
       "port": "Phí cảng (THC...)",
@@ -1676,7 +2643,8 @@
       "cancel": "Hủy",
       "sections": {
         "bankInfo": "Thông tin Ngân hàng",
-        "datesDocuments": "Thời hạn & Chứng từ"
+        "datesDocuments": "Thời hạn & Chứng từ",
+        "attachments": "Tài liệu đính kèm L/C gốc"
       },
       "fields": {
         "lcNumber": "Số L/C",
@@ -1689,8 +2657,11 @@
         "issueDate": "Ngày mở L/C",
         "expiryDate": "Ngày hết hạn",
         "latestShipmentDate": "Hạn giao hàng cuối",
+        "presentationDeadline": "Hạn xuất trình chứng từ",
         "descriptionOfGoods": "Mô tả hàng hóa",
-        "documentsRequired": "Chứng từ yêu cầu"
+        "documentsRequired": "Chứng từ yêu cầu",
+        "additionalConditions": "Điều kiện bổ sung",
+        "attachmentUrl": "File đính kèm L/C gốc"
       },
       "placeholders": {
         "lcNumber": "Nhập mã hiệu L/C",
@@ -1698,7 +2669,9 @@
         "issuingBank": "Tên ngân hàng phía người mua",
         "advisingBank": "Tên ngân hàng phía người bán",
         "descriptionOfGoods": "Mô tả chi tiết theo L/C...",
-        "documentsRequired": "Vận đơn, hóa đơn, C/O..."
+        "documentsRequired": "Vận đơn, hóa đơn, C/O...",
+        "additionalConditions": "Dung sai, giao hàng từng phần, chuyển tải, điều khoản ngân hàng...",
+        "attachmentUrl": "Nhập đường dẫn URL hoặc tải lên..."
       },
       "lcTypes": {
         "AT_SIGHT": "Trả ngay",
@@ -1706,12 +2679,22 @@
         "USANCE": "Kỳ hạn"
       },
       "validation": {
-        "lcNumber": "Vui lòng nhập số L/C"
+        "lcNumber": "Vui lòng nhập số L/C",
+        "expiryAfterIssue": "Ngày hết hạn phải bằng hoặc sau ngày mở L/C",
+        "shipmentBeforeExpiry": "Hạn giao hàng cuối phải bằng hoặc trước ngày hết hạn",
+        "presentationBeforeExpiry": "Hạn xuất trình chứng từ phải bằng hoặc trước ngày hết hạn"
       },
       "notifications": {
         "createSuccess": "Tạo L/C mới thành công",
         "updateSuccess": "Cập nhật L/C thành công",
-        "error": "Có lỗi xảy ra"
+        "error": "Có lỗi xảy ra",
+        "uploadSuccess": "Tải lên file thành công",
+        "uploadFailed": "Tải lên file thất bại"
+      },
+      "upload": {
+        "uploadAttachment": "Tải lên L/C gốc",
+        "acceptFormats": "Chấp nhận file scan PDF hoặc ảnh (PNG/JPG)",
+        "filePlaceholder": "Chưa có file đính kèm"
       }
     }
   },
@@ -1779,32 +2762,323 @@
     }
   },
   "Accounting": {
-    "title": "Kế Toán Tài Chính",
-    "description": "Quản lý nhật ký chung, sổ cái và báo cáo kết quả kinh doanh tự động",
+    "title": "Kế toán tài chính",
+    "description": "Quản lý nhật ký chung, sổ cái và báo cáo tài chính tự động",
     "actions": {
       "refresh": "Làm mới",
-      "closePeriod": "Kết chuyển cuối kỳ"
+      "closePeriod": "Đóng kỳ",
+      "advancedFilters": "Bộ lọc nâng cao",
+      "exportExcel": "Xuất Excel",
+      "traceLedger": "Truy xuất sổ chi tiết",
+      "viewDebtors": "Xem danh sách khách hàng nợ",
+      "viewCreditors": "Xem danh sách nhà cung cấp cần trả",
+      "openPeriod": "Mở kỳ",
+      "runRevaluation": "Chạy revaluation",
+      "createDossier": "Tạo hồ sơ",
+      "exportCsv": "Xuất CSV",
+      "policy": "Chính sách",
+      "close": "Đóng",
+      "reopen": "Mở lại",
+      "requestLock": "Gửi duyệt khóa",
+      "submit": "Nộp",
+      "approve": "Duyệt",
+      "reject": "Từ chối",
+      "receiveMoney": "Nhận tiền"
     },
     "summary": {
-      "revenue": "Tổng Doanh Thu",
-      "cogs": "Giá Vốn Hàng Bán",
-      "expenses": "Chi Phí Vận Hành",
-      "netProfit": "Lợi Nhuận Thuần"
+      "revenue": "Tổng doanh thu",
+      "cogs": "Giá vốn hàng bán",
+      "expenses": "Chi phí vận hành",
+      "netProfit": "Lợi nhuận thuần"
     },
     "tabs": {
       "journal": "Nhật ký chung",
-      "reports": "Báo cáo Tài chính"
+      "reports": "Báo cáo tài chính",
+      "workflows": "Workflow kế toán",
+      "pl": "Kết quả kinh doanh (P&L)",
+      "balanceSheet": "Bảng cân đối kế toán",
+      "cashFlow": "Lưu chuyển tiền tệ",
+      "aging": "Công nợ & tuổi nợ"
     },
     "filters": {
       "searchPlaceholder": "Tìm theo diễn giải hoặc mã..."
     },
-    "journalHint": "Tất cả các bút toán được sinh tự động từ các nghiệp vụ Kho & Bán hàng",
+    "alerts": {
+      "costHiddenTitle": "Chỉ số giá vốn và lợi nhuận đang được ẩn",
+      "costHiddenDescription": "Tài khoản hiện tại không có quyền read:cost_fields nên các KPI COGS, chi phí và lợi nhuận không được hiển thị trên admin."
+    },
+    "journalHint": "Tất cả các bút toán được sinh tự động từ nghiệp vụ kho và bán hàng",
     "table": {
-      "entryNumber": "MÃ BÚT TOÁN",
-      "description": "DIỄN GIẢI",
-      "entryDetails": "CHI TIẾT ĐỊNH KHOẢN (NỢ / CÓ)",
+      "entryNumber": "Mã bút toán",
+      "description": "Diễn giải",
+      "entryDetails": "Chi tiết định khoản (Nợ / Có)",
       "reference": "THAM CHIẾU",
-      "status": "TRẠNG THÁI"
+      "status": "Trạng thái"
+    },
+    "empty": {
+      "noJournal": "Chưa có bút toán"
+    },
+    "reports": {
+      "loading": "Đang chuẩn bị báo cáo tài chính...",
+      "hiddenByPermission": "Ẩn theo phân quyền",
+      "noCostPermission": "Chỉ số biên lợi nhuận và vòng quay tồn kho đang được ẩn theo phân quyền",
+      "kpi": {
+        "netRevenue": "Doanh thu thuần",
+        "comparedPreviousPeriod": "so với kỳ trước",
+        "netProfit": "Lợi nhuận ròng",
+        "netCashFlow": "Dòng tiền thuần",
+        "positiveCashFlow": "Dòng tiền dương",
+        "negativeCashFlow": "Dòng tiền âm",
+        "customerReceivables": "Phải thu KH",
+        "customerDebtTotal": "Tổng dư nợ khách hàng"
+      },
+      "sections": {
+        "financialTrend": "Xu hướng tài chính",
+        "financialTrendDescription": "Phân tích biến động doanh thu và lợi nhuận qua các kỳ",
+        "performanceRatios": "Chỉ số hiệu quả",
+        "plDetail": "Chi tiết báo cáo Kết quả kinh doanh (P&L)"
+      },
+      "chart": {
+        "revenue": "Doanh thu",
+        "profit": "Lợi nhuận"
+      },
+      "ratios": {
+        "grossMargin": "Biên lợi nhuận gộp",
+        "netMargin": "Biên lợi nhuận ròng",
+        "inventoryTurnover": "Vòng quay tồn kho",
+        "turnoverValue": "{value} lần",
+        "currentRatio": "Khả năng thanh toán",
+        "currentRatioValue": "{value}"
+      },
+      "plRows": {
+        "revenue": "Doanh thu bán hàng và cung cấp dịch vụ",
+        "deductions": "Các khoản giảm trừ doanh thu",
+        "netRevenue": "Doanh thu thuần",
+        "cogs": "Giá vốn hàng bán",
+        "grossProfit": "Lợi nhuận gộp về bán hàng",
+        "operatingExpenses": "Chi phí bán hàng & QL doanh nghiệp",
+        "operatingNetProfit": "Lợi nhuận thuần từ hoạt động kinh doanh",
+        "hiddenCost": "Giá vốn, chi phí và lợi nhuận"
+      },
+      "columns": {
+        "metric": "Chỉ tiêu",
+        "currentPeriod": "Kỳ này (VND)",
+        "previousPeriod": "Kỳ trước (VND)",
+        "changePercent": "% Tăng/Giảm",
+        "details": "Chi tiết",
+        "account": "Tài khoản",
+        "balance": "Số dư",
+        "date": "Ngày hạch toán",
+        "reference": "Chứng từ gốc",
+        "debit": "Phát sinh Nợ",
+        "credit": "Phát sinh Có"
+      },
+      "actions": {
+        "drilldown": "Xem chi tiết bút toán"
+      },
+      "balanceSheet": {
+        "assetStructure": "Cơ cấu tài sản",
+        "capitalStructure": "Cơ cấu nguồn vốn",
+        "assets": "TÀI SẢN",
+        "liabilitiesEquity": "NGUỒN VỐN",
+        "totalAssets": "TỔNG CỘNG TÀI SẢN",
+        "totalLiabilitiesEquity": "TỔNG CỘNG NGUỒN VỐN"
+      },
+      "cashFlow": {
+        "operatingCashFlow": "Dòng tiền hoạt động",
+        "inflow": "Tiền thu",
+        "outflow": "Tiền chi",
+        "netCashFlow": "Dòng tiền thuần",
+        "summary": "Tóm tắt dòng tiền",
+        "salesCollections": "Thu từ bán hàng",
+        "vendorPayments": "Chi cho nhà cung cấp"
+      },
+      "aging": {
+        "arTitle": "Tuổi nợ phải thu (AR Aging)",
+        "apTitle": "Tuổi nợ phải trả (AP Aging)",
+        "current": "Trong hạn",
+        "days30": "1-30 ngày",
+        "days60": "31-60 ngày",
+        "days90": "61-90 ngày",
+        "over90": "> 90 ngày",
+        "over60": "> 60 ngày"
+      },
+      "agingDetails": {
+        "arTitle": "Danh sách khách hàng nợ",
+        "apTitle": "Danh sách nhà cung cấp cần trả",
+        "searchPlaceholder": "Tìm đối tác, hóa đơn, chứng từ...",
+        "summary": "{partners} đối tác / {items} chứng từ mở / {amount}",
+        "noData": "Không có công nợ mở phù hợp",
+        "loadError": "Không tải được danh sách tuổi nợ",
+        "customer": "Khách hàng",
+        "vendor": "Nhà cung cấp",
+        "partner": "Đối tác",
+        "partnerCount": "Số đối tác",
+        "partnerTotal": "Tổng {total} đối tác",
+        "itemCount": "Số chứng từ",
+        "totalOpen": "Số dư mở",
+        "overdueTotal": "Tổng quá hạn",
+        "earliestDueDate": "Hạn sớm nhất",
+        "worstOverdue": "Quá hạn nặng nhất",
+        "daysOverdue": "{days} ngày",
+        "notOverdue": "Trong hạn",
+        "document": "Chứng từ",
+        "reference": "Tham chiếu",
+        "issueDate": "Ngày phát sinh",
+        "dueDate": "Hạn thanh toán",
+        "currency": "Tiền tệ",
+        "originalAmount": "Giá trị gốc",
+        "paidAmount": "Đã thanh toán",
+        "remaining": "Còn lại",
+        "bucket": "Tuổi nợ",
+        "status": "Trạng thái",
+        "openFullModule": "Mở module chi tiết",
+        "exportedAt": "Xuất lúc",
+        "exportFilePrefix": "Chi_Tiet_Tuoi_No"
+      },
+      "export": {
+        "plTitle": "BÁO CÁO KẾT QUẢ KINH DOANH",
+        "balanceSheetTitle": "BẢNG CÂN ĐỐI KẾ TOÁN",
+        "fromDate": "Từ ngày",
+        "toDate": "Đến ngày",
+        "metric": "Chỉ tiêu",
+        "currentPeriod": "Kỳ này (VND)",
+        "previousPeriod": "Kỳ trước (VND)",
+        "account": "Tài khoản",
+        "balance": "Số dư (VND)",
+        "filePrefix": "Bao_Cao_Tai_Chinh",
+        "rows": {
+          "revenue": "Doanh thu",
+          "cogs": "Giá vốn",
+          "expenses": "Chi phí",
+          "netProfit": "Lợi nhuận thuần"
+        }
+      }
+    },
+    "workflows": {
+      "messages": {
+        "updated": "Đã cập nhật workflow kế toán",
+        "exportTaxError": "Không thể xuất báo cáo thuế"
+      },
+      "defaults": {
+        "closeNote": "Đóng kỳ sau khi đạt checklist close policy",
+        "lockReason": "Khóa kỳ cuối sau rà soát quản trị",
+        "rejectReason": "Không đủ điều kiện hoàn thuế",
+        "reopenReason": "Điều chỉnh số liệu sau khóa sổ"
+      },
+      "cards": {
+        "accountingPeriod": "Kỳ kế toán",
+        "fxRevaluation": "Đánh giá lại FX",
+        "vatRefundDossier": "Hồ sơ hoàn thuế"
+      },
+      "form": {
+        "periodRange": "Khoảng kỳ",
+        "revaluationDate": "Ngày cuối kỳ",
+        "currency": "Tiền tệ",
+        "closingRate": "Tỷ giá cuối kỳ",
+        "postJournal": "Hạch toán ngay",
+        "taxPeriod": "Kỳ thuế",
+        "exportRevenue": "Doanh thu XK",
+        "refundAmount": "Đề nghị hoàn"
+      },
+      "validation": {
+        "periodRange": "Chọn kỳ kế toán",
+        "revaluationDate": "Chọn ngày cuối kỳ",
+        "currency": "Nhập tiền tệ",
+        "closingRate": "Nhập tỷ giá cuối kỳ",
+        "taxPeriod": "Chọn kỳ thuế"
+      },
+      "taxReport": {
+        "title": "Báo cáo thuế production-grade",
+        "inputVat": "VAT đầu vào",
+        "outputVat": "VAT đầu ra",
+        "refundableVat": "Đề nghị hoàn",
+        "exportRevenue": "Doanh thu xuất khẩu",
+        "customsTraced": "Tờ khai hải quan truy vết: {count}",
+        "coTraced": "C/O truy vết: {count}",
+        "refundDossiers": "Hồ sơ hoàn VAT: {count}",
+        "reconciliationWarnings": "Cảnh báo đối chiếu: {count}",
+        "warnings": {
+          "noAccountingPeriod": "Chưa cấu hình kỳ kế toán cho khoảng báo cáo thuế này.",
+          "missingCustoms": "Có doanh thu xuất khẩu nhưng chưa truy vết được tờ khai hải quan trong kỳ thuế.",
+          "missingCo": "Có doanh thu xuất khẩu nhưng chưa truy vết được chứng nhận C/O trong kỳ thuế.",
+          "missingRefundDossier": "Có VAT được hoàn nhưng chưa có hồ sơ hoàn thuế đã nộp/duyệt/nhận tiền trong kỳ.",
+          "missingVatReference": "Dòng VAT {entry} thiếu tham chiếu chứng từ."
+        }
+      },
+      "sections": {
+        "periodList": "Danh sách kỳ kế toán",
+        "frozenTaxRuns": "Các lần chốt báo cáo thuế",
+        "closePackets": "Gói đóng kỳ kế toán",
+        "fxRevaluations": "Đánh giá lại chênh lệch tỷ giá chưa thực hiện",
+        "vatRefundWorkflow": "Workflow hoàn thuế GTGT xuất khẩu",
+        "immutableAudit": "Audit kế toán bất biến"
+      },
+      "columns": {
+        "start": "Bắt đầu",
+        "end": "Kết thúc",
+        "status": "Trạng thái",
+        "closedBy": "Đóng bởi",
+        "reopenCount": "Số lần mở lại",
+        "periodHash": "Hash kỳ",
+        "reopenedBy": "Mở lại bởi",
+        "actions": "Thao tác",
+        "run": "Lần chạy",
+        "period": "Kỳ",
+        "by": "Bởi",
+        "warnings": "Cảnh báo",
+        "reportHash": "Hash báo cáo",
+        "runHash": "Hash lần chạy",
+        "packet": "Gói",
+        "journals": "Bút toán",
+        "failed": "Lỗi",
+        "packetHash": "Hash gói",
+        "source": "Nguồn",
+        "currency": "Tiền tệ",
+        "openFcy": "Số dư ngoại tệ",
+        "gainLossVnd": "Lãi/lỗ VND",
+        "dossier": "Hồ sơ",
+        "event": "Sự kiện",
+        "entity": "Đối tượng",
+        "user": "Người dùng",
+        "at": "Thời điểm",
+        "hash": "Hash"
+      },
+      "approval": {
+        "reopenPending": "Chờ duyệt mở lại",
+        "lockPending": "Chờ duyệt khóa"
+      },
+      "status": {
+        "OPEN": "Đang mở",
+        "CLOSED": "Đã đóng",
+        "LOCKED": "Đã khóa",
+        "DRAFT": "Nháp",
+        "SUBMITTED": "Đã nộp",
+        "APPROVED": "Đã duyệt",
+        "PAID": "Đã nhận tiền",
+        "REJECTED": "Từ chối",
+        "POSTED": "Đã ghi sổ",
+        "PASSED": "Đạt",
+        "WARNING": "Cảnh báo",
+        "FAILED": "Lỗi"
+      },
+      "closePolicy": {
+        "title": "Chính sách đóng kỳ kế toán",
+        "ready": "Sẵn sàng đóng kỳ",
+        "failed": "Close policy chưa đạt",
+        "summary": "Lỗi: {failed} | Cảnh báo: {warnings} | Dòng kết chuyển: {lines}",
+        "totalDebit": "Tổng Nợ",
+        "totalCredit": "Tổng Có",
+        "policyHash": "Hash chính sách",
+        "check": "Kiểm tra",
+        "details": "Chi tiết",
+        "loading": "Đang tải close policy..."
+      },
+      "reopen": {
+        "title": "Mở lại kỳ kế toán",
+        "description": "Lý do mở lại sẽ được lưu audit trên kỳ kế toán.",
+        "placeholder": "Nhập lý do mở lại kỳ"
+      }
     }
   },
   "UserManagement": {
@@ -1818,12 +3092,12 @@
     "actions": {
       "create": "Tạo người dùng mới",
       "edit": "Chỉnh sửa",
-      "delete": "Xóa",
-      "deleteAll": "Xóa tất cả",
-      "bulkDelete": "Xóa hàng loạt"
+      "delete": "Tạm khóa",
+      "deleteAll": "Tạm khóa tất cả",
+      "bulkDelete": "Tạm khóa hàng loạt"
     },
     "filters": {
-      "searchPlaceholder": "Tìm tên hoặc email...",
+      "searchPlaceholder": "Tìm tên, username, email hoặc SĐT...",
       "rolePlaceholder": "Vai trò",
       "statusPlaceholder": "Trạng thái"
     },
@@ -1841,17 +3115,158 @@
     "messages": {
       "missingTokenTitle": "Lỗi nội bộ",
       "missingTokenDescription": "Không tìm thấy access token.",
-      "deleteSuccess": "Xóa người dùng thành công",
+      "deleteSuccess": "Tạm khóa người dùng thành công",
       "bulkSuccess": "Thao tác thành công",
       "error": "Lỗi"
     },
     "confirm": {
-      "deleteTitle": "Xóa người dùng này?",
-      "bulkDeleteTitle": "Xóa {count} người dùng?",
+      "deleteTitle": "Tạm khóa người dùng này?",
+      "bulkDeleteTitle": "Tạm khóa {count} người dùng?",
       "cancel": "Hủy"
     },
     "selection": "Đã chọn {count} mục",
     "pagination": "{start}-{end} của {total} người dùng"
+  },
+  "RolePermissions": {
+    "tabs": {
+      "users": "Người dùng",
+      "permissions": "Vai trò & Phân quyền"
+    },
+    "title": "Vai trò & Phân quyền",
+    "description": "Quản lý phạm vi thao tác của từng vai trò theo module nghiệp vụ",
+    "filters": {
+      "searchPlaceholder": "Tìm quyền nghiệp vụ hoặc module...",
+      "roleSearchPlaceholder": "Tìm vai trò..."
+    },
+    "sections": {
+      "roleList": "Vai trò",
+      "permissionGroups": "Nhóm quyền"
+    },
+    "labels": {
+      "assignedCount": "Đã cấp {count}/{total} quyền",
+      "appliedToRoles": "{count}/{total} vai trò",
+      "visibleCount": "{count} quyền đang hiển thị",
+      "totalPermissions": "Tổng {count} quyền",
+      "roleCount": "{count} vai trò",
+      "unsavedChanges": "Có thay đổi chưa lưu",
+      "noDescription": "Chưa có mô tả"
+    },
+    "actions": {
+      "reload": "Tải lại",
+      "save": "Lưu thay đổi",
+      "reset": "Hoàn tác",
+      "grantVisibleRole": "Cấp quyền đang hiển thị",
+      "clearVisibleRole": "Xóa quyền đang hiển thị",
+      "grantPermissionToAllRoles": "Cấp quyền này cho mọi vai trò",
+      "clearPermissionFromAllRoles": "Xóa quyền này khỏi mọi vai trò"
+    },
+    "actionTypes": {
+      "view": "Xem",
+      "createEdit": "Tạo / Sửa",
+      "edit": "Sửa",
+      "manage": "Quản lý",
+      "fullAccess": "Toàn quyền",
+      "custom": "Tùy chỉnh"
+    },
+    "modules": {
+      "system": "Quản trị hệ thống",
+      "accounting": "Kế toán & Thuế",
+      "exportDocuments": "Bộ chứng từ xuất khẩu",
+      "salesContracts": "Hợp đồng bán hàng",
+      "sensitiveFields": "Dữ liệu nhạy cảm",
+      "general": "Quyền khác"
+    },
+    "permissions": {
+      "readAll": {
+        "title": "Xem tất cả module",
+        "description": "Cho phép xem dashboard, danh sách và màn hình chi tiết trong toàn hệ thống."
+      },
+      "manageAll": {
+        "title": "Toàn quyền quản trị hệ thống",
+        "description": "Cho phép cấu hình người dùng, vai trò và toàn bộ module vận hành."
+      },
+      "readAccounting": {
+        "title": "Xem dữ liệu kế toán",
+        "description": "Cho phép xem bút toán, sổ cái, báo cáo thuế, công nợ phải thu và phải trả."
+      },
+      "writeAccounting": {
+        "title": "Tạo và cập nhật dữ liệu kế toán",
+        "description": "Cho phép ghi bút toán, cập nhật thanh toán và xử lý workflow kỳ kế toán."
+      },
+      "readExportDocument": {
+        "title": "Xem bộ chứng từ xuất khẩu",
+        "description": "Cho phép xem hóa đơn thương mại, bộ chứng từ xuất khẩu và chứng từ lô hàng liên quan."
+      },
+      "writeExportDocument": {
+        "title": "Tạo và cập nhật chứng từ xuất khẩu",
+        "description": "Cho phép phát hành, chỉnh sửa và hủy chứng từ xuất khẩu."
+      },
+      "readSalesContract": {
+        "title": "Xem hợp đồng bán hàng",
+        "description": "Cho phép xem hợp đồng xuất khẩu và thông tin thương mại liên quan."
+      },
+      "writeSalesContract": {
+        "title": "Tạo và cập nhật hợp đồng bán hàng",
+        "description": "Cho phép tạo, chỉnh sửa và chuyển trạng thái hợp đồng xuất khẩu."
+      },
+      "readCostPrice": {
+        "title": "Xem giá vốn",
+        "description": "Cho phép xem giá mua và các chỉ số liên quan đến giá vốn."
+      },
+      "readCostFields": {
+        "title": "Xem trường dữ liệu chi phí",
+        "description": "Cho phép xem biên lợi nhuận, định giá tồn kho và các trường chi phí được bảo vệ."
+      },
+      "writeCostFields": {
+        "title": "Nhập trường dữ liệu chi phí",
+        "description": "Cho phép tạo giá trị liên quan đến chi phí, định giá và biên lợi nhuận."
+      },
+      "updateCostFields": {
+        "title": "Điều chỉnh trường dữ liệu chi phí",
+        "description": "Cho phép cập nhật giá trị chi phí sau khi rà soát."
+      },
+      "manageCostFields": {
+        "title": "Quản lý toàn bộ kiểm soát chi phí",
+        "description": "Cho phép toàn quyền với các trường giá vốn và biên lợi nhuận được bảo vệ."
+      },
+      "readBankFields": {
+        "title": "Xem thông tin ngân hàng",
+        "description": "Cho phép xem tài khoản ngân hàng và thông tin chuyển khoản."
+      },
+      "readPaymentFields": {
+        "title": "Xem thông tin thanh toán",
+        "description": "Cho phép xem lịch thanh toán, chứng từ thanh toán và thông tin tất toán."
+      },
+      "manageBankFields": {
+        "title": "Quản lý thông tin ngân hàng",
+        "description": "Cho phép cập nhật tài khoản ngân hàng và thông tin chuyển khoản được bảo vệ."
+      },
+      "readTradeFinance": {
+        "title": "Xem tài trợ thương mại",
+        "description": "Cho phép xem thông tin L/C, D/P, D/A và T/T."
+      },
+      "manageTradeFinance": {
+        "title": "Quản lý tài trợ thương mại",
+        "description": "Cho phép tạo và cập nhật workflow L/C, nhờ thu và thanh toán quốc tế."
+      },
+      "readLcSensitive": {
+        "title": "Xem điều khoản L/C nhạy cảm",
+        "description": "Cho phép xem điều khoản Letter of Credit được bảo vệ và thông tin sai biệt chứng từ."
+      },
+      "custom": {
+        "description": "Quyền được cấu hình bởi quản trị hệ thống."
+      }
+    },
+    "messages": {
+      "loadError": "Không thể tải dữ liệu phân quyền",
+      "saveSuccess": "Đã cập nhật phân quyền role",
+      "saveError": "Không thể cập nhật phân quyền role"
+    },
+    "empty": {
+      "roles": "Chưa có vai trò đang hoạt động",
+      "permissions": "Chưa có permission nào được tạo",
+      "search": "Không có kết quả phù hợp"
+    }
   },
   "SystemSettings": {
     "pageTitle": "Cài đặt hệ thống",
@@ -2199,7 +3614,8 @@
       "ACCOUNTING_PERIOD_REOPEN": "Mở lại kỳ kế toán",
       "ACCOUNTING_PERIOD_LOCK": "Khóa kỳ kế toán",
       "SALES_CONTRACT_CANCEL": "Hủy hợp đồng bán hàng",
-      "EXPORT_DOCUMENT_REVIEW": "Rà soát chứng từ xuất khẩu"
+      "EXPORT_DOCUMENT_REVIEW": "Rà soát chứng từ xuất khẩu",
+      "PRICING_POLICY": "Chính sách giá"
     }
   },
   "Approvals": {
@@ -2289,7 +3705,8 @@
       "TRADE_FINANCE": "Giao dịch Tài chính",
       "INVENTORY_COUNT": "Phiếu kiểm kê",
       "PRODUCT_CHANGE_REQUEST": "Thay đổi sản phẩm",
-      "APPROVAL_WORKFLOW": "Luồng phê duyệt"
+      "APPROVAL_WORKFLOW": "Luồng phê duyệt",
+      "PRICING_POLICY": "Chính sách giá"
     },
     "notifications": {
       "approveSuccess": "Đã phê duyệt {number} thành công",
@@ -2448,6 +3865,23 @@
         "total": "Thành tiền",
         "required": "Bắt buộc"
       },
+      "pricing": {
+        "resolving": "Đang tính giá",
+        "sourcePolicy": "Chính sách giá",
+        "sourceDerived": "Quy đổi Incoterm",
+        "sourceProductDefault": "Giá mặc định",
+        "sourceManual": "Giá nhập tay",
+        "sourceUnresolved": "Chưa có giá",
+        "productDefaultHint": "Không có chính sách phù hợp, đang dùng giá mặc định sản phẩm.",
+        "unresolvedHint": "Chưa tìm thấy chính sách giá phù hợp.",
+        "includedCosts": "Đã bao gồm: {items}",
+        "costInland": "vận chuyển nội địa đầu đi",
+        "costPort": "phí cảng đầu đi",
+        "costFreight": "cước biển",
+        "costInsurance": "bảo hiểm",
+        "costDestination": "giao hàng đầu đến",
+        "costCustoms": "hải quan/thuế DDP"
+      },
       "logistics": {
         "seaFreight": "Cước biển (Sea Freight)",
         "insurance": "Bảo hiểm (Insurance)",
@@ -2455,7 +3889,9 @@
         "portCharges": "Phí tại cảng (Local charges)",
         "other": "Phí khác / Doc Fee",
         "required": "Bắt buộc!",
-        "buyerCollect": "Buyer Collect"
+        "buyerCollect": "Buyer Collect",
+        "optional": "Tuỳ chọn",
+        "includedLocked": "Đã nằm trong đơn giá: {items}. Các ô tương ứng đã khóa để tránh tính hai lần."
       },
       "notifications": {
         "success": "Tạo báo giá thành công!",
@@ -2623,15 +4059,20 @@
     "description": "Tạo phiếu kiểm kê, duyệt chênh lệch trước khi ghi ledger và xem valuation FIFO/AVG",
     "hiddenByPermission": "Ẩn theo phân quyền",
     "searchPlaceholder": "Tìm số phiếu, kho, người tạo",
+    "draftEntryHint": "Nhập số thực đếm cho phiếu nháp, lưu lại rồi gửi duyệt để khóa chênh lệch.",
     "actions": {
       "reload": "Tải lại",
       "create": "Tạo phiếu kiểm kê",
       "submit": "Gửi duyệt",
-      "approve": "Duyệt"
+      "approve": "Duyệt",
+      "saveDraft": "Lưu thực đếm",
+      "openApproval": "Xem phê duyệt"
     },
     "messages": {
       "createSuccess": "Đã tạo phiếu kiểm kê từ tồn kho hiện tại",
       "createError": "Không tạo được phiếu kiểm kê",
+      "saveSuccess": "Đã lưu số thực đếm",
+      "saveError": "Không lưu được số thực đếm",
       "submitSuccess": "Đã gửi duyệt phiếu kiểm kê",
       "submitError": "Không gửi duyệt được phiếu kiểm kê",
       "approveSuccess": "Đã duyệt và ghi nhận chênh lệch kiểm kê",
@@ -2645,6 +4086,22 @@
     "sections": {
       "counts": "Phiếu kiểm kê",
       "valuation": "Báo cáo định giá tồn kho"
+    },
+    "valuation": {
+      "methodInUse": "Đang dùng {method}",
+      "generatedAt": "Dữ liệu được tính lúc: {time}",
+      "FIFO": {
+        "title": "FIFO - nhập trước, xuất trước",
+        "description": "Định giá tồn kho theo các lớp hàng còn lại sau khi xuất từ lô nhập cũ nhất trước. Phù hợp khi cần bám sát giá vốn theo lô."
+      },
+      "AVG": {
+        "title": "AVG - bình quân gia quyền",
+        "description": "Định giá tồn kho theo đơn giá bình quân của lượng hàng còn lại. Phù hợp khi muốn làm phẳng biến động giá giữa các lô."
+      },
+      "sameResultTitle": "FIFO và AVG đang cho cùng kết quả",
+      "sameResultDescription": "Điều này bình thường nếu các lô còn tồn đang cùng đơn giá, chỉ còn một lớp giá, hoặc dữ liệu cũ chưa có chênh lệch giá theo lô.",
+      "differentResultTitle": "FIFO và AVG đang lệch {difference}",
+      "differentResultDescription": "Tổng FIFO: {fifo}. Tổng AVG: {avg}."
     },
     "status": {
       "DRAFT": "Nháp",
@@ -2677,11 +4134,11 @@
     }
   },
   "ExportDeliveries": {
-    "title": "Phiếu xuất kho export",
-    "description": "Quản lý phiếu xuất kho export độc lập với shipment",
+    "title": "Phiếu xuất kho",
+    "description": "Quản lý phiếu xuất kho xuất khẩu gắn với lô hàng",
     "actions": {
       "reload": "Tải lại",
-      "createFromShipment": "Tạo từ shipment",
+      "createFromShipment": "Tạo từ lô hàng",
       "detail": "Chi tiết",
       "issue": "Xuất kho",
       "cancel": "Hủy",
@@ -2697,14 +4154,21 @@
     },
     "table": {
       "delivery": "Phiếu xuất",
-      "shipment": "Shipment",
-      "buyer": "Buyer",
+      "shipment": "Lô hàng",
+      "buyer": "Khách hàng",
       "status": "Trạng thái",
       "lines": "Dòng",
       "actions": "Thao tác"
     },
     "itemTable": {
-      "quantity": "Số lượng"
+      "sku": "SKU",
+      "quantity": "Số lượng",
+      "lot": "Lô"
+    },
+    "empty": {
+      "noDeliveries": "Chưa có phiếu xuất kho",
+      "noItems": "Chưa có dòng xuất kho",
+      "noAudit": "Chưa có lịch sử thao tác"
     },
     "status": {
       "DRAFT": "Nháp",
@@ -2716,7 +4180,7 @@
       "cancelTitle": "Hủy phiếu xuất kho"
     },
     "form": {
-      "shipment": "Shipment",
+      "shipment": "Lô hàng",
       "deliveryDate": "Ngày xuất dự kiến",
       "note": "Ghi chú",
       "reason": "Lý do"
@@ -2727,8 +4191,8 @@
     "drawer": {
       "defaultTitle": "Phiếu xuất kho",
       "status": "Trạng thái",
-      "shipment": "Shipment",
-      "buyer": "Buyer",
+      "shipment": "Lô hàng",
+      "buyer": "Khách hàng",
       "createdBy": "Người tạo",
       "issuedBy": "Người xuất",
       "issuedAt": "Thời điểm xuất",
@@ -2866,7 +4330,7 @@
       "detail": "Chi tiết",
       "issue": "Phát hành",
       "cancel": "Hủy",
-      "esignPdf": "PDF ký số",
+      "invoicePdf": "PDF hóa đơn",
       "createDraft": "Tạo nháp",
       "cancelDocument": "Hủy chứng từ"
     },
@@ -2944,7 +4408,9 @@
       "createFailed": "Không thể tạo hóa đơn thương mại",
       "issueFailed": "Không thể phát hành hóa đơn thương mại",
       "cancelFailed": "Không thể hủy hóa đơn thương mại",
-      "downloadFailed": "Không thể tải PDF bộ ký số"
+      "detailFailed": "Không thể tải chi tiết hóa đơn thương mại",
+      "downloadFailed": "Không thể tải PDF hóa đơn thương mại",
+      "issueBeforeDownload": "Cần phát hành hóa đơn thương mại trước khi tải PDF chính thức"
     }
   },
   "AdjustmentModal": {

@@ -1,4 +1,13 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  Query,
+} from '@nestjs/common';
 import { PurchaseOrdersService } from './purchase-orders.service';
 import { CreatePurchaseOrderDto } from './dto/create-purchase-order.dto';
 import { UpdatePurchaseOrderDto } from './dto/update-purchase-order.dto';
@@ -15,22 +24,28 @@ export class PurchaseOrdersController {
   @Post()
   @Roles('ADMIN', 'PURCHASING')
   @ResponseMessage('Tạo đơn đặt hàng thành công')
-  create(@Body() createPurchaseOrderDto: CreatePurchaseOrderDto, @User() user: IUser) {
+  create(
+    @Body() createPurchaseOrderDto: CreatePurchaseOrderDto,
+    @User() user: IUser,
+  ) {
     return this.purchaseOrdersService.create(createPurchaseOrderDto, user);
   }
 
   @Post('from-pr')
   @Roles('ADMIN', 'PURCHASING')
   @ResponseMessage('Tạo đơn đặt hàng từ yêu cầu mua hàng thành công')
-  createFromPR(@Body() body: { purchaseRequestId: string; vendorId?: string }, @User() user: IUser) {
+  createFromPR(
+    @Body() body: { purchaseRequestId: string; vendorId?: string },
+    @User() user: IUser,
+  ) {
     return this.purchaseOrdersService.createFromPR(body, user);
   }
 
   @Get()
   @ResponseMessage('Lấy danh sách đơn đặt hàng thành công')
   findAll(
-    @Query("current") currentPage: string,
-    @Query("pageSize") limit: string,
+    @Query('current') currentPage: string,
+    @Query('pageSize') limit: string,
     @Query() qs: string,
   ) {
     return this.purchaseOrdersService.findAll(+currentPage, +limit, qs);
@@ -50,7 +65,10 @@ export class PurchaseOrdersController {
 
   @Patch(':_id')
   @ResponseMessage('Cập nhật đơn đặt hàng thành công')
-  update(@Param('_id') recordId: string, @Body() updatePurchaseOrderDto: UpdatePurchaseOrderDto) {
+  update(
+    @Param('_id') recordId: string,
+    @Body() updatePurchaseOrderDto: UpdatePurchaseOrderDto,
+  ) {
     return this.purchaseOrdersService.update(recordId, updatePurchaseOrderDto);
   }
 

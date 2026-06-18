@@ -4,7 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Brackets, LessThanOrEqual, Not, Repository } from 'typeorm';
+import { Brackets, In, LessThanOrEqual, Repository } from 'typeorm';
 import Decimal from 'decimal.js';
 import {
   AccountPayable,
@@ -114,6 +114,12 @@ export class VendorEvaluationsService {
     return new Date(value.getFullYear(), value.getMonth(), 1);
   }
 
+  private endOfMonth(value: Date) {
+    return this.endOfBusinessDay(
+      new Date(value.getFullYear(), value.getMonth() + 1, 0),
+    );
+  }
+
   private monthKey(value: Date) {
     return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}`;
   }
@@ -125,6 +131,37 @@ export class VendorEvaluationsService {
 
   private toOptionalDate(value?: string | Date | null) {
     return value ? new Date(value) : undefined;
+  }
+
+  private resolveScorecardMonth(value?: string) {
+    if (!value) return this.startOfMonth(new Date());
+    const match = /^(\d{4})-(\d{2})$/.exec(value);
+    if (!match) {
+      throw new BadRequestException('Thang xem scorecard khong hop le');
+    }
+
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    if (!Number.isInteger(year) || month < 1 || month > 12) {
+      throw new BadRequestException('Thang xem scorecard khong hop le');
+    }
+
+    return new Date(year, month - 1, 1);
+  }
+
+  private isWithinDateRange(
+    value: string | Date | null | undefined,
+    start: Date,
+    end: Date,
+  ) {
+    if (!value) return false;
+    const time = new Date(value).getTime();
+    return time >= start.getTime() && time <= end.getTime();
+  }
+
+  private isOnOrBefore(value: string | Date | null | undefined, end: Date) {
+    if (!value) return false;
+    return new Date(value).getTime() <= end.getTime();
   }
 
   private async calculateOperationalVendorMetrics(vendorId: string) {
@@ -407,7 +444,7 @@ export class VendorEvaluationsService {
       this.evaluationRepository.find({
         where: { status: VendorEvaluationStatus.APPROVED },
         relations: ['vendor'],
-        order: { updatedAt: 'DESC' },
+        order: { periodEnd: 'DESC', approvedAt: 'DESC', updatedAt: 'DESC' },
       }),
       this.evaluationRepository.count({
         where: { status: VendorEvaluationStatus.SUBMITTED },
@@ -501,7 +538,7 @@ export class VendorEvaluationsService {
 
     const payables = await this.accountPayableRepository.find({
       where: {
-        status: Not(APStatus.PAID),
+        status: In([APStatus.UNPAID, APStatus.PARTIAL]),
         dueDate: LessThanOrEqual(horizon),
       },
       relations: ['vendor'],
@@ -530,18 +567,29 @@ export class VendorEvaluationsService {
     });
   }
 
-  async getVendorScorecardDetail(vendorId: string, months = 6) {
+  async getVendorScorecardDetail(vendorId: string, months = 6, month?: string) {
     const vendor = await this.validateVendor(vendorId);
-    const now = new Date();
-    const since = this.startOfMonth(
-      new Date(now.getFullYear(), now.getMonth() - Math.max(months - 1, 0), 1),
+    const anchorMonth = this.resolveScorecardMonth(month);
+    const selectedMonthStart = this.startOfMonth(anchorMonth);
+    const selectedMonthEnd = this.endOfMonth(anchorMonth);
+    const trendStart = this.startOfMonth(
+      new Date(
+        anchorMonth.getFullYear(),
+        anchorMonth.getMonth() - Math.max(months - 1, 0),
+        1,
+      ),
     );
+    const currentDate = new Date();
+    const referenceDate =
+      selectedMonthEnd.getTime() < currentDate.getTime()
+        ? selectedMonthEnd
+        : currentDate;
 
     const [evaluations, receipts, purchaseOrders, qualityClaims, payables] =
       await Promise.all([
         this.evaluationRepository.find({
           where: { vendorId, status: VendorEvaluationStatus.APPROVED },
-          order: { approvedAt: 'ASC', updatedAt: 'ASC' },
+          order: { periodEnd: 'ASC', approvedAt: 'ASC', updatedAt: 'ASC' },
         }),
         this.goodsReceiptRepository
           .createQueryBuilder('receipt')
@@ -576,7 +624,7 @@ export class VendorEvaluationsService {
           .take(100)
           .getMany(),
         this.accountPayableRepository.find({
-          where: { vendorId, status: Not(APStatus.PAID) },
+          where: { vendorId, status: In([APStatus.UNPAID, APStatus.PARTIAL]) },
           order: { dueDate: 'ASC', updatedAt: 'DESC' },
           take: 50,
         }),
@@ -597,7 +645,11 @@ export class VendorEvaluationsService {
     >();
 
     for (let i = months - 1; i >= 0; i -= 1) {
-      const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const date = new Date(
+        anchorMonth.getFullYear(),
+        anchorMonth.getMonth() - i,
+        1,
+      );
       const key = this.monthKey(date);
       trendBuckets.set(key, {
         month: key,
@@ -613,9 +665,14 @@ export class VendorEvaluationsService {
 
     for (const evaluation of evaluations) {
       const basisDate =
-        evaluation.approvedAt || evaluation.periodEnd || evaluation.updatedAt;
-      if (!basisDate || new Date(basisDate).getTime() < since.getTime())
+        evaluation.periodEnd || evaluation.approvedAt || evaluation.updatedAt;
+      if (
+        !basisDate ||
+        new Date(basisDate).getTime() < trendStart.getTime() ||
+        new Date(basisDate).getTime() > selectedMonthEnd.getTime()
+      ) {
         continue;
+      }
       const key = this.monthKey(new Date(basisDate));
       const bucket = trendBuckets.get(key);
       if (!bucket) continue;
@@ -654,9 +711,18 @@ export class VendorEvaluationsService {
       evaluationCount: bucket.count,
     }));
 
+    const claimsInMonth = qualityClaims.filter((claim) => {
+      const basisDate = claim.claimSentAt || claim.createdAt;
+      return this.isWithinDateRange(
+        basisDate,
+        selectedMonthStart,
+        selectedMonthEnd,
+      );
+    });
+
     const qualityIssuesByReceipt = new Map<string, number>();
     const qualityIssuesByPo = new Map<string, number>();
-    for (const claim of qualityClaims) {
+    for (const claim of claimsInMonth) {
       if (claim.goodsReceiptId) {
         qualityIssuesByReceipt.set(
           claim.goodsReceiptId,
@@ -671,66 +737,89 @@ export class VendorEvaluationsService {
       }
     }
 
-    const receiptPoIds = new Set(
-      receipts.map((receipt) => receipt.purchaseOrderId).filter(Boolean),
+    const receiptPoIdsAsOfMonth = new Set(
+      receipts
+        .filter((receipt) =>
+          this.isOnOrBefore(receipt.receivedDate, selectedMonthEnd),
+        )
+        .map((receipt) => receipt.purchaseOrderId)
+        .filter(Boolean),
     );
-    const receiptRows = receipts.map((receipt) => {
-      const expectedDate = receipt.purchaseOrder?.expectedDeliveryDate || null;
-      const receivedDate = receipt.receivedDate
-        ? new Date(receipt.receivedDate)
-        : null;
-      const isOnTime =
-        expectedDate && receivedDate
-          ? receivedDate.getTime() <=
-            this.endOfBusinessDay(expectedDate).getTime()
+    const receiptRows = receipts
+      .filter((receipt) =>
+        this.isWithinDateRange(
+          receipt.receivedDate,
+          selectedMonthStart,
+          selectedMonthEnd,
+        ),
+      )
+      .map((receipt) => {
+        const expectedDate =
+          receipt.purchaseOrder?.expectedDeliveryDate || null;
+        const receivedDate = receipt.receivedDate
+          ? new Date(receipt.receivedDate)
           : null;
-      const daysLate =
-        expectedDate && receivedDate
-          ? Math.max(
-              this.daysBetween(
-                this.endOfBusinessDay(expectedDate),
-                receivedDate,
-              ),
-              0,
-            )
-          : 0;
-      const receivedQuantity = (receipt.items || []).reduce(
-        (sum, item) => sum + Number(item.quantityReceived || 0),
-        0,
-      );
-      const rejectedQuantity = (receipt.items || []).reduce(
-        (sum, item) => sum + Number(item.quantityRejected || 0),
-        0,
-      );
-
-      return {
-        _id: receipt._id,
-        type: 'GRN',
-        purchaseOrderId: receipt.purchaseOrderId,
-        poNumber: receipt.purchaseOrder?.poNumber || null,
-        grNumber: receipt.grNumber,
-        expectedDeliveryDate: expectedDate,
-        receivedDate,
-        isOnTime,
-        daysLate,
-        receivedQuantity,
-        rejectedQuantity,
-        qualityIssueCount:
-          qualityIssuesByReceipt.get(receipt._id) ||
-          qualityIssuesByPo.get(receipt.purchaseOrderId || '') ||
+        const isOnTime =
+          expectedDate && receivedDate
+            ? receivedDate.getTime() <=
+              this.endOfBusinessDay(expectedDate).getTime()
+            : null;
+        const daysLate =
+          expectedDate && receivedDate
+            ? Math.max(
+                this.daysBetween(
+                  this.endOfBusinessDay(expectedDate),
+                  receivedDate,
+                ),
+                0,
+              )
+            : 0;
+        const receivedQuantity = (receipt.items || []).reduce(
+          (sum, item) => sum + Number(item.quantityReceived || 0),
           0,
-        status: receipt.status,
-      };
-    });
+        );
+        const rejectedQuantity = (receipt.items || []).reduce(
+          (sum, item) => sum + Number(item.quantityRejected || 0),
+          0,
+        );
+
+        return {
+          _id: receipt._id,
+          type: 'GRN',
+          purchaseOrderId: receipt.purchaseOrderId,
+          poNumber: receipt.purchaseOrder?.poNumber || null,
+          grNumber: receipt.grNumber,
+          expectedDeliveryDate: expectedDate,
+          receivedDate,
+          isOnTime,
+          daysLate,
+          receivedQuantity,
+          rejectedQuantity,
+          qualityIssueCount:
+            qualityIssuesByReceipt.get(receipt._id) ||
+            qualityIssuesByPo.get(receipt.purchaseOrderId || '') ||
+            0,
+          status: receipt.status,
+        };
+      });
 
     const pendingPoRows = purchaseOrders
-      .filter((po) => !receiptPoIds.has(po._id))
+      .filter(
+        (po) =>
+          !receiptPoIdsAsOfMonth.has(po._id) &&
+          this.isWithinDateRange(
+            po.expectedDeliveryDate,
+            selectedMonthStart,
+            selectedMonthEnd,
+          ),
+      )
       .map((po) => {
         const expectedDate = po.expectedDeliveryDate
           ? new Date(po.expectedDeliveryDate)
           : null;
         const isLate = expectedDate
-          ? this.endOfBusinessDay(expectedDate).getTime() < now.getTime()
+          ? this.endOfBusinessDay(expectedDate).getTime() <
+            referenceDate.getTime()
           : false;
         return {
           _id: po._id,
@@ -744,7 +833,10 @@ export class VendorEvaluationsService {
           daysLate:
             isLate && expectedDate
               ? Math.max(
-                  this.daysBetween(this.endOfBusinessDay(expectedDate), now),
+                  this.daysBetween(
+                    this.endOfBusinessDay(expectedDate),
+                    referenceDate,
+                  ),
                   0,
                 )
               : 0,
@@ -792,10 +884,10 @@ export class VendorEvaluationsService {
       },
     };
 
-    const claimItems = qualityClaims.map((claim) => {
+    const claimItems = claimsInMonth.map((claim) => {
       const basisDate = claim.claimSentAt || claim.createdAt;
       const ageDays = basisDate
-        ? Math.max(this.daysBetween(new Date(basisDate), now), 0)
+        ? Math.max(this.daysBetween(new Date(basisDate), referenceDate), 0)
         : 0;
       const isOpenClaim = [QCClaimStatus.OPEN, QCClaimStatus.SENT].includes(
         claim.claimStatus,
@@ -846,7 +938,15 @@ export class VendorEvaluationsService {
       };
     });
 
-    const payableSummary = payables.reduce(
+    const payablesInMonth = payables.filter((item) =>
+      this.isWithinDateRange(
+        item.dueDate,
+        selectedMonthStart,
+        selectedMonthEnd,
+      ),
+    );
+
+    const payableSummary = payablesInMonth.reduce(
       (acc, item) => {
         const remainingAmount = Math.max(
           Number(item.amount || 0) - Number(item.paidAmount || 0),
@@ -854,13 +954,20 @@ export class VendorEvaluationsService {
         );
         const dueDate = item.dueDate ? new Date(item.dueDate) : null;
         acc.remainingAmount += remainingAmount;
-        if (dueDate && dueDate.getTime() < now.getTime()) acc.overdueCount += 1;
+        if (dueDate && dueDate.getTime() < referenceDate.getTime())
+          acc.overdueCount += 1;
         return acc;
       },
       { remainingAmount: 0, overdueCount: 0 },
     );
-    const latestEvaluation = evaluations.at(-1) || null;
-    const previousEvaluation = evaluations.at(-2) || null;
+
+    const evaluationsAsOfMonth = evaluations.filter((evaluation) => {
+      const basisDate =
+        evaluation.periodEnd || evaluation.approvedAt || evaluation.updatedAt;
+      return this.isOnOrBefore(basisDate, selectedMonthEnd);
+    });
+    const latestEvaluation = evaluationsAsOfMonth.at(-1) || null;
+    const previousEvaluation = evaluationsAsOfMonth.at(-2) || null;
     const scoreTrend =
       latestEvaluation && previousEvaluation
         ? Number(
@@ -873,7 +980,7 @@ export class VendorEvaluationsService {
     return {
       vendor,
       summary: {
-        evaluationCount: evaluations.length,
+        evaluationCount: evaluationsAsOfMonth.length,
         latestScore:
           latestEvaluation?.overallScore ?? vendor.vendorOverallScore ?? null,
         latestGrade: latestEvaluation?.grade ?? vendor.vendorGrade ?? null,
@@ -894,7 +1001,7 @@ export class VendorEvaluationsService {
       poGrnPerformance,
       claimAging,
       claimItems,
-      payables: payables.map((item) => ({
+      payables: payablesInMonth.map((item) => ({
         ...item,
         remainingAmount: Math.max(
           Number(item.amount || 0) - Number(item.paidAmount || 0),

@@ -11,13 +11,21 @@ import { ProformaInvoice } from '../proforma-invoices/entities/proforma-invoice.
 import { SalesContractsModule } from '../sales-contracts/sales-contracts.module';
 import { AccountingModule } from '../accounting/accounting.module';
 import { InventoryModule } from '../inventory/inventory.module';
+import { PortsModule } from '../ports/ports.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Shipment, Container, ShipmentDocument, ShipmentCostAllocation, ProformaInvoice]),
+    TypeOrmModule.forFeature([
+      Shipment,
+      Container,
+      ShipmentDocument,
+      ShipmentCostAllocation,
+      ProformaInvoice,
+    ]),
     SalesContractsModule,
     AccountingModule,
     InventoryModule,
+    PortsModule,
   ],
   controllers: [ShipmentsController],
   providers: [ShipmentsService, LogisticsAllocationService],

@@ -4,28 +4,37 @@ import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   Table, Tag, Space, Button, Input, Card, Badge,
   Typography, Divider, Tooltip, Row, Col, Statistic,
-  Dropdown, Drawer, Avatar, notification, Popconfirm, Tabs, theme, Select, Form, Switch, Empty
+  Dropdown, Drawer, Avatar, notification, Popconfirm, Tabs, theme, Select, Form, Empty, Skeleton
 } from 'antd';
 import {
   PlusOutlined, SearchOutlined, FilterOutlined,
   ExportOutlined, HistoryOutlined, EditOutlined,
   DeleteOutlined, MoreOutlined, GlobalOutlined,
-  DollarCircleOutlined, TeamOutlined, WarningOutlined,
-  ReloadOutlined, CloseOutlined, CheckOutlined,
-  ArrowUpOutlined, ArrowDownOutlined, LockOutlined
+  TeamOutlined, WarningOutlined,
+  ReloadOutlined, ArrowUpOutlined, ArrowDownOutlined,
+  LockOutlined, EyeOutlined, FileTextOutlined
 } from '@ant-design/icons';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Progress } from 'antd'; // Add Progress component
 import { useSession } from 'next-auth/react';
 import { useTheme } from '@/context/theme.context';
-import { sendRequest } from '@/lib/api-client';
+import { backendFetch, sendRequest } from '@/lib/api-client';
 import { GLOBAL_EXCHANGE_RATE } from '@/constants/currency.config';
 import { useTranslations, useLocale } from 'next-intl';
+import { useRouter } from 'next/navigation';
 import { useCurrency } from '@/hooks/useCurrency';
+import { useHasMounted } from '@/hooks/useHasMounted';
 import PartnerCreateModal from './partner.create';
 import PartnerUpdateModal from './partner.update';
+import QuotationDetailModal from '../quotation/quotation.detail';
+import ProformaInvoiceDetailModal from '../proforma-invoice/pi.detail';
+import PurchaseOrderDetailModal from '../purchase-order/purchase-order.detail';
+import VendorInvoiceDetailModal from '../vendor-invoice/vendor-invoice.detail';
+import ShipmentDetailDrawer from '../shipment/shipment.detail';
 import type { ColumnsType } from 'antd/es/table';
+import type { IVendorInvoice } from '@/types/vendor-invoice';
 import { getAccessToken } from '@/lib/auth-token';
+import { buildCountryOptions, buildRegionOptions } from '@/constants/geo';
 
 const { Title, Text } = Typography;
 
@@ -60,6 +69,103 @@ interface IMeta {
   total: number;
 }
 
+type PartnerListResponse = {
+  results: IPartner[];
+  totalItems: number;
+};
+
+type HistoryDateRange = 'ALL' | '30_DAYS' | 'THIS_YEAR';
+
+type PartnerHistoryCollection<TItem> = {
+  total: number;
+  items: TItem[];
+};
+
+type PartnerHistoryPartner = Pick<IPartner, '_id' | 'name' | 'partnerType' | 'defaultCurrency' | 'apBalance'>;
+
+type PartnerHistoryDateFields = {
+  createdAt?: string | Date;
+  updatedAt?: string | Date;
+  orderDate?: string | Date;
+  invoiceDate?: string | Date;
+  dueDate?: string | Date;
+  etd?: string | Date;
+};
+
+type PartnerHistoryDocumentBase = PartnerHistoryDateFields & {
+  _id: string;
+  status?: string;
+  currency?: string;
+  totalAmount?: number | string;
+  amount?: number | string;
+  paidAmount?: number | string;
+};
+
+type PartnerHistoryQuotation = PartnerHistoryDocumentBase & {
+  quotationNumber?: string;
+};
+
+type PartnerHistoryProformaInvoice = PartnerHistoryDocumentBase & {
+  piNumber?: string;
+};
+
+type PartnerHistoryPurchaseOrder = PartnerHistoryDocumentBase & {
+  poNumber?: string;
+  items?: unknown[];
+};
+
+type PartnerHistoryVendorInvoice = PartnerHistoryDocumentBase & {
+  invoiceNumber?: string;
+  purchaseOrderId?: string;
+  taxRate?: number;
+  taxAmount?: number;
+  note?: string;
+  attachments?: string[];
+  purchaseOrder?: {
+    _id?: string;
+    poNumber?: string;
+    totalAmount?: number;
+  };
+};
+
+type PartnerHistoryShipment = PartnerHistoryDocumentBase & {
+  shipmentNumber?: string;
+  blNumber?: string;
+};
+
+type PartnerHistoryPayable = PartnerHistoryDocumentBase & {
+  invoiceNumber?: string;
+};
+
+type PartnerHistoryPayableSummary = {
+  totalAmount: number;
+  paidAmount: number;
+  remainingAmount: number;
+  openCount: number;
+  overdueCount: number;
+};
+
+type PartnerHistoryResponse = {
+  partner: PartnerHistoryPartner;
+  quotations: PartnerHistoryCollection<PartnerHistoryQuotation>;
+  proformaInvoices: PartnerHistoryCollection<PartnerHistoryProformaInvoice>;
+  shipments: PartnerHistoryCollection<PartnerHistoryShipment>;
+  purchaseOrders: PartnerHistoryCollection<PartnerHistoryPurchaseOrder>;
+  vendorInvoices: PartnerHistoryCollection<PartnerHistoryVendorInvoice>;
+  payables: PartnerHistoryCollection<PartnerHistoryPayable> & {
+    summary: PartnerHistoryPayableSummary;
+  };
+  lastActivityAt?: string | Date | null;
+};
+
+type PartnerHistoryDocumentDetail =
+  | { type: 'quotation'; recordRef: string }
+  | { type: 'proformaInvoice'; record: PartnerHistoryProformaInvoice }
+  | { type: 'purchaseOrder'; recordRef: string }
+  | { type: 'vendorInvoice'; record: PartnerHistoryVendorInvoice }
+  | { type: 'shipment'; recordRef: string }
+  | null;
+
 type PartnerFilters = Partial<Pick<IPartner, 'country' | 'isActive' | 'partnerType' | 'region' | 'riskLevel'>>;
 type PartnerSortField = 'balance' | 'name' | 'partnerType' | 'updatedAt';
 type PartnerSortOrder = 'ascend' | 'descend';
@@ -67,16 +173,132 @@ type PartnerSortConfig = {
   field: PartnerSortField;
   order: PartnerSortOrder;
 };
+type PartnerTableProps = {
+  linkedPartnerRef?: string;
+  linkedPartnerType?: string;
+};
 
 const DEFAULT_PARTNER_SORT: PartnerSortConfig = {
   field: 'updatedAt',
   order: 'descend',
 };
 
+const PARTNER_HISTORY_DRAWER_DEFAULT_SIZE = 560;
+const PARTNER_HISTORY_DRAWER_MIN_SIZE = 420;
+const PARTNER_HISTORY_DRAWER_MAX_SIZE = 960;
+
+const getPartnerHistoryDrawerMaxSize = (): number => {
+  if (typeof window === 'undefined') {
+    return PARTNER_HISTORY_DRAWER_MAX_SIZE;
+  }
+
+  return Math.max(360, Math.min(PARTNER_HISTORY_DRAWER_MAX_SIZE, window.innerWidth - 16));
+};
+
+const clampPartnerHistoryDrawerSize = (size: number): number => {
+  const maxSize = getPartnerHistoryDrawerMaxSize();
+  const minSize = Math.min(PARTNER_HISTORY_DRAWER_MIN_SIZE, maxSize);
+
+  return Math.max(minSize, Math.min(size, maxSize));
+};
+
 const cleanPartnerFilters = (values: PartnerFilters): PartnerFilters => {
   return Object.fromEntries(
     Object.entries(values).filter(([, value]) => value !== undefined && value !== null && value !== ''),
   ) as PartnerFilters;
+};
+
+const toPartnerTypeFilter = (value?: string): IPartner['partnerType'] | null => {
+  if (value === 'CUSTOMER' || value === 'SUPPLIER' || value === 'LOGISTICS') {
+    return value;
+  }
+
+  return null;
+};
+
+const getHistoryStatusColor = (status?: string): string => {
+  const normalizedStatus = status?.toUpperCase();
+
+  switch (normalizedStatus) {
+    case 'COMPLETED':
+    case 'CONVERTED':
+    case 'ACCEPTED':
+    case 'APPROVED':
+    case 'RECEIVED':
+    case 'PAID':
+    case 'ARRIVED':
+      return 'success';
+    case 'SENT':
+    case 'PARTIAL':
+    case 'PARTIAL_RECEIPT':
+    case 'CUSTOMS_CLEARED':
+    case 'ON_BOARD':
+      return 'processing';
+    case 'PENDING':
+    case 'PENDING_APPROVAL':
+    case 'LOADING':
+      return 'warning';
+    case 'CANCELLED':
+    case 'CANCELED':
+    case 'REJECTED':
+    case 'EXPIRED':
+    case 'VOID':
+    case 'OVERDUE':
+      return 'error';
+    case 'CLOSED':
+      return 'purple';
+    default:
+      return 'default';
+  }
+};
+
+const toDate = (value?: string | Date): Date | null => {
+  if (!value) return null;
+
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const getHistoryDocumentDate = (item: PartnerHistoryDateFields): Date | null => (
+  toDate(item.updatedAt)
+  ?? toDate(item.createdAt)
+  ?? toDate(item.orderDate)
+  ?? toDate(item.invoiceDate)
+  ?? toDate(item.etd)
+  ?? toDate(item.dueDate)
+);
+
+const isWithinHistoryDateRange = (item: PartnerHistoryDateFields, range: HistoryDateRange): boolean => {
+  if (range === 'ALL') return true;
+
+  const documentDate = getHistoryDocumentDate(item);
+  if (!documentDate) return false;
+
+  const now = new Date();
+  if (range === 'THIS_YEAR') {
+    return documentDate.getFullYear() === now.getFullYear();
+  }
+
+  const thirtyDaysAgo = new Date(now);
+  thirtyDaysAgo.setDate(now.getDate() - 30);
+  return documentDate >= thirtyDaysAgo;
+};
+
+const filterHistoryItems = <TItem extends PartnerHistoryDateFields>(
+  items: TItem[],
+  searchText: string,
+  dateRange: HistoryDateRange,
+  getSearchValues: (item: TItem) => Array<string | number | null | undefined>,
+): TItem[] => {
+  const normalizedSearchText = searchText.trim().toLowerCase();
+
+  return items.filter((item) => {
+    if (!isWithinHistoryDateRange(item, dateRange)) return false;
+    if (!normalizedSearchText) return true;
+
+    return getSearchValues(item)
+      .some((value) => String(value ?? '').toLowerCase().includes(normalizedSearchText));
+  });
 };
 
 const toPartnerSortField = (value: unknown): PartnerSortField | null => {
@@ -104,13 +326,18 @@ const toPartnerSortConfig = (sorter: unknown): PartnerSortConfig => {
   };
 };
 
-const PartnerTable = () => {
+const PartnerTable = ({ linkedPartnerRef, linkedPartnerType }: PartnerTableProps) => {
   const { data: session } = useSession();
   const [api, contextHolder] = notification.useNotification();
   const accessToken = getAccessToken(session);
   const t = useTranslations('Partner');
   const tCommon = useTranslations('Common');
   const locale = useLocale();
+  const regionOptions = useMemo(() => buildRegionOptions(t), [t]);
+  const countryOptions = useMemo(() => buildCountryOptions(locale), [locale]);
+  const router = useRouter();
+  const hasMounted = useHasMounted();
+  const linkedPartnerTypeFilter = useMemo(() => toPartnerTypeFilter(linkedPartnerType), [linkedPartnerType]);
 
   // --- States ---
   const [partners, setPartners] = useState<IPartner[]>([]);
@@ -134,18 +361,33 @@ const PartnerTable = () => {
 
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
-  const [historyData, setHistoryData] = useState<any>(null);
+  const [historyData, setHistoryData] = useState<PartnerHistoryResponse | null>(null);
+  const [historyDrawerSize, setHistoryDrawerSize] = useState(PARTNER_HISTORY_DRAWER_DEFAULT_SIZE);
+  const [openedPartnerRef, setOpenedPartnerRef] = useState<string | null>(null);
+  const [historySearchText, setHistorySearchText] = useState('');
+  const [historyDateRange, setHistoryDateRange] = useState<HistoryDateRange>('ALL');
+  const [historyDocumentDetail, setHistoryDocumentDetail] = useState<PartnerHistoryDocumentDetail>(null);
+
+  const handleHistoryDrawerResize = useCallback((nextSize: number) => {
+    setHistoryDrawerSize(clampPartnerHistoryDrawerSize(nextSize));
+  }, []);
 
   // --- Advanced Filter States ---
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [filterForm] = Form.useForm();
-  const [filters, setFilters] = useState<PartnerFilters>({});
+  const [filters, setFilters] = useState<PartnerFilters>(() => (
+    linkedPartnerTypeFilter ? { partnerType: linkedPartnerTypeFilter } : {}
+  ));
   const activeFilterCount = Object.keys(filters).length;
   const [sortConfig, setSortConfig] = useState<PartnerSortConfig>(DEFAULT_PARTNER_SORT);
 
   // --- 2. Logic Fetch Dữ liệu (useCallback để tối ưu) ---
   const { formatMoney, formatVND } = useCurrency();
-  
+  const { token } = theme.useToken();
+  const { isDark } = useTheme();
+
+  const { current, pageSize } = meta;
+
   const fetchPartners = useCallback(async () => {
     if (!accessToken) return;
     setIsFetching(true);
@@ -155,12 +397,12 @@ const PartnerTable = () => {
       if (sortConfig.order === 'descend') sortStr = `-${sortStr}`;
       const activeFilters = cleanPartnerFilters(filters);
 
-      const res = await sendRequest<IBackendRes<any>>({
+      const res = await sendRequest<IBackendRes<PartnerListResponse>>({
         url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/partners`,
         method: 'GET',
         queryParams: {
-          current: meta.current,
-          pageSize: meta.pageSize,
+          current,
+          pageSize,
           sort: sortStr,
           ...(debouncedSearchText ? { search: debouncedSearchText } : {}),
           ...activeFilters
@@ -168,21 +410,46 @@ const PartnerTable = () => {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
 
-      if (res?.data) {
-        setPartners(res.data.results);
-        setMeta(prev => ({ ...prev, total: res.data.totalItems }));
+      const partnerList = res?.data;
+      if (partnerList) {
+        setPartners(partnerList.results);
+        setMeta(prev => ({ ...prev, total: partnerList.totalItems }));
       }
     } finally {
       setIsFetching(false);
     }
-  }, [meta.current, meta.pageSize, debouncedSearchText, filters, sortConfig, accessToken]);
+  }, [current, pageSize, debouncedSearchText, filters, sortConfig, accessToken]);
 
   useEffect(() => {
     fetchPartners();
   }, [fetchPartners]);
 
+  useEffect(() => {
+    if (!linkedPartnerTypeFilter) return;
+
+    filterForm.setFieldsValue({ partnerType: linkedPartnerTypeFilter });
+    setFilters((currentFilters) => {
+      if (currentFilters.partnerType === linkedPartnerTypeFilter) {
+        return currentFilters;
+      }
+
+      return cleanPartnerFilters({ ...currentFilters, partnerType: linkedPartnerTypeFilter });
+    });
+    setMeta(prev => ({ ...prev, current: 1 }));
+  }, [filterForm, linkedPartnerTypeFilter]);
+
+  useEffect(() => {
+    const handleWindowResize = () => {
+      setHistoryDrawerSize((currentSize) => clampPartnerHistoryDrawerSize(currentSize));
+    };
+
+    handleWindowResize();
+    window.addEventListener('resize', handleWindowResize);
+    return () => window.removeEventListener('resize', handleWindowResize);
+  }, []);
+
   // --- 3. Hành động (Actions) ---
-  const confirmDelete = async (id: string) => {
+  const confirmDelete = useCallback(async (id: string) => {
     const res = await sendRequest<IBackendRes<any>>({
       url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/partners/${id}`,
       method: 'DELETE',
@@ -195,21 +462,479 @@ const PartnerTable = () => {
     } else {
       notification.error({ title: t('notifications.errorTitle'), description: res?.message });
     }
-  };
+  }, [accessToken, t, fetchPartners]);
 
-  const openHistory = async (record: IPartner) => {
+  const openHistoryByRef = useCallback(async (partnerRef: string): Promise<boolean> => {
+    if (!accessToken) return false;
+
+    setHistorySearchText('');
+    setHistoryDateRange('ALL');
+    setHistoryDocumentDetail(null);
     setHistoryOpen(true);
     setHistoryLoading(true);
+    setHistoryData(null);
     try {
-      const res = await sendRequest<IBackendRes<any>>({
-        url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/partners/${record._id}/history`,
+      const res = await sendRequest<IBackendRes<PartnerHistoryResponse>>({
+        url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/partners/${partnerRef}/history`,
         method: 'GET',
         headers: { Authorization: `Bearer ${accessToken}` },
       });
-      if (res?.data) setHistoryData(res.data);
+      if (res?.data) {
+        setHistoryData(res.data);
+        return true;
+      }
+
+      setHistoryOpen(false);
+      return false;
     } finally {
       setHistoryLoading(false);
     }
+  }, [accessToken]);
+
+  const closeHistoryDrawer = useCallback(() => {
+    setHistoryOpen(false);
+    setHistoryDocumentDetail(null);
+  }, []);
+
+  const openHistory = useCallback(async (record: IPartner) => {
+    await openHistoryByRef(record._id);
+  }, [openHistoryByRef]);
+
+  useEffect(() => {
+    if (!accessToken || !linkedPartnerRef || openedPartnerRef === linkedPartnerRef) return;
+
+    let cancelled = false;
+
+    const openLinkedPartner = async (): Promise<void> => {
+      await openHistoryByRef(linkedPartnerRef);
+      if (!cancelled) {
+        setOpenedPartnerRef(linkedPartnerRef);
+      }
+    };
+
+    void openLinkedPartner();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, linkedPartnerRef, openedPartnerRef, openHistoryByRef]);
+
+  const historyDateLocale = locale === 'vi' ? 'vi-VN' : 'en-US';
+
+  const formatHistoryDate = useCallback((value?: string | Date): string => {
+    const date = toDate(value);
+    return date ? date.toLocaleDateString(historyDateLocale) : tCommon('noData');
+  }, [historyDateLocale, tCommon]);
+
+  const openDashboardModule = useCallback((modulePath: string) => {
+    router.push(`/${locale}${modulePath}`);
+  }, [locale, router]);
+
+  const refreshDocumentDetail = useCallback(() => undefined, []);
+
+  const toVendorInvoiceDetailRecord = useCallback((record: PartnerHistoryVendorInvoice): IVendorInvoice => {
+    const partner = historyData?.partner;
+    const vendorInvoiceStatus = record.status === 'PAID' || record.status === 'CANCELLED' ? record.status : 'PENDING';
+    const invoiceDate = toDate(record.invoiceDate ?? record.createdAt ?? record.updatedAt)?.toISOString() ?? new Date().toISOString();
+
+    return {
+      _id: record._id,
+      invoiceNumber: record.invoiceNumber ?? record._id,
+      purchaseOrderId: record.purchaseOrderId ?? record.purchaseOrder?._id ?? '',
+      purchaseOrder: {
+        _id: record.purchaseOrder?._id ?? '',
+        poNumber: record.purchaseOrder?.poNumber ?? '',
+        totalAmount: Number(record.purchaseOrder?.totalAmount ?? 0),
+      },
+      vendorId: partner?._id ?? '',
+      vendor: {
+        _id: partner?._id ?? '',
+        name: partner?.name ?? '',
+      },
+      invoiceDate,
+      dueDate: record.dueDate ? String(record.dueDate) : undefined,
+      amount: Number(record.amount ?? record.totalAmount ?? 0),
+      taxRate: record.taxRate,
+      taxAmount: Number(record.taxAmount ?? 0),
+      totalAmount: Number(record.totalAmount ?? record.amount ?? 0),
+      currency: record.currency ?? partner?.defaultCurrency ?? 'VND',
+      status: vendorInvoiceStatus,
+      note: record.note,
+      attachments: record.attachments,
+      createdAt: String(record.createdAt ?? invoiceDate),
+    };
+  }, [historyData?.partner]);
+
+  const renderHistoryControls = () => (
+    <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
+      <Col xs={24} md={14}>
+        <Input
+          allowClear
+          prefix={<SearchOutlined />}
+          placeholder={t('history.searchPlaceholder')}
+          value={historySearchText}
+          onChange={(event) => setHistorySearchText(event.target.value)}
+        />
+      </Col>
+      <Col xs={24} md={10}>
+        <Select
+          value={historyDateRange}
+          onChange={setHistoryDateRange}
+          style={{ width: '100%' }}
+          options={[
+            { value: 'ALL', label: t('history.periodAll') },
+            { value: '30_DAYS', label: t('history.period30Days') },
+            { value: 'THIS_YEAR', label: t('history.periodThisYear') },
+          ]}
+        />
+      </Col>
+    </Row>
+  );
+
+  const renderHistoryStatusBadge = (status?: string) => (
+    status ? (
+      <Tag color={getHistoryStatusColor(status)} style={{ borderRadius: 4, fontSize: 10, marginInlineEnd: 0 }}>
+        {status}
+      </Tag>
+    ) : null
+  );
+
+  const renderHistoryList = <TItem extends PartnerHistoryDocumentBase,>({
+    items,
+    total,
+    emptyDescription,
+    modulePath,
+    createLabel,
+    titleOf,
+    metaOf,
+    amountOf,
+    searchValuesOf,
+    onOpen,
+  }: {
+    items: TItem[];
+    total: number;
+    emptyDescription: string;
+    modulePath: string;
+    createLabel?: string;
+    titleOf: (item: TItem) => string;
+    metaOf: (item: TItem) => React.ReactNode;
+    amountOf?: (item: TItem) => React.ReactNode;
+    searchValuesOf: (item: TItem) => Array<string | number | null | undefined>;
+    onOpen?: (item: TItem) => void;
+  }) => {
+    const filteredItems = filterHistoryItems(items, historySearchText, historyDateRange, searchValuesOf);
+    const hasActiveFilter = historySearchText.trim().length > 0 || historyDateRange !== 'ALL';
+    const emptyText = hasActiveFilter ? t('history.noMatch') : emptyDescription;
+    const summaryText = hasActiveFilter
+      ? t('history.filteredSummary', { shown: filteredItems.length, loaded: items.length })
+      : t('history.recentSummary', { shown: items.length, total });
+
+    if (filteredItems.length === 0) {
+      return (
+        <Empty description={emptyText} style={{ padding: '28px 0' }}>
+          <Space wrap>
+            <Button icon={<FileTextOutlined />} onClick={() => openDashboardModule(modulePath)}>
+              {t('history.viewAll')}
+            </Button>
+            {createLabel ? (
+              <Button type="primary" icon={<PlusOutlined />} onClick={() => openDashboardModule(modulePath)}>
+                {createLabel}
+              </Button>
+            ) : null}
+          </Space>
+        </Empty>
+      );
+    }
+
+    return (
+      <Space orientation="vertical" size={12} style={{ width: '100%' }}>
+        {filteredItems.map((item) => {
+          const canOpen = Boolean(onOpen);
+          const openRecord = () => onOpen?.(item);
+
+          return (
+            <div
+              key={item._id}
+              className="partner-history-document-card"
+              role={canOpen ? 'button' : undefined}
+              tabIndex={canOpen ? 0 : undefined}
+              onClick={canOpen ? openRecord : undefined}
+              onKeyDown={(event) => {
+                if (!canOpen) return;
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  openRecord();
+                }
+              }}
+              style={{
+                padding: 16,
+                background: isDark ? '#1e293b' : '#f8f9fa',
+                borderRadius: 12,
+                border: `1px solid ${isDark ? '#334155' : '#f0f0f0'}`,
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                gap: 16,
+                cursor: canOpen ? 'pointer' : 'default',
+              }}
+            >
+              <div style={{ minWidth: 0 }}>
+                <Space size={8} wrap style={{ marginBottom: 4 }}>
+                  <Text strong style={{ fontSize: 14 }}>{titleOf(item)}</Text>
+                  {renderHistoryStatusBadge(item.status)}
+                </Space>
+                <div style={{ fontSize: 12, color: token.colorTextSecondary }}>
+                  {metaOf(item)}
+                </div>
+              </div>
+              <div style={{ textAlign: 'right', minWidth: 150 }}>
+                {amountOf ? amountOf(item) : null}
+                {canOpen ? (
+                  <div style={{ marginTop: 6 }}>
+                    <Button
+                      type="text"
+                      size="small"
+                      icon={<EyeOutlined />}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        openRecord();
+                      }}
+                    >
+                      {t('history.openDetail')}
+                    </Button>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          );
+        })}
+
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: 12,
+          paddingTop: 4,
+        }}>
+          <Text type="secondary" style={{ fontSize: 12 }}>{summaryText}</Text>
+          <Button size="small" icon={<FileTextOutlined />} onClick={() => openDashboardModule(modulePath)}>
+            {t('history.viewAll')}
+          </Button>
+        </div>
+      </Space>
+    );
+  };
+
+  const renderHistoryTabs = () => {
+    if (!historyData) return [];
+
+    const partnerCurrency = historyData.partner.defaultCurrency ?? 'VND';
+
+    if (historyData.partner.partnerType === 'SUPPLIER') {
+      return [
+        {
+          key: 'purchaseOrders',
+          label: `${t('history.purchaseOrders')} (${historyData.purchaseOrders.total})`,
+          children: renderHistoryList<PartnerHistoryPurchaseOrder>({
+            items: historyData.purchaseOrders.items,
+            total: historyData.purchaseOrders.total,
+            emptyDescription: t('history.noPurchaseOrders'),
+            modulePath: '/dashboard/purchase-orders',
+            createLabel: t('history.createPurchaseOrder'),
+            titleOf: (item) => item.poNumber ?? item._id,
+            metaOf: (item) => (
+              <>
+                {formatHistoryDate(item.orderDate ?? item.updatedAt)}
+                {' · '}
+                {(item.items ?? []).length} {t('history.items')}
+              </>
+            ),
+            amountOf: (item) => (
+              <Text strong style={{ color: token.colorSuccess, fontSize: 15 }}>
+                {formatMoney(Number(item.totalAmount ?? 0), item.currency ?? partnerCurrency)}
+              </Text>
+            ),
+            searchValuesOf: (item) => [item.poNumber, item.status, item.currency, item.totalAmount],
+            onOpen: (item) => setHistoryDocumentDetail({ type: 'purchaseOrder', recordRef: item._id }),
+          }),
+        },
+        {
+          key: 'vendorInvoices',
+          label: `${t('history.vendorInvoices')} (${historyData.vendorInvoices.total})`,
+          children: renderHistoryList<PartnerHistoryVendorInvoice>({
+            items: historyData.vendorInvoices.items,
+            total: historyData.vendorInvoices.total,
+            emptyDescription: t('history.noVendorInvoices'),
+            modulePath: '/dashboard/vendor-invoice',
+            createLabel: t('history.createVendorInvoice'),
+            titleOf: (item) => item.invoiceNumber ?? item._id,
+            metaOf: (item) => (
+              <>
+                {t('history.purchaseOrderRef')}: {item.purchaseOrder?.poNumber ?? item.purchaseOrderId ?? tCommon('noData')}
+              </>
+            ),
+            amountOf: (item) => (
+              <Text strong style={{ color: token.colorInfo, fontSize: 15 }}>
+                {formatMoney(Number(item.totalAmount ?? item.amount ?? 0), item.currency ?? partnerCurrency)}
+              </Text>
+            ),
+            searchValuesOf: (item) => [item.invoiceNumber, item.purchaseOrder?.poNumber, item.purchaseOrderId, item.status, item.currency],
+            onOpen: (item) => setHistoryDocumentDetail({ type: 'vendorInvoice', record: item }),
+          }),
+        },
+        {
+          key: 'payables',
+          label: `${t('history.payables')} (${historyData.payables.total})`,
+          children: (
+            <Space orientation="vertical" size={16} style={{ width: '100%' }}>
+              <Row gutter={12}>
+                <Col span={12}>
+                  <Statistic
+                    title={t('history.remaining')}
+                    value={historyData.payables.summary.remainingAmount}
+                    formatter={(value) => formatMoney(Number(value), partnerCurrency)}
+                  />
+                </Col>
+                <Col span={12}>
+                  <Statistic
+                    title={t('history.overdue')}
+                    value={historyData.payables.summary.overdueCount}
+                    styles={{ content: { color: token.colorError } }}
+                  />
+                </Col>
+              </Row>
+              {renderHistoryList<PartnerHistoryPayable>({
+                items: historyData.payables.items,
+                total: historyData.payables.total,
+                emptyDescription: t('history.noPayables'),
+                modulePath: '/dashboard/account-payables',
+                titleOf: (item) => item.invoiceNumber ?? item._id,
+                metaOf: (item) => (
+                  <>
+                    {t('history.dueDate')}: {formatHistoryDate(item.dueDate)}
+                  </>
+                ),
+                amountOf: (item) => {
+                  const remaining = Math.max(Number(item.amount ?? 0) - Number(item.paidAmount ?? 0), 0);
+                  return (
+                    <Text strong style={{ color: token.colorError, fontSize: 15 }}>
+                      {formatMoney(remaining, item.currency ?? partnerCurrency)}
+                    </Text>
+                  );
+                },
+                searchValuesOf: (item) => [item.invoiceNumber, item.status, item.currency, item.amount],
+                onOpen: () => openDashboardModule('/dashboard/account-payables'),
+              })}
+            </Space>
+          ),
+        },
+      ];
+    }
+
+    if (historyData.partner.partnerType === 'LOGISTICS') {
+      return [
+        {
+          key: 'shipments',
+          label: `${t('history.shipments')} (${historyData.shipments.total})`,
+          children: renderHistoryList<PartnerHistoryShipment>({
+            items: historyData.shipments.items,
+            total: historyData.shipments.total,
+            emptyDescription: t('history.noShipments'),
+            modulePath: '/dashboard/shipment',
+            createLabel: t('history.createShipment'),
+            titleOf: (item) => item.shipmentNumber ?? item._id,
+            metaOf: (item) => (
+              <>
+                ETD: {formatHistoryDate(item.etd)}
+                {' · '}
+                B/L: {item.blNumber ?? tCommon('noData')}
+              </>
+            ),
+            searchValuesOf: (item) => [item.shipmentNumber, item.blNumber, item.status],
+            onOpen: (item) => setHistoryDocumentDetail({ type: 'shipment', recordRef: item._id }),
+          }),
+        },
+        {
+          key: 'payables',
+          label: `${t('history.payables')} (${historyData.payables.total})`,
+          children: (
+            <Space orientation="vertical" size={16} style={{ width: '100%' }}>
+              <Statistic
+                title={t('history.totalPayables')}
+                value={historyData.payables.summary.remainingAmount || historyData.partner.apBalance || 0}
+                formatter={(value) => formatMoney(Number(value), partnerCurrency)}
+                styles={{ content: { color: token.colorError } }}
+              />
+              {renderHistoryList<PartnerHistoryPayable>({
+                items: historyData.payables.items,
+                total: historyData.payables.total,
+                emptyDescription: t('history.noPayables'),
+                modulePath: '/dashboard/account-payables',
+                titleOf: (item) => item.invoiceNumber ?? item._id,
+                metaOf: (item) => (
+                  <>
+                    {t('history.dueDate')}: {formatHistoryDate(item.dueDate)}
+                  </>
+                ),
+                amountOf: (item) => {
+                  const remaining = Math.max(Number(item.amount ?? 0) - Number(item.paidAmount ?? 0), 0);
+                  return (
+                    <Text strong style={{ color: token.colorError, fontSize: 15 }}>
+                      {formatMoney(remaining, item.currency ?? partnerCurrency)}
+                    </Text>
+                  );
+                },
+                searchValuesOf: (item) => [item.invoiceNumber, item.status, item.currency, item.amount],
+                onOpen: () => openDashboardModule('/dashboard/account-payables'),
+              })}
+            </Space>
+          ),
+        },
+      ];
+    }
+
+    return [
+      {
+        key: 'quotations',
+        label: `${t('history.quotations')} (${historyData.quotations.total})`,
+        children: renderHistoryList<PartnerHistoryQuotation>({
+          items: historyData.quotations.items,
+          total: historyData.quotations.total,
+          emptyDescription: t('history.noQuotations'),
+          modulePath: '/dashboard/quotation',
+          createLabel: t('history.createQuotation'),
+          titleOf: (item) => item.quotationNumber ?? item._id,
+          metaOf: (item) => formatHistoryDate(item.updatedAt ?? item.createdAt),
+          amountOf: (item) => (
+            <Text strong style={{ color: token.colorSuccess, fontSize: 15 }}>
+              {formatMoney(Number(item.totalAmount ?? 0), item.currency ?? partnerCurrency)}
+            </Text>
+          ),
+          searchValuesOf: (item) => [item.quotationNumber, item.status, item.currency, item.totalAmount],
+          onOpen: (item) => setHistoryDocumentDetail({ type: 'quotation', recordRef: item._id }),
+        }),
+      },
+      {
+        key: 'proformaInvoices',
+        label: `${t('history.piInvoices')} (${historyData.proformaInvoices.total})`,
+        children: renderHistoryList<PartnerHistoryProformaInvoice>({
+          items: historyData.proformaInvoices.items,
+          total: historyData.proformaInvoices.total,
+          emptyDescription: t('history.noPI'),
+          modulePath: '/dashboard/proforma-invoice',
+          createLabel: t('history.createPI'),
+          titleOf: (item) => item.piNumber ?? item._id,
+          metaOf: (item) => formatHistoryDate(item.updatedAt ?? item.createdAt),
+          amountOf: (item) => (
+            <Text strong style={{ color: token.colorInfo, fontSize: 15 }}>
+              {formatMoney(Number(item.totalAmount ?? 0), item.currency ?? partnerCurrency)}
+            </Text>
+          ),
+          searchValuesOf: (item) => [item.piNumber, item.status, item.currency, item.totalAmount],
+          onOpen: (item) => setHistoryDocumentDetail({ type: 'proformaInvoice', record: item }),
+        }),
+      },
+    ];
   };
 
   const handleResetFilters = () => {
@@ -242,7 +967,7 @@ const PartnerTable = () => {
 
       const url = `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/partners/export?${queryParams.toString()}`;
 
-      const response = await fetch(url, {
+      const response = await backendFetch(url, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${accessToken}`,
@@ -277,9 +1002,9 @@ const PartnerTable = () => {
   };
 
   // --- 4. Cấu hình Columns (AntD 5 chuẩn chỉnh) ---
-  const getSortOrder = (field: PartnerSortField) => (
+  const getSortOrder = useCallback((field: PartnerSortField) => (
     sortConfig.field === field ? sortConfig.order : null
-  );
+  ), [sortConfig]);
 
   const columns: ColumnsType<IPartner> = useMemo(() => [
     {
@@ -548,10 +1273,18 @@ const PartnerTable = () => {
         </Space>
       ),
     },
-  ], [accessToken, sortConfig]);
-
-  const { token } = theme.useToken();
-  const { isDark } = useTheme();
+  ], [
+    confirmDelete,
+    formatMoney,
+    formatVND,
+    getSortOrder,
+    isDark,
+    locale,
+    openHistory,
+    t,
+    tCommon,
+    token,
+  ]);
 
   return (
     <div style={{
@@ -627,7 +1360,6 @@ const PartnerTable = () => {
             <Statistic
               title={<Text type="secondary" style={{ color: isDark ? '#94a3b8' : undefined }}>{t('stats.payable')}</Text>}
               value={partners.filter(p => p.partnerType !== 'CUSTOMER').reduce((sum, p) => {
-                const currency = p.defaultCurrency || 'SUPPLIER' ? 'USD' : 'VND'; // Fallback logic
                 const actualCurrency = p.defaultCurrency || (p.partnerType === 'SUPPLIER' ? 'USD' : 'VND');
                 const amount = p.apBalance || 0;
                 const amountVnd = actualCurrency === 'VND' ? amount : (amount * GLOBAL_EXCHANGE_RATE);
@@ -781,6 +1513,7 @@ const PartnerTable = () => {
         onClose={() => setIsFilterOpen(false)}
         open={isFilterOpen}
         size="default"
+        forceRender={hasMounted}
         extra={
           <Space>
             <Button onClick={handleResetFilters}>{t('table.reset')}</Button>
@@ -810,12 +1543,7 @@ const PartnerTable = () => {
             <Select
               allowClear
               placeholder={t('table.allRegions')}
-              options={[
-                { value: 'EU', label: t('regions.EU') },
-                { value: 'US', label: t('regions.US') },
-                { value: 'ASEAN', label: t('regions.ASEAN') },
-                { value: 'APAC', label: t('regions.APAC') },
-              ]}
+              options={regionOptions}
             />
           </Form.Item>
 
@@ -845,7 +1573,13 @@ const PartnerTable = () => {
           <Divider />
 
           <Form.Item label={t('table.country')} name="country">
-            <Input placeholder={t('form.placeholders.country')} allowClear />
+            <Select
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              options={countryOptions}
+              placeholder={t('form.placeholders.country')}
+            />
           </Form.Item>
 
         </Form>
@@ -853,321 +1587,90 @@ const PartnerTable = () => {
 
       <Drawer
         title={<Space><HistoryOutlined /> {t('table.historyTitle')}</Space>}
-        size="default"
-        onClose={() => setHistoryOpen(false)}
+        size={historyDrawerSize}
+        defaultSize={PARTNER_HISTORY_DRAWER_DEFAULT_SIZE}
+        maxSize={PARTNER_HISTORY_DRAWER_MAX_SIZE}
+        resizable={{
+          onResize: handleHistoryDrawerResize,
+          onResizeEnd: () => {
+            setHistoryDrawerSize((currentSize) => clampPartnerHistoryDrawerSize(currentSize));
+          },
+        }}
+        onClose={closeHistoryDrawer}
         open={historyOpen}
         destroyOnHidden
+        styles={{ dragger: { width: 10, background: 'transparent' } }}
       >
-        {historyLoading ? <div style={{ textAlign: 'center', padding: 50 }}>{tCommon('loading')}</div> : (
-          <>
-            <Title level={4}>{historyData?.partner?.name}</Title>
-            <Divider />
-            <Tabs items={
-              historyData?.partner?.partnerType === 'SUPPLIER' ? [
-                {
-                  key: '1', label: t('history.purchaseOrders'),
-                  children: (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                      {(historyData?.purchaseOrders?.items || []).length > 0 ? (
-                        (historyData?.purchaseOrders?.items || []).map((item: any) => (
-                          <div key={item._id} style={{
-                            padding: '16px',
-                            background: isDark ? '#1e293b' : '#f8f9fa',
-                            borderRadius: '12px',
-                            border: `1px solid ${isDark ? '#334155' : '#f0f0f0'}`,
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center'
-                          }}>
-                            <div>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                                <Text strong style={{ fontSize: 14 }}>{item.poNumber}</Text>
-                                <Tag color={item.status === 'COMPLETED' ? 'green' : item.status === 'CANCELLED' ? 'red' : 'blue'} style={{ borderRadius: 4, fontSize: 10 }}>
-                                  {item.status}
-                                </Tag>
-                              </div>
-                              <Text type="secondary" style={{ fontSize: 12 }}>
-                                {item.orderDate ? new Date(item.orderDate).toLocaleDateString('vi-VN') : tCommon('noData')}
-                              </Text>
-                            </div>
-                            <div style={{ textAlign: 'right' }}>
-                              <Text strong style={{ color: token.colorSuccess, fontSize: 15 }}>
-                                {formatMoney(Number(item.totalAmount || 0), item.currency || 'VND')}
-                              </Text>
-                              <br />
-                              <Text type="secondary" style={{ fontSize: 12 }}>
-                                {(item.items || []).length} {t('history.items')}
-                              </Text>
-                            </div>
-                          </div>
-                        ))
-                      ) : <Empty description={t('history.noPurchaseOrders')} />}
-                    </div>
-                  )
-                },
-                {
-                  key: '2', label: t('history.vendorInvoices'),
-                  children: (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                      {(historyData?.vendorInvoices?.items || []).length > 0 ? (
-                        (historyData?.vendorInvoices?.items || []).map((item: any) => (
-                          <div key={item._id} style={{
-                            padding: '16px',
-                            background: isDark ? '#1e293b' : '#f8f9fa',
-                            borderRadius: '12px',
-                            border: `1px solid ${isDark ? '#334155' : '#f0f0f0'}`,
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center'
-                          }}>
-                            <div>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                                <Text strong>{item.invoiceNumber}</Text>
-                                <Tag color={item.status === 'PAID' ? 'green' : item.status === 'CANCELLED' ? 'red' : 'orange'}>{item.status}</Tag>
-                              </div>
-                              <Text type="secondary" style={{ fontSize: 12 }}>
-                                PO: {item.purchaseOrder?.poNumber || item.purchaseOrderId}
-                              </Text>
-                            </div>
-                            <Text strong style={{ color: '#1890ff' }}>
-                              {formatMoney(Number(item.totalAmount || 0), item.currency || 'VND')}
-                            </Text>
-                          </div>
-                        ))
-                      ) : <Empty description={t('history.noVendorInvoices')} />}
-                    </div>
-                  )
-                },
-                {
-                  key: '3', label: t('history.payables'),
-                  children: (
-                    <div>
-                      <Row gutter={12} style={{ marginBottom: 16 }}>
-                        <Col span={12}>
-                          <Statistic title={t('history.remaining')} value={historyData?.payables?.summary?.remainingAmount || 0} formatter={(value) => formatMoney(Number(value), historyData?.partner?.defaultCurrency || 'VND')} />
-                        </Col>
-                        <Col span={12}>
-                          <Statistic title={t('history.overdue')} value={historyData?.payables?.summary?.overdueCount || 0} styles={{ content: { color: token.colorError } }} />
-                        </Col>
-                      </Row>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                        {(historyData?.payables?.items || []).length > 0 ? (
-                          (historyData?.payables?.items || []).map((item: any) => {
-                            const remaining = Math.max(Number(item.amount || 0) - Number(item.paidAmount || 0), 0);
-                            return (
-                              <div key={item._id} style={{
-                                padding: '16px',
-                                background: isDark ? '#1e293b' : '#f8f9fa',
-                                borderRadius: '12px',
-                                border: `1px solid ${isDark ? '#334155' : '#f0f0f0'}`,
-                                display: 'flex',
-                                justifyContent: 'space-between',
-                                alignItems: 'center'
-                              }}>
-                                <div>
-                                  <Text strong>{item.invoiceNumber || item._id}</Text>
-                                  <br />
-                                  <Text type="secondary" style={{ fontSize: 12 }}>
-                                    {t('history.dueDate')}: {item.dueDate ? new Date(item.dueDate).toLocaleDateString('vi-VN') : tCommon('noData')}
-                                  </Text>
-                                </div>
-                                <div style={{ textAlign: 'right' }}>
-                                  <Tag color={item.status === 'PAID' ? 'green' : item.status === 'PARTIAL' ? 'blue' : 'orange'}>{item.status}</Tag>
-                                  <br />
-                                  <Text strong style={{ color: token.colorError }}>
-                                    {formatMoney(remaining, item.currency || 'VND')}
-                                  </Text>
-                                </div>
-                              </div>
-                            );
-                          })
-                        ) : <Empty description={t('history.noPayables')} />}
-                      </div>
-                    </div>
-                  )
-                }
-              ] :
-              historyData?.partner?.partnerType === 'LOGISTICS' ? [
-                {
-                  key: '1', label: t('history.shipments'),
-                  children: (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                      {(historyData?.shipments?.items || []).length > 0 ? (
-                        (historyData?.shipments?.items || []).map((item: any) => {
-                          const statusColors: any = {
-                            BOOKED: 'default',
-                            LOADING: 'orange',
-                            CUSTOMS_CLEARED: 'blue',
-                            ON_BOARD: 'processing',
-                            ARRIVED: 'success',
-                            CLOSED: 'purple'
-                          };
-                          return (
-                            <div key={item._id} style={{
-                              padding: '16px',
-                              background: isDark ? '#1e293b' : '#f8f9fa',
-                              borderRadius: '12px',
-                              border: `1px solid ${isDark ? '#334155' : '#f0f0f0'}`,
-                              display: 'flex',
-                              justifyContent: 'space-between',
-                              alignItems: 'center'
-                            }}>
-                              <div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                                  <Text strong style={{ fontSize: 14 }}>{item.shipmentNumber}</Text>
-                                  <Tag color={statusColors[item.status] || 'default'} style={{ borderRadius: 4, fontSize: 10 }}>
-                                    {item.status}
-                                  </Tag>
-                                </div>
-                                <Text type="secondary" style={{ fontSize: 12 }}>
-                                  ETD: {item.etd ? new Date(item.etd).toLocaleDateString('vi-VN') : 'N/A'}
-                                </Text>
-                              </div>
-                              <div style={{ textAlign: 'right' }}>
-                                <Text strong style={{ fontSize: 13 }}>
-                                  B/L: {item.blNumber || tCommon('noData')}
-                                </Text>
-                              </div>
-                            </div>
-                          );
-                        })
-                      ) : <Empty description={t('history.noShipments')} />}
-                    </div>
-                  )
-                },
-                {
-                  key: '2', label: t('history.payables'),
-                  children: (
-                    <div>
-                       <Statistic
-                          title={t('history.totalPayables')}
-                          value={historyData?.payables?.summary?.remainingAmount || historyData?.partner?.apBalance || 0}
-                          formatter={(value) => formatMoney(Number(value), historyData?.partner?.defaultCurrency || 'VND')}
-                          styles={{ content: { color: '#cf1322' } }}
-                       />
-                       <Divider />
-                       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                         {(historyData?.payables?.items || []).length > 0 ? (
-                           (historyData?.payables?.items || []).map((item: any) => {
-                             const remaining = Math.max(Number(item.amount || 0) - Number(item.paidAmount || 0), 0);
-                             return (
-                               <div key={item._id} style={{
-                                 padding: '16px',
-                                 background: isDark ? '#1e293b' : '#f8f9fa',
-                                 borderRadius: '12px',
-                                 border: `1px solid ${isDark ? '#334155' : '#f0f0f0'}`,
-                                 display: 'flex',
-                                 justifyContent: 'space-between',
-                                 alignItems: 'center'
-                               }}>
-                                 <div>
-                                   <Text strong>{item.invoiceNumber || item._id}</Text>
-                                   <br />
-                                   <Text type="secondary" style={{ fontSize: 12 }}>
-                                     {t('history.dueDate')}: {item.dueDate ? new Date(item.dueDate).toLocaleDateString('vi-VN') : tCommon('noData')}
-                                   </Text>
-                                 </div>
-                                 <div style={{ textAlign: 'right' }}>
-                                   <Tag color={item.status === 'PAID' ? 'green' : item.status === 'PARTIAL' ? 'blue' : 'orange'}>{item.status}</Tag>
-                                   <br />
-                                   <Text strong style={{ color: token.colorError }}>
-                                     {formatMoney(remaining, item.currency || 'VND')}
-                                   </Text>
-                                 </div>
-                               </div>
-                             );
-                           })
-                         ) : <Empty description={t('history.noPayables')} />}
-                       </div>
-                    </div>
-                  )
-                }
-              ] : [
-                {
-                  key: '1', label: t('history.quotations'),
-                  children: (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                      {(historyData?.quotations?.items || []).length > 0 ? (
-                        (historyData?.quotations?.items || []).map((item: any) => {
-                          const statusColors: any = {
-                            DRAFT: 'default',
-                            PENDING_APPROVAL: 'orange',
-                            SENT: 'blue',
-                            ACCEPTED: 'green',
-                            REJECTED: 'red',
-                            EXPIRED: 'volcano'
-                          };
-                          return (
-                            <div key={item._id} style={{
-                              padding: '16px',
-                              background: isDark ? '#1e293b' : '#f8f9fa',
-                              borderRadius: '12px',
-                              border: `1px solid ${isDark ? '#334155' : '#f0f0f0'}`,
-                              display: 'flex',
-                              justifyContent: 'space-between',
-                              alignItems: 'center'
-                            }}>
-                              <div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                                  <Text strong style={{ fontSize: 14 }}>{item.quotationNumber}</Text>
-                                  <Tag color={statusColors[item.status] || 'default'} style={{ borderRadius: 4, fontSize: 10 }}>
-                                    {item.status}
-                                  </Tag>
-                                </div>
-                                <Text type="secondary" style={{ fontSize: 12 }}>
-                                  {new Date(item.updatedAt).toLocaleDateString('vi-VN')}
-                                </Text>
-                              </div>
-                              <div style={{ textAlign: 'right' }}>
-                                <Text strong style={{ color: token.colorSuccess, fontSize: 15 }}>
-                                  {Number(item.totalAmount).toLocaleString()} {item.currency}
-                                </Text>
-                              </div>
-                            </div>
-                          );
-                        })
-                      ) : <Empty description={t('history.noQuotations')} />}
-                    </div>
-                  )
-                },
-                {
-                  key: '2', label: t('history.piInvoices'),
-                  children: (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                      {(historyData?.proformaInvoices?.items || []).length > 0 ? (
-                        (historyData?.proformaInvoices?.items || []).map((item: any) => (
-                          <div key={item._id} style={{
-                            padding: '16px',
-                            background: isDark ? '#1e293b' : '#f8f9fa',
-                            borderRadius: '12px',
-                            border: `1px solid ${isDark ? '#334155' : '#f0f0f0'}`,
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center'
-                          }}>
-                            <div>
-                               <Text strong>{item.piNumber}</Text>
-                               <br />
-                               <Text type="secondary" style={{ fontSize: 12 }}>
-                                 {new Date(item.updatedAt).toLocaleDateString('vi-VN')}
-                               </Text>
-                            </div>
-                            <div style={{ textAlign: 'right' }}>
-                              <Text strong style={{ color: '#1890ff' }}>
-                                {Number(item.totalAmount).toLocaleString()} {item.currency}
-                              </Text>
-                            </div>
-                          </div>
-                        ))
-                      ) : <Empty description={t('history.noPI')} />}
-                    </div>
-                  )
-                },
-              ]
-            } />
-          </>
+        {historyLoading ? (
+          <Skeleton active paragraph={{ rows: 8 }} />
+        ) : historyData ? (
+          <Space orientation="vertical" size={16} style={{ width: '100%' }}>
+            <div>
+              <Title level={4} style={{ marginBottom: 4 }}>{historyData.partner.name}</Title>
+              <Text type="secondary">{t('history.subtitle')}</Text>
+              {historyData.lastActivityAt ? (
+                <div style={{ marginTop: 6 }}>
+                  <Tag color="blue">{t('history.lastActivity')}: {formatHistoryDate(historyData.lastActivityAt)}</Tag>
+                </div>
+              ) : null}
+            </div>
+            <Divider style={{ margin: '4px 0' }} />
+            {renderHistoryControls()}
+            <Tabs items={renderHistoryTabs()} />
+          </Space>
+        ) : (
+          <Empty description={tCommon('noData')} />
         )}
       </Drawer>
+
+      {historyDocumentDetail?.type === 'quotation' ? (
+        <QuotationDetailModal
+          quotationId={historyDocumentDetail.recordRef}
+          open
+          onClose={() => setHistoryDocumentDetail(null)}
+          onSuccess={refreshDocumentDetail}
+        />
+      ) : null}
+
+      {historyDocumentDetail?.type === 'proformaInvoice' ? (
+        <ProformaInvoiceDetailModal
+          open
+          setOpen={(open) => {
+            if (!open) setHistoryDocumentDetail(null);
+          }}
+          piData={historyDocumentDetail.record}
+          fetchPIs={refreshDocumentDetail}
+        />
+      ) : null}
+
+      {historyDocumentDetail?.type === 'purchaseOrder' ? (
+        <PurchaseOrderDetailModal
+          poId={historyDocumentDetail.recordRef}
+          open
+          onClose={() => setHistoryDocumentDetail(null)}
+          onSuccess={refreshDocumentDetail}
+        />
+      ) : null}
+
+      {historyDocumentDetail?.type === 'vendorInvoice' ? (
+        <VendorInvoiceDetailModal
+          isOpen
+          setIsOpen={(open) => {
+            if (!open) setHistoryDocumentDetail(null);
+          }}
+          data={toVendorInvoiceDetailRecord(historyDocumentDetail.record)}
+        />
+      ) : null}
+
+      {historyDocumentDetail?.type === 'shipment' ? (
+        <ShipmentDetailDrawer
+          shipmentId={historyDocumentDetail.recordRef}
+          open
+          onClose={() => setHistoryDocumentDetail(null)}
+          onSuccess={refreshDocumentDetail}
+        />
+      ) : null}
+
       <style jsx global>{`
         .premium-table .ant-table {
           background: transparent !important;
@@ -1184,6 +1687,18 @@ const PartnerTable = () => {
         }
         .premium-table .ant-table-placeholder {
           background: transparent !important;
+        }
+        .partner-history-document-card {
+          transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+        }
+        .partner-history-document-card:hover {
+          border-color: ${token.colorPrimary} !important;
+          box-shadow: 0 8px 24px ${isDark ? 'rgba(15, 23, 42, 0.35)' : 'rgba(15, 23, 42, 0.08)'};
+          transform: translateY(-1px);
+        }
+        .partner-history-document-card:focus-visible {
+          outline: 2px solid ${token.colorPrimary};
+          outline-offset: 2px;
         }
       `}</style>
     </div>

@@ -100,22 +100,58 @@ export class CommercialInvoice {
   @Column({ type: 'varchar', default: 'USD' })
   currency: string;
 
-  @Column({ type: 'numeric', precision: 15, scale: 6, default: 1, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 6,
+    default: 1,
+    transformer: new ColumnNumericTransformer(),
+  })
   exchangeRate: number;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   subtotalForeign: number;
 
-  @Column({ type: 'numeric', precision: 7, scale: 4, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 7,
+    scale: 4,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   taxRatePercent: number;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   taxAmountForeign: number;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   totalAmountForeign: number;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   totalAmountVnd: number;
 
   @Column({ type: 'varchar', nullable: true })
@@ -154,7 +190,9 @@ export class CommercialInvoice {
   @Column({ type: 'text', nullable: true })
   note: string | null;
 
-  @OneToMany(() => CommercialInvoiceItem, (item) => item.commercialInvoice, { cascade: true })
+  @OneToMany(() => CommercialInvoiceItem, (item) => item.commercialInvoice, {
+    cascade: true,
+  })
   items: CommercialInvoiceItem[];
 
   @CreateDateColumn()

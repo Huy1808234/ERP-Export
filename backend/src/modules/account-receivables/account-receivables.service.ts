@@ -1,8 +1,15 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, In, Repository } from 'typeorm';
 import Decimal from 'decimal.js';
-import { Partner, PartnerType } from '@/modules/partners/entities/partner.entity';
+import {
+  Partner,
+  PartnerType,
+} from '@/modules/partners/entities/partner.entity';
 import {
   AccountReceivable,
   ARSourceType,
@@ -12,7 +19,10 @@ import { PaymentAllocation } from './entities/payment-allocation.entity';
 import { CreateAccountReceivableDto } from './dto/create-account-receivable.dto';
 import { UpdateAccountReceivableDto } from './dto/update-account-receivable.dto';
 import { AllocatePaymentDto } from './dto/allocate-payment.dto';
-import { SalesContract, SalesContractStatus } from '../sales-contracts/entities/sales-contract.entity';
+import {
+  SalesContract,
+  SalesContractStatus,
+} from '../sales-contracts/entities/sales-contract.entity';
 import {
   TradeFinanceTransaction,
   TradeFinanceType,
@@ -83,7 +93,11 @@ export class AccountReceivablesService {
     }
   }
 
-  private deriveDueDate(invoiceDate: Date, paymentTerms?: string | null, fallback?: string | Date | null) {
+  private deriveDueDate(
+    invoiceDate: Date,
+    paymentTerms?: string | null,
+    fallback?: string | Date | null,
+  ) {
     if (fallback) return new Date(fallback);
 
     const match = String(paymentTerms || '').match(/(?:net\s*)?(\d{1,3})/i);
@@ -96,12 +110,17 @@ export class AccountReceivablesService {
   private normalizeStatus(ar: AccountReceivable) {
     const paid = new Decimal(ar.paidAmountForeign || 0);
     const total = new Decimal(ar.amountForeign || 0);
-    if (paid.lessThan(0)) throw new BadRequestException('Số tiền đã thu không được âm');
-    if (paid.greaterThan(total)) throw new BadRequestException('Số tiền đã thu không được vượt quá công nợ');
+    if (paid.lessThan(0))
+      throw new BadRequestException('Số tiền đã thu không được âm');
+    if (paid.greaterThan(total))
+      throw new BadRequestException(
+        'Số tiền đã thu không được vượt quá công nợ',
+      );
 
     if (paid.greaterThanOrEqualTo(total)) return ARStatus.PAID;
     const dueDate = ar.dueDate ? new Date(ar.dueDate) : null;
-    if (dueDate && dueDate.getTime() < new Date().setHours(0, 0, 0, 0)) return ARStatus.OVERDUE;
+    if (dueDate && dueDate.getTime() < new Date().setHours(0, 0, 0, 0))
+      return ARStatus.OVERDUE;
     if (paid.greaterThan(0)) return ARStatus.PARTIAL;
     return ARStatus.UNPAID;
   }
@@ -109,22 +128,30 @@ export class AccountReceivablesService {
   private getPaymentStage(type?: TradeFinanceType | null): PaymentStage {
     if (type === TradeFinanceType.TT_ADVANCE) return 'ADVANCE';
     if (type === TradeFinanceType.TT_BALANCE) return 'BALANCE';
-    if (type === TradeFinanceType.DP || type === TradeFinanceType.DA) return 'COLLECTION';
+    if (type === TradeFinanceType.DP || type === TradeFinanceType.DA)
+      return 'COLLECTION';
     return 'MANUAL';
   }
 
   private async attachTradeFinanceAllocationDetails(rows: AccountReceivable[]) {
-    const transactionIds = Array.from(new Set(rows.flatMap((row) => (
-      row.allocations || []
-    ).map((allocation) => allocation.tradeFinanceTransactionId)
-      .filter((value): value is string => Boolean(value)))));
+    const transactionIds = Array.from(
+      new Set(
+        rows.flatMap((row) =>
+          (row.allocations || [])
+            .map((allocation) => allocation.tradeFinanceTransactionId)
+            .filter((value): value is string => Boolean(value)),
+        ),
+      ),
+    );
 
     if (transactionIds.length === 0) return rows;
 
     const transactions = await this.tradeFinanceTransactionRepository.find({
       where: { _id: In(transactionIds) },
     });
-    const transactionById = new Map(transactions.map((transaction) => [transaction._id, transaction]));
+    const transactionById = new Map(
+      transactions.map((transaction) => [transaction._id, transaction]),
+    );
 
     rows.forEach((row) => {
       (row.allocations || []).forEach((allocation) => {
@@ -172,7 +199,9 @@ export class AccountReceivablesService {
       paidAmountForeign: 0,
       currency: contract.currencyCode || 'USD',
       exchangeRate,
-      amountVnd: Number(contract.totalAmountVnd || amountForeign * exchangeRate),
+      amountVnd: Number(
+        contract.totalAmountVnd || amountForeign * exchangeRate,
+      ),
       paidAmountVnd: 0,
       revenueJournalEntryId,
       createdByUsername: username,
@@ -189,7 +218,9 @@ export class AccountReceivablesService {
       ...dto,
       sourceType: dto.sourceType || ARSourceType.COMMERCIAL_INVOICE,
       invoiceDate,
-      dueDate: dto.dueDate ? new Date(dto.dueDate) : this.deriveDueDate(invoiceDate),
+      dueDate: dto.dueDate
+        ? new Date(dto.dueDate)
+        : this.deriveDueDate(invoiceDate),
       currency: dto.currency || 'USD',
       amountVnd,
       paidAmountForeign: 0,
@@ -215,19 +246,26 @@ export class AccountReceivablesService {
     });
 
     if (!receivable) {
-      receivable = this.buildReceivableFromContract(contract, revenueJournalEntryId, username);
+      receivable = this.buildReceivableFromContract(
+        contract,
+        revenueJournalEntryId,
+        username,
+      );
     } else if (receivable.status === ARStatus.PAID) {
       return receivable;
     } else {
       receivable.amountForeign = Number(contract.totalAmount || 0);
       receivable.amountVnd = Number(contract.totalAmountVnd || 0);
       receivable.currency = contract.currencyCode || receivable.currency;
-      receivable.exchangeRate = Number(contract.exchangeRate || receivable.exchangeRate || 1);
+      receivable.exchangeRate = Number(
+        contract.exchangeRate || receivable.exchangeRate || 1,
+      );
       receivable.dueDate = this.deriveDueDate(
         new Date(receivable.invoiceDate),
         contract.paymentTerms,
       );
-      receivable.revenueJournalEntryId = receivable.revenueJournalEntryId || revenueJournalEntryId;
+      receivable.revenueJournalEntryId =
+        receivable.revenueJournalEntryId || revenueJournalEntryId;
     }
 
     receivable.status = this.normalizeStatus(receivable);
@@ -246,6 +284,13 @@ export class AccountReceivablesService {
       lock: { mode: 'pessimistic_write' },
     });
 
+    if (!receivable && invoice.salesContract_id) {
+      receivable = await repository.findOne({
+        where: { salesContractId: invoice.salesContract_id },
+        lock: { mode: 'pessimistic_write' },
+      });
+    }
+
     if (!receivable) {
       receivable = await repository.findOne({
         where: { invoiceNumber: invoice.invoiceNumber },
@@ -254,10 +299,16 @@ export class AccountReceivablesService {
     }
 
     const invoiceDate = new Date(invoice.invoiceDate);
-    const dueDate = this.deriveDueDate(invoiceDate, invoice.paymentTerms, invoice.dueDate || null);
+    const dueDate = this.deriveDueDate(
+      invoiceDate,
+      invoice.paymentTerms,
+      invoice.dueDate || null,
+    );
     const amountForeign = Number(invoice.totalAmountForeign || 0);
     const exchangeRate = Number(invoice.exchangeRate || 1);
-    const amountVnd = Number(invoice.totalAmountVnd || amountForeign * exchangeRate);
+    const amountVnd = Number(
+      invoice.totalAmountVnd || amountForeign * exchangeRate,
+    );
 
     if (!receivable) {
       receivable = repository.create({
@@ -284,6 +335,7 @@ export class AccountReceivablesService {
       receivable.buyerId = invoice.buyer_id;
       receivable.salesContractId = invoice.salesContract_id;
       receivable.commercialInvoice_id = invoice._id;
+      receivable.invoiceNumber = invoice.invoiceNumber;
       receivable.sourceType = ARSourceType.COMMERCIAL_INVOICE;
       receivable.invoiceDate = invoiceDate;
       receivable.dueDate = dueDate;
@@ -291,8 +343,9 @@ export class AccountReceivablesService {
       receivable.amountVnd = amountVnd;
       receivable.currency = invoice.currency || receivable.currency || 'USD';
       receivable.exchangeRate = exchangeRate;
-      receivable.revenueJournalEntryId = receivable.revenueJournalEntryId || revenueJournalEntryId;
-      receivable.note = receivable.note || `Generated from Commercial Invoice ${invoice.invoiceNumber}`;
+      receivable.revenueJournalEntryId =
+        receivable.revenueJournalEntryId || revenueJournalEntryId;
+      receivable.note = `Generated from Commercial Invoice ${invoice.invoiceNumber}`;
     }
 
     receivable.status = this.normalizeStatus(receivable);
@@ -304,7 +357,8 @@ export class AccountReceivablesService {
     return {
       syncedCount: 0,
       results: [],
-      message: 'AR sync from shipped Sales Contract is disabled. Issue Commercial Invoice to create AR.',
+      message:
+        'AR sync from shipped Sales Contract is disabled. Issue Commercial Invoice to create AR.',
     };
   }
 
@@ -316,15 +370,26 @@ export class AccountReceivablesService {
       .leftJoinAndSelect('ar.allocations', 'allocations')
       .orderBy('ar.updatedAt', 'DESC');
 
-    if (query.buyerId) qb.andWhere('ar.buyerId = :buyerId', { buyerId: query.buyerId });
-    if (query.status) qb.andWhere('ar.status = :status', { status: query.status });
+    if (query.buyerId)
+      qb.andWhere('ar.buyerId = :buyerId', { buyerId: query.buyerId });
+    if (query.status)
+      qb.andWhere('ar.status = :status', { status: query.status });
     if (query.search) {
-      qb.andWhere('(ar.invoiceNumber ILIKE :search OR buyer.name ILIKE :search)', {
-        search: `%${query.search}%`,
-      });
+      qb.andWhere(
+        '(ar.invoiceNumber ILIKE :search OR buyer.name ILIKE :search)',
+        {
+          search: `%${query.search}%`,
+        },
+      );
     }
 
     const rows = await qb.getMany();
+    rows.forEach((row) => {
+      if (![ARStatus.PAID, ARStatus.CANCELLED].includes(row.status)) {
+        row.status = this.normalizeStatus(row);
+      }
+    });
+
     return this.attachTradeFinanceAllocationDetails(rows);
   }
 
@@ -333,21 +398,30 @@ export class AccountReceivablesService {
       where: { _id: recordId },
       relations: ['buyer', 'salesContract', 'allocations'],
     });
-    if (!receivable) throw new NotFoundException('Không tìm thấy công nợ phải thu');
+    if (!receivable)
+      throw new NotFoundException('Không tìm thấy công nợ phải thu');
     const [row] = await this.attachTradeFinanceAllocationDetails([receivable]);
     return row;
   }
 
   async update(recordId: string, dto: UpdateAccountReceivableDto) {
     const receivable = await this.findOne(recordId);
-    const payload = Object.fromEntries(Object.entries(dto).filter(([, value]) => value !== undefined));
+    const payload = Object.fromEntries(
+      Object.entries(dto).filter(([, value]) => value !== undefined),
+    );
 
     if (payload.buyerId) await this.validateBuyer(payload.buyerId as string);
-    if (payload.invoiceDate) payload.invoiceDate = new Date(payload.invoiceDate as any) as any;
-    if (payload.dueDate) payload.dueDate = new Date(payload.dueDate as any) as any;
+    if (payload.invoiceDate)
+      payload.invoiceDate = new Date(payload.invoiceDate as any) as any;
+    if (payload.dueDate)
+      payload.dueDate = new Date(payload.dueDate as any) as any;
     if (payload.amountForeign || payload.exchangeRate) {
-      const amountForeign = Number(payload.amountForeign ?? receivable.amountForeign);
-      const exchangeRate = Number(payload.exchangeRate ?? receivable.exchangeRate);
+      const amountForeign = Number(
+        payload.amountForeign ?? receivable.amountForeign,
+      );
+      const exchangeRate = Number(
+        payload.exchangeRate ?? receivable.exchangeRate,
+      );
       payload.amountVnd = amountForeign * exchangeRate;
     }
 
@@ -358,18 +432,28 @@ export class AccountReceivablesService {
     return this.findOne(recordId);
   }
 
-  async allocatePayment(recordId: string, dto: AllocatePaymentDto, user?: { username?: string }) {
+  async allocatePayment(
+    recordId: string,
+    dto: AllocatePaymentDto,
+    user?: { username?: string },
+  ) {
     return this.arRepository.manager.transaction(async (manager) => {
       const receivable = await manager.findOne(AccountReceivable, {
         where: { _id: recordId },
         lock: { mode: 'pessimistic_write' },
       });
 
-      if (!receivable) throw new NotFoundException('Không tìm thấy công nợ phải thu');
+      if (!receivable)
+        throw new NotFoundException('Không tìm thấy công nợ phải thu');
 
-      const openAmount = new Decimal(receivable.amountForeign).minus(receivable.paidAmountForeign || 0);
+      const openAmount = new Decimal(receivable.amountForeign).minus(
+        receivable.paidAmountForeign || 0,
+      );
       const allocationAmount = new Decimal(dto.amountForeign);
-      if (allocationAmount.lessThanOrEqualTo(0) || allocationAmount.greaterThan(openAmount)) {
+      if (
+        allocationAmount.lessThanOrEqualTo(0) ||
+        allocationAmount.greaterThan(openAmount)
+      ) {
         throw new BadRequestException('Số tiền phân bổ không hợp lệ');
       }
 
@@ -386,7 +470,9 @@ export class AccountReceivablesService {
 
       await manager.save(allocation);
 
-      receivable.paidAmountForeign = new Decimal(receivable.paidAmountForeign || 0)
+      receivable.paidAmountForeign = new Decimal(
+        receivable.paidAmountForeign || 0,
+      )
         .plus(allocation.allocatedAmountForeign)
         .toNumber();
       receivable.paidAmountVnd = new Decimal(receivable.paidAmountVnd || 0)
@@ -425,9 +511,12 @@ export class AccountReceivablesService {
 
     for (const receivable of receivables) {
       if (remaining.lessThanOrEqualTo(0)) break;
-      if ([ARStatus.PAID, ARStatus.CANCELLED].includes(receivable.status)) continue;
+      if ([ARStatus.PAID, ARStatus.CANCELLED].includes(receivable.status))
+        continue;
 
-      const openAmount = new Decimal(receivable.amountForeign).minus(receivable.paidAmountForeign || 0);
+      const openAmount = new Decimal(receivable.amountForeign).minus(
+        receivable.paidAmountForeign || 0,
+      );
       if (openAmount.lessThanOrEqualTo(0)) continue;
 
       const allocatedForeign = Decimal.min(openAmount, remaining);
@@ -437,7 +526,9 @@ export class AccountReceivablesService {
         allocatedAmountForeign: allocatedForeign.toNumber(),
         allocatedAmountVnd: allocatedForeign.mul(exchangeRate).toNumber(),
         exchangeRate,
-        allocatedAt: tx.transactionDate ? new Date(tx.transactionDate) : new Date(),
+        allocatedAt: tx.transactionDate
+          ? new Date(tx.transactionDate)
+          : new Date(),
         allocatedByUsername: username,
         note: `Allocated from trade finance transaction ${tx._id}`,
       });
@@ -445,7 +536,9 @@ export class AccountReceivablesService {
       await manager.save(allocation);
       allocations.push(allocation);
 
-      receivable.paidAmountForeign = new Decimal(receivable.paidAmountForeign || 0)
+      receivable.paidAmountForeign = new Decimal(
+        receivable.paidAmountForeign || 0,
+      )
         .plus(allocation.allocatedAmountForeign)
         .toNumber();
       receivable.paidAmountVnd = new Decimal(receivable.paidAmountVnd || 0)
@@ -465,7 +558,11 @@ export class AccountReceivablesService {
     });
 
     if (openCount === 0) {
-      await manager.update(SalesContract, { _id: tx.salesContractId }, { status: SalesContractStatus.PAID });
+      await manager.update(
+        SalesContract,
+        { _id: tx.salesContractId },
+        { status: SalesContractStatus.PAID },
+      );
     }
 
     return allocations;
@@ -473,19 +570,33 @@ export class AccountReceivablesService {
 
   async getAging() {
     const rows = await this.arRepository.find({
-      where: { status: In([ARStatus.UNPAID, ARStatus.PARTIAL, ARStatus.OVERDUE]) },
+      where: {
+        status: In([ARStatus.UNPAID, ARStatus.PARTIAL, ARStatus.OVERDUE]),
+      },
       relations: ['buyer'],
     });
 
     const today = new Date();
-    const aging = { current: 0, days_30: 0, days_60: 0, days_90: 0, over_90: 0 };
+    const aging = {
+      current: 0,
+      days_30: 0,
+      days_60: 0,
+      days_90: 0,
+      over_90: 0,
+    };
 
     for (const row of rows) {
-      const amount = new Decimal(row.amountVnd || 0).minus(row.paidAmountVnd || 0).toNumber();
+      const amount = new Decimal(row.amountVnd || 0)
+        .minus(row.paidAmountVnd || 0)
+        .toNumber();
       if (amount <= 0) continue;
 
-      const dueDate = row.dueDate ? new Date(row.dueDate) : new Date(row.invoiceDate);
-      const diffDays = Math.floor((today.getTime() - dueDate.getTime()) / (1000 * 3600 * 24));
+      const dueDate = row.dueDate
+        ? new Date(row.dueDate)
+        : new Date(row.invoiceDate);
+      const diffDays = Math.floor(
+        (today.getTime() - dueDate.getTime()) / (1000 * 3600 * 24),
+      );
 
       if (diffDays <= 0) aging.current += amount;
       else if (diffDays <= 30) aging.days_30 += amount;
@@ -498,26 +609,43 @@ export class AccountReceivablesService {
   }
 
   async getDso(days = 90) {
+    const windowDays =
+      Number.isFinite(days) && days > 0 ? Math.min(Math.floor(days), 365) : 90;
     const endDate = new Date();
     const startDate = new Date();
-    startDate.setDate(endDate.getDate() - days);
+    startDate.setDate(endDate.getDate() - windowDays);
 
     const invoices = await this.arRepository
       .createQueryBuilder('ar')
-      .where('ar.invoiceDate BETWEEN :startDate AND :endDate', { startDate, endDate })
+      .where('ar.invoiceDate BETWEEN :startDate AND :endDate', {
+        startDate,
+        endDate,
+      })
+      .andWhere('ar.status != :cancelled', { cancelled: ARStatus.CANCELLED })
       .getMany();
 
-    const totalCreditSales = invoices.reduce((sum, row) => sum + Number(row.amountVnd || 0), 0);
+    const totalCreditSales = invoices.reduce(
+      (sum, row) => sum + Number(row.amountVnd || 0),
+      0,
+    );
     const openAr = invoices.reduce(
-      (sum, row) => sum + Math.max(Number(row.amountVnd || 0) - Number(row.paidAmountVnd || 0), 0),
+      (sum, row) =>
+        sum +
+        Math.max(
+          Number(row.amountVnd || 0) - Number(row.paidAmountVnd || 0),
+          0,
+        ),
       0,
     );
 
     return {
-      days,
+      days: windowDays,
       totalCreditSales,
       openAr,
-      dso: totalCreditSales > 0 ? Math.round((openAr / totalCreditSales) * days) : 0,
+      dso:
+        totalCreditSales > 0
+          ? Math.round((openAr / totalCreditSales) * windowDays)
+          : 0,
     };
   }
 }

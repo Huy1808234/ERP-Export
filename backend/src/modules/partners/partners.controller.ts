@@ -1,17 +1,17 @@
-import { 
-  Body, 
-  Controller, 
-  Delete, 
-  DefaultValuePipe, 
-  Get, 
-  Param, 
-  ParseIntPipe, 
-  Patch, 
-  Post, 
-  Query, 
-  Request, 
+import {
+  Body,
+  Controller,
+  Delete,
+  DefaultValuePipe,
+  Get,
+  Param,
+  ParseIntPipe,
+  Patch,
+  Post,
+  Query,
+  Request,
   Res,
-  UseGuards
+  UseGuards,
 } from '@nestjs/common';
 import * as express from 'express';
 import { Roles } from '@/decorator/customize'; // Giữ nguyên decorator của bạn
@@ -33,9 +33,10 @@ export class PartnersController {
   @Roles('ADMIN', 'MANAGER', 'SALES_EXPORT', 'PURCHASING', 'ACCOUNTANT')
   async exportExcel(@Query() query: any, @Res() res: express.Response) {
     const buffer = await this.partnersService.exportExcel(query);
-    
+
     res.set({
-      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Type':
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       'Content-Disposition': `attachment; filename="Partners_Export_${new Date().getTime()}.xlsx"`,
       'Content-Length': buffer.length,
     });
@@ -44,7 +45,14 @@ export class PartnersController {
   }
 
   @Get()
-  @Roles('ADMIN', 'MANAGER', 'SALES_EXPORT', 'PURCHASING', 'ACCOUNTANT', 'LOGISTICS') // Ai cũng được xem list
+  @Roles(
+    'ADMIN',
+    'MANAGER',
+    'SALES_EXPORT',
+    'PURCHASING',
+    'ACCOUNTANT',
+    'LOGISTICS',
+  ) // Ai cũng được xem list
   async findAll(
     // Sử dụng DefaultValuePipe và ParseIntPipe để an toàn tuyệt đối
     @Query('current', new DefaultValuePipe(1), ParseIntPipe) current: number,
@@ -54,7 +62,7 @@ export class PartnersController {
     // Xóa current và pageSize ra khỏi query object để tránh truyền query rác vào TypeORM
     delete query.current;
     delete query.pageSize;
-    
+
     return this.partnersService.findAll(query, current, pageSize);
   }
 
@@ -71,15 +79,15 @@ export class PartnersController {
   }
 
   @Patch(':_id')
-  @Roles('ADMIN', 'MANAGER', 'DIRECTOR', 'SALES_EXPORT') 
+  @Roles('ADMIN', 'MANAGER', 'DIRECTOR', 'SALES_EXPORT')
   update(
-    @Param('_id') recordId: string, 
-    @Body() updatePartnerDto: UpdatePartnerDto, 
-    @Request() req: any
+    @Param('_id') recordId: string,
+    @Body() updatePartnerDto: UpdatePartnerDto,
+    @Request() req: any,
   ) {
     // Lấy tên Role từ object Role của User (AuthGuard bóc tách từ JWT)
-    const userRole = req.user?.role?.name || req.user?.role; 
-    
+    const userRole = req.user?.role?.name || req.user?.role;
+
     // Pass role xuống Service để check logic "Cấp hạn mức tín dụng cho khách hàng HIGH RISK"
     return this.partnersService.update(recordId, updatePartnerDto, userRole);
   }

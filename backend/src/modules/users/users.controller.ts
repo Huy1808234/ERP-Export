@@ -8,10 +8,15 @@ import {
   Delete,
   Query,
 } from '@nestjs/common';
-import { UsersService } from './users.service';
+import { UsersService, type UserListResponse } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
-import { UpdateUserDto } from './dto/update-user.dto';
-import { Roles } from '@/decorator/customize';
+import {
+  BulkDeactivateUsersDto,
+  DeactivateUserDto,
+  UpdateUserDto,
+} from './dto/update-user.dto';
+import { Roles, User } from '@/decorator/customize';
+import type { AuthenticatedUser } from '@/common/types/authenticated-user.type';
 
 @Roles('ADMIN')
 @Controller('users')
@@ -25,11 +30,10 @@ export class UsersController {
 
   @Get()
   async findAll(
-    @Query() query: string,
+    @Query() query: Record<string, string | undefined>,
     @Query('current') current: string,
-    @Query('limit') limit: string,
     @Query('pageSize') pageSize: string,
-  ) {
+  ): Promise<UserListResponse> {
     return this.usersService.findAll(query, +current, +pageSize);
   }
 
@@ -39,16 +43,27 @@ export class UsersController {
   }
 
   @Patch(':user_ref')
-  update(@Param('user_ref') user_ref: string, @Body() updateUserDto: UpdateUserDto) {
+  update(
+    @Param('user_ref') user_ref: string,
+    @Body() updateUserDto: UpdateUserDto,
+  ) {
     return this.usersService.update(user_ref, updateUserDto);
   }
-  @Post('bulk-delete')
-  bulkRemove(@Body('ids') ids: string[]) {
-    return this.usersService.bulkRemove(ids);
+
+  @Post('bulk-deactivate')
+  bulkRemove(
+    @Body() dto: BulkDeactivateUsersDto,
+    @User() actor: AuthenticatedUser,
+  ) {
+    return this.usersService.bulkDeactivate(dto.userRefs, dto.reason, actor);
   }
 
   @Delete(':user_ref')
-  remove(@Param('user_ref') user_ref: string) {
-    return this.usersService.remove(user_ref);
+  remove(
+    @Param('user_ref') user_ref: string,
+    @Body() dto: DeactivateUserDto,
+    @User() actor: AuthenticatedUser,
+  ) {
+    return this.usersService.deactivate(user_ref, dto.reason, actor);
   }
 }

@@ -1,8 +1,29 @@
-import { IsArray, IsDateString, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, ValidateNested } from 'class-validator';
-import { Type } from 'class-transformer';
+import {
+  IsArray,
+  IsDateString,
+  IsEnum,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsString,
+  ValidateNested,
+} from 'class-validator';
+import { Transform, Type } from 'class-transformer';
 import { ContainerType } from '../entities/container.entity';
 import { ShipmentStatus } from '../entities/shipment.entity';
 import { IsEntityId } from '@/common/ids/entity-id.validator';
+
+const optionalText = ({
+  value,
+}: {
+  value: unknown;
+}): string | null | undefined => {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  if (typeof value !== 'string') return value as string;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+};
 
 class ContainerDto {
   @IsString()
@@ -57,11 +78,23 @@ export class CreateShipmentDto {
 
   @IsString()
   @IsOptional()
-  pol: string;
+  @Transform(optionalText)
+  pol: string | null;
+
+  @IsEntityId()
+  @IsOptional()
+  @Transform(optionalText)
+  pol_port_id?: string | null;
 
   @IsString()
   @IsOptional()
-  pod: string;
+  @Transform(optionalText)
+  pod: string | null;
+
+  @IsEntityId()
+  @IsOptional()
+  @Transform(optionalText)
+  pod_port_id?: string | null;
 
   @IsDateString()
   @IsOptional()

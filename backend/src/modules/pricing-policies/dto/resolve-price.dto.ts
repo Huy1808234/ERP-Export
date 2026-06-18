@@ -1,4 +1,11 @@
-import { IsDateString, IsEnum, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import {
+  IsDateString,
+  IsEnum,
+  IsNumber,
+  IsOptional,
+  IsString,
+  Min,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 import { IsEntityId } from '@/common/ids/entity-id.validator';
 import { BuyerRegion } from '@/modules/partners/entities/partner.entity';
@@ -29,7 +36,19 @@ export class ResolvePriceDto {
 
   @IsOptional()
   @IsString()
+  countryCode?: string;
+
+  @IsOptional()
+  @IsString()
   country?: string;
+
+  @IsOptional()
+  @IsEntityId()
+  origin_port_id?: string;
+
+  @IsOptional()
+  @IsEntityId()
+  destination_port_id?: string;
 
   @IsOptional()
   @IsDateString()

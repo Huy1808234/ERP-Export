@@ -1,4 +1,14 @@
-import { BeforeInsert, Column, CreateDateColumn, DeleteDateColumn, Entity, JoinColumn, ManyToOne, PrimaryColumn, UpdateDateColumn } from 'typeorm';
+import {
+  BeforeInsert,
+  Column,
+  CreateDateColumn,
+  DeleteDateColumn,
+  Entity,
+  JoinColumn,
+  ManyToOne,
+  PrimaryColumn,
+  UpdateDateColumn,
+} from 'typeorm';
 import { SalesContract } from '@/modules/sales-contracts/entities/sales-contract.entity';
 import { VendorInvoice } from '@/modules/vendor-invoices/entities/vendor-invoice.entity';
 import { User } from '@/modules/users/entities/user.entity';
@@ -9,7 +19,7 @@ export enum TradeFinanceType {
   TT_ADVANCE = 'TT_ADVANCE',
   TT_BALANCE = 'TT_BALANCE',
   DP = 'DP',
-  DA = 'DA'
+  DA = 'DA',
 }
 
 export enum TradeFinanceStatus {
@@ -18,7 +28,7 @@ export enum TradeFinanceStatus {
   ACCEPTED = 'ACCEPTED', // For D/A
   PAID = 'PAID',
   REJECTED = 'REJECTED',
-  CANCELLED = 'CANCELLED'
+  CANCELLED = 'CANCELLED',
 }
 
 export enum ReconciliationStatus {
@@ -60,16 +70,31 @@ export class TradeFinanceTransaction {
   @JoinColumn({ name: 'vendorInvoiceId' })
   vendorInvoice: VendorInvoice;
 
-  @Column({ type: 'enum', enum: TradeFinanceStatus, default: TradeFinanceStatus.PENDING })
+  @Column({
+    type: 'enum',
+    enum: TradeFinanceStatus,
+    default: TradeFinanceStatus.PENDING,
+  })
   status: TradeFinanceStatus;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    transformer: new ColumnNumericTransformer(),
+  })
   amount: number;
 
   @Column({ default: 'USD' })
   currency: string;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, default: 1, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    default: 1,
+    transformer: new ColumnNumericTransformer(),
+  })
   exchangeRate: number;
 
   @Column({ nullable: true })
@@ -90,10 +115,22 @@ export class TradeFinanceTransaction {
   @Column({ type: 'text', nullable: true })
   note: string;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, nullable: true, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    nullable: true,
+    transformer: new ColumnNumericTransformer(),
+  })
   expectedAmount: number;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   varianceAmount: number;
 
   @Column({ type: 'varchar', default: ReconciliationStatus.PENDING })
@@ -103,7 +140,10 @@ export class TradeFinanceTransaction {
   reconciledByUsername: string;
 
   @ManyToOne(() => User)
-  @JoinColumn({ name: 'reconciledByUsername', referencedColumnName: 'username' })
+  @JoinColumn({
+    name: 'reconciledByUsername',
+    referencedColumnName: 'username',
+  })
   reconciledBy: User;
 
   @Column({ type: 'timestamp', nullable: true })

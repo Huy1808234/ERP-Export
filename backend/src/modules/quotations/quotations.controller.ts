@@ -1,4 +1,13 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  Query,
+} from '@nestjs/common';
 import { QuotationsService } from './quotations.service';
 import { CreateQuotationDto } from './dto/create-quotation.dto';
 import { UpdateQuotationDto } from './dto/update-quotation.dto';
@@ -12,7 +21,10 @@ export class QuotationsController {
 
   @Post()
   @ResponseMessage('Create quotation successfully')
-  create(@Body() createQuotationDto: CreateQuotationDto, @User() user: UserEntity) {
+  create(
+    @Body() createQuotationDto: CreateQuotationDto,
+    @User() user: UserEntity,
+  ) {
     return this.quotationsService.create(createQuotationDto, user);
   }
 
@@ -34,7 +46,10 @@ export class QuotationsController {
 
   @Patch(':_id')
   @ResponseMessage('Update quotation successfully')
-  update(@Param('_id') recordId: string, @Body() updateQuotationDto: UpdateQuotationDto) {
+  update(
+    @Param('_id') recordId: string,
+    @Body() updateQuotationDto: UpdateQuotationDto,
+  ) {
     return this.quotationsService.update(recordId, updateQuotationDto);
   }
 

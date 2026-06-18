@@ -25,7 +25,7 @@ export class LotsService {
     const repo = manager ? manager.getRepository(Lot) : this.lotRepository;
     const lot = await repo.findOne({ where: { lotNumber } });
     if (!lot) throw new NotFoundException(`Lot ${lotNumber} not found`);
-    
+
     lot.currentQuantity = Number(lot.currentQuantity) + change;
     return repo.save(lot);
   }
@@ -35,7 +35,7 @@ export class LotsService {
     return this.lotRepository.find({
       where: { productId, supplierId },
       relations: ['product', 'supplier'],
-      order: { createdAt: 'DESC' }
+      order: { createdAt: 'DESC' },
     });
   }
 }

@@ -18,6 +18,7 @@ import {
   Typography,
   Upload,
 } from 'antd';
+import type { TablePaginationConfig, UploadProps } from 'antd';
 import {
   ApartmentOutlined,
   CheckCircleOutlined,
@@ -30,6 +31,7 @@ import {
   WalletOutlined,
 } from '@ant-design/icons';
 import { useSession } from 'next-auth/react';
+import { useTranslations } from 'next-intl';
 import dayjs from 'dayjs';
 import AdminPageScroll from '@/components/layout/admin.page-scroll';
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -39,7 +41,7 @@ import { formatMoneyStatic, formatVND } from '@/utils/format';
 
 const { Text } = Typography;
 
-type APStatus = 'UNPAID' | 'PARTIAL' | 'PAID';
+type APStatus = 'UNPAID' | 'PARTIAL' | 'PAID' | 'VOID';
 type BatchStatus = 'DRAFT' | 'SUBMITTED' | 'APPROVED_LEVEL_1' | 'APPROVED' | 'REJECTED' | 'PAID' | 'CANCELLED';
 type SettlementAuditType = 'SETTLEMENT' | 'REVERSAL';
 
@@ -58,7 +60,18 @@ interface IAccountPayable {
   approvedByUsername?: string | null;
   approvedAt?: string | null;
   paidAt?: string | null;
+  voidedAt?: string | null;
+  voidedByUsername?: string | null;
+  voidReason?: string | null;
   note?: string | null;
+}
+
+interface IAccountPayableListResponse {
+  results: IAccountPayable[];
+  totalItems: number;
+  totalPages: number;
+  current: number;
+  pageSize: number;
 }
 
 interface IPaymentBatchItem {
@@ -139,20 +152,14 @@ interface ISettlementInvoiceTrail {
   audits: ISettlementAudit[];
 }
 
-const batchStatusMeta: Record<BatchStatus, { color: string; label: string }> = {
-  DRAFT: { color: 'default', label: 'Nháp' },
-  SUBMITTED: { color: 'processing', label: 'Chờ duyệt' },
-  APPROVED_LEVEL_1: { color: 'blue', label: 'Đã duyệt cấp 1' },
-  APPROVED: { color: 'green', label: 'Đã duyệt chi' },
-  REJECTED: { color: 'red', label: 'Từ chối' },
-  PAID: { color: 'success', label: 'Đã chi tiền' },
-  CANCELLED: { color: 'default', label: 'Đã hủy' },
-};
-
-const statusLabel: Record<APStatus, string> = {
-  UNPAID: 'Chưa thanh toán',
-  PARTIAL: 'Thanh toán một phần',
-  PAID: 'Đã thanh toán',
+const batchStatusColor: Record<BatchStatus, string> = {
+  DRAFT: 'default',
+  SUBMITTED: 'processing',
+  APPROVED_LEVEL_1: 'blue',
+  APPROVED: 'green',
+  REJECTED: 'red',
+  PAID: 'success',
+  CANCELLED: 'default',
 };
 
 const formatAmount = (amount: number, currency = 'VND') => (
@@ -170,10 +177,10 @@ const resolveFileUrl = (url?: string | null) => {
 };
 
 const AccountPayablesPage = () => {
+  const t = useTranslations('AccountPayables');
   const { data: session } = useSession();
   const accessToken = getAccessToken(session);
   const { message, modal } = App.useApp();
-  const [paymentForm] = Form.useForm();
   const [batchForm] = Form.useForm();
   const [markPaidForm] = Form.useForm();
   const [loading, setLoading] = useState(false);
@@ -181,34 +188,62 @@ const AccountPayablesPage = () => {
   const [auditLoading, setAuditLoading] = useState(false);
   const [uploadingProof, setUploadingProof] = useState(false);
   const [rows, setRows] = useState<IAccountPayable[]>([]);
+  const [apMeta, setApMeta] = useState({ current: 1, pageSize: 10, total: 0 });
   const [batches, setBatches] = useState<IPaymentBatch[]>([]);
   const [settlementAudits, setSettlementAudits] = useState<ISettlementAudit[]>([]);
   const [search, setSearch] = useState('');
-  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [batchModalOpen, setBatchModalOpen] = useState(false);
   const [markPaidModalOpen, setMarkPaidModalOpen] = useState(false);
-  const [selectedPayable, setSelectedPayable] = useState<IAccountPayable | null>(null);
   const [selectedBatch, setSelectedBatch] = useState<IPaymentBatch | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [hasHydrated, setHasHydrated] = useState(false);
+
+  useEffect(() => {
+    setHasHydrated(true);
+  }, []);
 
   const headers = useMemo(() => (
     accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined
   ), [accessToken]);
 
+  const tableLocale = useMemo(() => ({ emptyText: t('empty.noData') }), [t]);
+  const { current: apCurrent, pageSize: apPageSize } = apMeta;
+
+  const apStatusText = useCallback((status: APStatus) => t(`status.${status}`), [t]);
+  const batchStatusText = useCallback((status: BatchStatus) => t(`batchStatus.${status}`), [t]);
+
   const fetchRows = useCallback(async () => {
     if (!headers) return;
     setLoading(true);
     try {
-      const res = await sendRequest<IBackendRes<IAccountPayable[]>>({
+      const res = await sendRequest<IBackendRes<IAccountPayable[] | IAccountPayableListResponse>>({
         url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/account-payables`,
         method: 'GET',
+        queryParams: {
+          current: apCurrent,
+          pageSize: apPageSize,
+          ...(search.trim() ? { search: search.trim() } : {}),
+        },
         headers,
       });
-      setRows(res?.data ?? []);
+      const data = res?.data;
+      if (Array.isArray(data)) {
+        setRows(data);
+        setApMeta((prev) => ({ ...prev, total: data.length }));
+      } else {
+        const listData = data as IAccountPayableListResponse | undefined;
+        setRows(listData?.results ?? []);
+        setApMeta((prev) => ({
+          ...prev,
+          current: listData?.current ?? prev.current,
+          pageSize: listData?.pageSize ?? prev.pageSize,
+          total: listData?.totalItems ?? 0,
+        }));
+      }
     } finally {
       setLoading(false);
     }
-  }, [headers]);
+  }, [apCurrent, apPageSize, headers, search]);
 
   const fetchBatches = useCallback(async () => {
     if (!headers) return;
@@ -253,19 +288,21 @@ const AccountPayablesPage = () => {
     fetchSettlementAudits();
   }, [fetchRows, fetchBatches, fetchSettlementAudits]);
 
-  const filteredRows = useMemo(() => {
-    const keyword = search.trim().toLowerCase();
-    if (!keyword) return rows;
-
-    return rows.filter((row) => (
-      row.invoiceNumber?.toLowerCase().includes(keyword)
-      || row.vendor?.name?.toLowerCase().includes(keyword)
-      || row._id.toLowerCase().includes(keyword)
-    ));
-  }, [rows, search]);
+  const handlePayableTableChange = useCallback((pagination: TablePaginationConfig) => {
+    setApMeta((prev) => ({
+      ...prev,
+      current: pagination.current || 1,
+      pageSize: pagination.pageSize || prev.pageSize,
+    }));
+  }, []);
 
   const selectedPayables = useMemo(() => (
-    rows.filter((row) => selectedRowKeys.includes(row._id) && row.status !== 'PAID' && remainingAmount(row) > 0)
+    rows.filter((row) => (
+      selectedRowKeys.includes(row._id)
+      && row.status !== 'PAID'
+      && row.status !== 'VOID'
+      && remainingAmount(row) > 0
+    ))
   ), [rows, selectedRowKeys]);
 
   const selectedBatchTotal = useMemo(() => (
@@ -313,69 +350,24 @@ const AccountPayablesPage = () => {
     }));
   }, [settlementAudits]);
 
-  const approvePayment = async (record: IAccountPayable) => {
-    if (!headers) return;
-    const res = await sendRequest<IBackendRes<IAccountPayable>>({
-      url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/account-payables/${record._id}/approve-payment`,
-      method: 'PATCH',
-      body: { note: `Approved from admin AP page at ${dayjs().format('YYYY-MM-DD HH:mm')}` },
-      headers,
-    });
-
-    if (res?.data) {
-      message.success('Đã duyệt thanh toán công nợ');
-      refreshAll();
-    } else {
-      message.error(res?.message || 'Không duyệt được công nợ');
-    }
-  };
-
-  const openPaymentModal = (record: IAccountPayable) => {
-    setSelectedPayable(record);
-    paymentForm.setFieldsValue({
-      amount: remainingAmount(record),
-      note: '',
-    });
-    setPaymentModalOpen(true);
-  };
-
-  const recordPayment = async () => {
-    if (!headers || !selectedPayable) return;
-    const values = await paymentForm.validateFields();
-    const res = await sendRequest<IBackendRes<IAccountPayable>>({
-      url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/account-payables/${selectedPayable._id}/record-payment`,
-      method: 'PATCH',
-      body: values,
-      headers,
-    });
-
-    if (res?.data) {
-      message.success('Đã ghi nhận thanh toán AP');
-      setPaymentModalOpen(false);
-      setSelectedPayable(null);
-      paymentForm.resetFields();
-      refreshAll();
-    } else {
-      message.error(res?.message || 'Không ghi nhận được thanh toán');
-    }
-  };
-
   const openBatchModal = () => {
     if (selectedPayables.length === 0) {
-      message.warning('Chọn ít nhất một công nợ còn mở để tạo batch');
+      message.warning(t('messages.selectOpenPayable'));
       return;
     }
 
     const currencies = new Set(selectedPayables.map((item) => item.currency || 'VND'));
     if (currencies.size > 1) {
-      message.error('Một batch chỉ gom các công nợ cùng loại tiền');
+      message.error(t('messages.sameCurrencyOnly'));
       return;
     }
 
+    batchForm.resetFields();
     batchForm.setFieldsValue({
       paymentDate: dayjs(),
       paymentMethod: 'BANK_TRANSFER',
       exchangeRate: selectedPayables[0]?.currency === 'VND' ? 1 : undefined,
+      bankReference: '',
       note: '',
     });
     setBatchModalOpen(true);
@@ -401,20 +393,20 @@ const AccountPayablesPage = () => {
     });
 
     if (res?.data) {
-      message.success('Đã tạo batch thanh toán AP');
+      message.success(t('messages.batchCreateSuccess'));
       setBatchModalOpen(false);
       setSelectedRowKeys([]);
       batchForm.resetFields();
       refreshAll();
     } else {
-      message.error(res?.message || 'Không tạo được batch thanh toán');
+      message.error(res?.message || t('messages.batchCreateError'));
     }
   };
 
-  const handleUploadPaymentProof = async (options: any) => {
+  const handleUploadPaymentProof: NonNullable<UploadProps['customRequest']> = async (options) => {
     const { file, onSuccess, onError } = options;
     if (!headers) {
-      const error = new Error('Missing access token');
+      const error = new Error(t('messages.missingAccessToken'));
       onError?.(error);
       return;
     }
@@ -422,7 +414,7 @@ const AccountPayablesPage = () => {
     setUploadingProof(true);
     try {
       const formData = new FormData();
-      formData.append('file', file as File);
+      formData.append('file', file);
 
       const res = await sendRequestFile<IBackendRes<{
         fileName: string;
@@ -439,18 +431,19 @@ const AccountPayablesPage = () => {
       });
 
       if (!res?.data?.url) {
-        throw new Error(res?.message || 'Upload chứng từ thanh toán thất bại');
+        throw new Error(res?.message || t('messages.uploadError'));
       }
 
       markPaidForm.setFieldsValue({
         bankProofFileId: res.data.fileName,
         bankProofUrl: res.data.url,
       });
-      message.success(`Đã upload ${res.data.originalName || res.data.fileName}`);
+      message.success(t('messages.uploadSuccess', { file: res.data.originalName || res.data.fileName }));
       onSuccess?.(res.data);
     } catch (error) {
-      onError?.(error);
-      message.error(error instanceof Error ? error.message : 'Upload chứng từ thanh toán thất bại');
+      const uploadError = error instanceof Error ? error : new Error(t('messages.uploadError'));
+      onError?.(uploadError);
+      message.error(uploadError.message);
     } finally {
       setUploadingProof(false);
     }
@@ -458,6 +451,7 @@ const AccountPayablesPage = () => {
 
   const openMarkPaidModal = (batch: IPaymentBatch) => {
     setSelectedBatch(batch);
+    markPaidForm.resetFields();
     markPaidForm.setFieldsValue({
       paymentDate: batch.paymentDate ? dayjs(batch.paymentDate) : dayjs(),
       bankTransferAt: batch.bankTransferAt ? dayjs(batch.bankTransferAt) : dayjs(),
@@ -489,13 +483,13 @@ const AccountPayablesPage = () => {
     });
 
     if (res?.data) {
-      message.success('Đã ghi chi batch và tạo settlement audit');
+      message.success(t('messages.markPaidSuccess'));
       setMarkPaidModalOpen(false);
       setSelectedBatch(null);
       markPaidForm.resetFields();
       refreshAll();
     } else {
-      message.error(res?.message || 'Không ghi chi được batch');
+      message.error(res?.message || t('messages.markPaidError'));
     }
   };
 
@@ -504,10 +498,13 @@ const AccountPayablesPage = () => {
     if ((audit.auditType || 'SETTLEMENT') !== 'SETTLEMENT' || audit.reversedAt) return;
 
     modal.confirm({
-      title: 'Đảo thanh toán AP?',
-      content: `${audit.invoiceNumber || audit.accountPayableId} - ${formatAmount(audit.amount, audit.currency)}. Hệ thống sẽ giảm paidAmount, mở lại AP nếu cần và tạo bút toán đảo.`,
-      okText: 'Đảo thanh toán',
-      cancelText: 'Hủy',
+      title: t('confirm.reverseTitle'),
+      content: t('confirm.reverseContent', {
+        invoice: audit.invoiceNumber || audit.accountPayableId,
+        amount: formatAmount(audit.amount, audit.currency),
+      }),
+      okText: t('actions.reversePayment'),
+      cancelText: t('actions.cancel'),
       okButtonProps: { danger: true },
       onOk: async () => {
         const res = await sendRequest<IBackendRes<ISettlementAudit>>({
@@ -520,10 +517,10 @@ const AccountPayablesPage = () => {
         });
 
         if (res?.data) {
-          message.success('Đã đảo thanh toán và ghi audit reversal');
+          message.success(t('messages.reverseSuccess'));
           refreshAll();
         } else {
-          message.error(res?.message || 'Không đảo được thanh toán');
+          message.error(res?.message || t('messages.reverseError'));
         }
       },
     });
@@ -543,25 +540,25 @@ const AccountPayablesPage = () => {
     });
 
     if (res?.data) {
-      message.success('Đã cập nhật batch thanh toán');
+      message.success(t('messages.batchWorkflowSuccess'));
       refreshAll();
     } else {
-      message.error(res?.message || 'Không cập nhật được batch');
+      message.error(res?.message || t('messages.batchWorkflowError'));
     }
   };
 
   const confirmBatchAction = (batch: IPaymentBatch, action: 'submit' | 'approve' | 'reject') => {
     const titleMap = {
-      submit: 'Gửi duyệt batch?',
-      approve: 'Duyệt batch thanh toán?',
-      reject: 'Từ chối batch thanh toán?',
+      submit: t('confirm.submitBatchTitle'),
+      approve: t('confirm.approveBatchTitle'),
+      reject: t('confirm.rejectBatchTitle'),
     };
 
     modal.confirm({
       title: titleMap[action],
       content: `${batch.batchNumber} - ${formatAmount(batch.totalAmount, batch.currency)}`,
-      okText: action === 'reject' ? 'Từ chối' : 'Xác nhận',
-      cancelText: 'Hủy',
+      okText: action === 'reject' ? t('actions.reject') : t('actions.confirm'),
+      cancelText: t('actions.cancel'),
       okButtonProps: { danger: action === 'reject' },
       onOk: () => runBatchAction(batch, action),
     });
@@ -569,7 +566,7 @@ const AccountPayablesPage = () => {
 
   const payableColumns = [
     {
-      title: 'Hóa đơn',
+      title: t('columns.invoice'),
       key: 'invoice',
       render: (_: unknown, record: IAccountPayable) => (
         <Space orientation="vertical" size={0}>
@@ -579,43 +576,45 @@ const AccountPayablesPage = () => {
       ),
     },
     {
-      title: 'Giá trị',
+      title: t('columns.amount'),
       key: 'amount',
       align: 'right' as const,
       render: (_: unknown, record: IAccountPayable) => (
         <Space orientation="vertical" size={0} align="end">
           <Text strong>{formatAmount(record.amount, record.currency)}</Text>
           <Text type="secondary" style={{ fontSize: 12 }}>
-            Còn lại: {formatAmount(remainingAmount(record), record.currency)}
+            {t('labels.remaining', { amount: formatAmount(remainingAmount(record), record.currency) })}
           </Text>
         </Space>
       ),
     },
     {
-      title: 'Hạn trả',
+      title: t('columns.dueDate'),
       dataIndex: 'dueDate',
       key: 'dueDate',
       render: (value?: string) => value ? dayjs(value).format('DD/MM/YYYY') : '-',
     },
     {
-      title: 'Trạng thái',
+      title: t('columns.status'),
       key: 'status',
       render: (_: unknown, record: IAccountPayable) => (
         <Space orientation="vertical" size={4}>
           <Badge
-            status={record.status === 'PAID' ? 'success' : record.status === 'PARTIAL' ? 'processing' : 'warning'}
-            text={statusLabel[record.status]}
+            status={record.status === 'PAID' ? 'success' : record.status === 'PARTIAL' ? 'processing' : record.status === 'VOID' ? 'default' : 'warning'}
+            text={apStatusText(record.status)}
           />
-          {record.isApprovedForPayment ? (
-            <Tag color="green">Đã duyệt chi</Tag>
+          {record.status === 'VOID' ? (
+            <Tag color="default">{record.voidReason || '-'}</Tag>
+          ) : record.isApprovedForPayment ? (
+            <Tag color="green">{t('labels.approvedForPayment')}</Tag>
           ) : (
-            <Tag color="orange">Chờ duyệt chi</Tag>
+            <Tag color="orange">{t('labels.waitingPaymentApproval')}</Tag>
           )}
         </Space>
       ),
     },
     {
-      title: 'Người duyệt',
+      title: t('columns.approvedBy'),
       key: 'approvedBy',
       render: (_: unknown, record: IAccountPayable) => (
         record.approvedByUsername ? (
@@ -626,48 +625,23 @@ const AccountPayablesPage = () => {
         ) : '-'
       ),
     },
-    {
-      title: 'Thao tác',
-      key: 'actions',
-      align: 'right' as const,
-      render: (_: unknown, record: IAccountPayable) => (
-        <Space>
-          <Button
-            type="primary"
-            ghost
-            icon={<CheckCircleOutlined />}
-            disabled={record.status === 'PAID' || record.isApprovedForPayment}
-            onClick={() => approvePayment(record)}
-          >
-            Duyệt chi
-          </Button>
-          <Button
-            icon={<DollarOutlined />}
-            disabled={record.status === 'PAID' || !record.isApprovedForPayment}
-            onClick={() => openPaymentModal(record)}
-          >
-            Ghi chi
-          </Button>
-        </Space>
-      ),
-    },
   ];
 
   const batchColumns = [
     {
-      title: 'Batch',
+      title: t('columns.batch'),
       key: 'batch',
       render: (_: unknown, record: IPaymentBatch) => (
         <Space orientation="vertical" size={0}>
           <Text strong>{record.batchNumber}</Text>
           <Text type="secondary" style={{ fontSize: 12 }}>
-            Tạo bởi {record.createdByUsername}
+            {t('labels.createdBy', { username: record.createdByUsername })}
           </Text>
         </Space>
       ),
     },
     {
-      title: 'Tổng chi',
+      title: t('columns.totalPayment'),
       key: 'total',
       align: 'right' as const,
       render: (_: unknown, record: IPaymentBatch) => (
@@ -678,26 +652,25 @@ const AccountPayablesPage = () => {
       ),
     },
     {
-      title: 'Trạng thái',
+      title: t('columns.status'),
       key: 'status',
       render: (_: unknown, record: IPaymentBatch) => {
-        const meta = batchStatusMeta[record.status];
-        return <Tag color={meta.color}>{meta.label}</Tag>;
+        return <Tag color={batchStatusColor[record.status]}>{batchStatusText(record.status)}</Tag>;
       },
     },
     {
-      title: 'Luồng duyệt',
+      title: t('columns.approvalFlow'),
       key: 'approval',
       render: (_: unknown, record: IPaymentBatch) => (
         <Space orientation="vertical" size={2}>
-          <Text type="secondary">Gửi: {record.submittedByUsername || '-'}</Text>
-          <Text type="secondary">Cấp 1: {record.firstApprovedByUsername || '-'}</Text>
-          <Text type="secondary">Cuối: {record.finalApprovedByUsername || '-'}</Text>
+          <Text type="secondary">{t('labels.submittedBy', { username: record.submittedByUsername || '-' })}</Text>
+          <Text type="secondary">{t('labels.levelOneBy', { username: record.firstApprovedByUsername || '-' })}</Text>
+          <Text type="secondary">{t('labels.finalBy', { username: record.finalApprovedByUsername || '-' })}</Text>
         </Space>
       ),
     },
     {
-      title: 'Thao tác',
+      title: t('columns.actions'),
       key: 'actions',
       align: 'right' as const,
       render: (_: unknown, record: IPaymentBatch) => (
@@ -707,7 +680,7 @@ const AccountPayablesPage = () => {
             disabled={record.status !== 'DRAFT'}
             onClick={() => confirmBatchAction(record, 'submit')}
           >
-            Gửi duyệt
+            {t('actions.submit')}
           </Button>
           <Button
             type="primary"
@@ -716,14 +689,14 @@ const AccountPayablesPage = () => {
             disabled={!['SUBMITTED', 'APPROVED_LEVEL_1'].includes(record.status)}
             onClick={() => confirmBatchAction(record, 'approve')}
           >
-            Duyệt
+            {t('actions.approve')}
           </Button>
           <Button
             danger
             disabled={!['SUBMITTED', 'APPROVED_LEVEL_1'].includes(record.status)}
             onClick={() => confirmBatchAction(record, 'reject')}
           >
-            Từ chối
+            {t('actions.reject')}
           </Button>
           <Button
             type="primary"
@@ -731,7 +704,7 @@ const AccountPayablesPage = () => {
             disabled={record.status !== 'APPROVED'}
             onClick={() => openMarkPaidModal(record)}
           >
-            Ghi chi
+            {t('actions.recordPayment')}
           </Button>
         </Space>
       ),
@@ -740,7 +713,7 @@ const AccountPayablesPage = () => {
 
   const auditColumns = [
     {
-      title: 'Invoice',
+      title: t('columns.invoice'),
       key: 'invoice',
       render: (_: unknown, record: ISettlementAudit) => (
         <Space orientation="vertical" size={0}>
@@ -752,7 +725,7 @@ const AccountPayablesPage = () => {
       ),
     },
     {
-      title: 'Batch',
+      title: t('columns.batch'),
       key: 'batch',
       render: (_: unknown, record: ISettlementAudit) => (
         <Space orientation="vertical" size={0}>
@@ -764,7 +737,7 @@ const AccountPayablesPage = () => {
       ),
     },
     {
-      title: 'Số tiền tất toán',
+      title: t('columns.settlementAmount'),
       key: 'amount',
       align: 'right' as const,
       render: (_: unknown, record: ISettlementAudit) => (
@@ -775,7 +748,7 @@ const AccountPayablesPage = () => {
       ),
     },
     {
-      title: 'Ngân hàng',
+      title: t('columns.bank'),
       key: 'bank',
       render: (_: unknown, record: ISettlementAudit) => (
         <Space orientation="vertical" size={2}>
@@ -787,16 +760,16 @@ const AccountPayablesPage = () => {
               icon={<FileProtectOutlined />}
               onClick={() => window.open(resolveFileUrl(record.bankProofUrl), '_blank', 'noopener,noreferrer')}
             >
-              Xem chứng từ
+              {t('actions.viewProof')}
             </Button>
           ) : (
-            <Text type="secondary" style={{ fontSize: 12 }}>Chưa có file</Text>
+            <Text type="secondary" style={{ fontSize: 12 }}>{t('empty.noFile')}</Text>
           )}
         </Space>
       ),
     },
     {
-      title: 'Người ghi chi',
+      title: t('columns.settledBy'),
       key: 'actor',
       render: (_: unknown, record: ISettlementAudit) => (
         <Space orientation="vertical" size={0}>
@@ -809,7 +782,7 @@ const AccountPayablesPage = () => {
 
   const settlementInvoiceColumns = [
     {
-      title: 'Invoice / Vendor',
+      title: t('columns.invoiceVendor'),
       key: 'invoice',
       render: (_: unknown, record: ISettlementInvoiceTrail) => (
         <Space orientation="vertical" size={0}>
@@ -819,7 +792,7 @@ const AccountPayablesPage = () => {
       ),
     },
     {
-      title: 'AP hiện tại',
+      title: t('columns.currentAp'),
       key: 'currentAp',
       align: 'right' as const,
       render: (_: unknown, record: ISettlementInvoiceTrail) => (
@@ -832,7 +805,7 @@ const AccountPayablesPage = () => {
       ),
     },
     {
-      title: 'Đã tất toán',
+      title: t('columns.settled'),
       key: 'settled',
       align: 'right' as const,
       render: (_: unknown, record: ISettlementInvoiceTrail) => (
@@ -840,7 +813,7 @@ const AccountPayablesPage = () => {
       ),
     },
     {
-      title: 'Đã đảo',
+      title: t('columns.reversed'),
       key: 'reversed',
       align: 'right' as const,
       render: (_: unknown, record: ISettlementInvoiceTrail) => (
@@ -850,7 +823,7 @@ const AccountPayablesPage = () => {
       ),
     },
     {
-      title: 'Net settlement',
+      title: t('columns.netSettlement'),
       key: 'net',
       align: 'right' as const,
       render: (_: unknown, record: ISettlementInvoiceTrail) => (
@@ -863,7 +836,7 @@ const AccountPayablesPage = () => {
       ),
     },
     {
-      title: 'Lần cuối',
+      title: t('columns.latest'),
       key: 'latest',
       render: (_: unknown, record: ISettlementInvoiceTrail) => (
         record.latestSettlementDate ? dayjs(record.latestSettlementDate).format('DD/MM/YYYY HH:mm') : '-'
@@ -876,21 +849,24 @@ const AccountPayablesPage = () => {
       <Card variant="borderless" style={{ borderRadius: 16 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
           <PageHeader
-            title="Công nợ phải trả NCC"
+            title={t('title')}
             icon={<WalletOutlined />}
-            description="Theo dõi AP, gom batch thanh toán và hạch toán chi tiền nhà cung cấp"
+            description={t('description')}
           />
           <Space orientation="horizontal">
             <Input
               allowClear
               prefix={<SearchOutlined />}
-              placeholder="Tìm hóa đơn hoặc nhà cung cấp"
+              placeholder={t('actions.searchPlaceholder')}
               value={search}
-              onChange={(event) => setSearch(event.target.value)}
+              onChange={(event) => {
+                setApMeta((prev) => ({ ...prev, current: 1 }));
+                setSearch(event.target.value);
+              }}
               style={{ width: 320 }}
             />
             <Button icon={<ReloadOutlined />} onClick={refreshAll}>
-              Tải lại
+              {t('actions.reload')}
             </Button>
           </Space>
         </div>
@@ -900,12 +876,15 @@ const AccountPayablesPage = () => {
           items={[
             {
               key: 'payables',
-              label: 'Công nợ AP',
+              label: t('tabs.payables'),
               children: (
                 <>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
                     <Text type="secondary">
-                      Đã chọn {selectedPayables.length} dòng, tổng {formatAmount(selectedBatchTotal, selectedPayables[0]?.currency || 'VND')}
+                      {t('selection.summary', {
+                        count: selectedPayables.length,
+                        amount: formatAmount(selectedBatchTotal, selectedPayables[0]?.currency || 'VND'),
+                      })}
                     </Text>
                     <Button
                       type="primary"
@@ -913,35 +892,43 @@ const AccountPayablesPage = () => {
                       disabled={selectedPayables.length === 0}
                       onClick={openBatchModal}
                     >
-                      Tạo batch chi
+                      {t('actions.createBatch')}
                     </Button>
                   </div>
                   <Table<IAccountPayable>
                     columns={payableColumns}
-                    dataSource={filteredRows}
+                    dataSource={rows}
                     rowKey="_id"
                     loading={loading}
+                    locale={tableLocale}
+                    onChange={handlePayableTableChange}
                     rowSelection={{
                       selectedRowKeys,
                       onChange: (keys) => setSelectedRowKeys(keys),
                       getCheckboxProps: (record) => ({
-                        disabled: record.status === 'PAID' || remainingAmount(record) <= 0,
+                        disabled: record.status === 'PAID' || record.status === 'VOID' || remainingAmount(record) <= 0,
                       }),
                     }}
-                    pagination={{ pageSize: 10, showSizeChanger: true }}
+                    pagination={{
+                      current: apMeta.current,
+                      pageSize: apMeta.pageSize,
+                      total: apMeta.total,
+                      showSizeChanger: true,
+                    }}
                   />
                 </>
               ),
             },
             {
               key: 'batches',
-              label: 'Batch thanh toán',
+              label: t('tabs.batches'),
               children: (
                 <Table<IPaymentBatch>
                   columns={batchColumns}
                   dataSource={batches}
                   rowKey="_id"
                   loading={batchLoading}
+                  locale={tableLocale}
                   pagination={{ pageSize: 10, showSizeChanger: true }}
                   expandable={{
                     expandedRowRender: (record) => (
@@ -950,9 +937,10 @@ const AccountPayablesPage = () => {
                         rowKey={(item) => item._id}
                         pagination={false}
                         dataSource={record.items || []}
+                        locale={tableLocale}
                         columns={[
                           {
-                            title: 'Hóa đơn',
+                            title: t('columns.invoice'),
                             render: (_, item) => (
                               <Space orientation="vertical" size={0}>
                                 <Text strong>{item.invoiceNumber || item.accountPayable?._id}</Text>
@@ -961,7 +949,7 @@ const AccountPayablesPage = () => {
                             ),
                           },
                           {
-                            title: 'Số tiền chi',
+                            title: t('columns.paymentAmount'),
                             align: 'right' as const,
                             render: (_, item) => <Text strong>{formatAmount(item.amount, item.currency)}</Text>,
                           },
@@ -974,13 +962,14 @@ const AccountPayablesPage = () => {
             },
             {
               key: 'settlement-audit',
-              label: 'Audit tất toán',
+              label: t('tabs.settlementAudit'),
               children: (
                 <Table<ISettlementInvoiceTrail>
                   columns={settlementInvoiceColumns}
                   dataSource={settlementInvoiceTrails}
                   rowKey="key"
                   loading={auditLoading}
+                  locale={tableLocale}
                   pagination={{ pageSize: 10, showSizeChanger: true }}
                   expandable={{
                     expandedRowRender: (record) => (
@@ -990,21 +979,21 @@ const AccountPayablesPage = () => {
                         columns={[
                           ...auditColumns,
                           {
-                            title: 'Trạng thái đảo',
+                            title: t('columns.reversalStatus'),
                             key: 'reversal',
                             align: 'right' as const,
                             render: (_: unknown, audit: ISettlementAudit) => {
                               const isReversal = (audit.auditType || 'SETTLEMENT') === 'REVERSAL' || Number(audit.amount || 0) < 0;
                               if (isReversal) {
-                                return <Tag color="red">Đảo từ {audit.reversedSettlementAudit_id || '-'}</Tag>;
+                                return <Tag color="red">{t('labels.reversalFrom', { audit: audit.reversedSettlementAudit_id || '-' })}</Tag>;
                               }
 
                               return (
                                 <Space orientation="vertical" size={2} align="end">
                                   {audit.reversedAt ? (
-                                    <Tag color="default">Đã đảo {dayjs(audit.reversedAt).format('DD/MM/YYYY')}</Tag>
+                                    <Tag color="default">{t('labels.reversedAt', { date: dayjs(audit.reversedAt).format('DD/MM/YYYY') })}</Tag>
                                   ) : (
-                                    <Tag color="green">Còn hiệu lực</Tag>
+                                    <Tag color="green">{t('labels.effective')}</Tag>
                                   )}
                                   <Button
                                     danger
@@ -1012,7 +1001,7 @@ const AccountPayablesPage = () => {
                                     disabled={!!audit.reversedAt}
                                     onClick={() => reverseSettlementAudit(audit)}
                                   >
-                                    Đảo thanh toán
+                                    {t('actions.reversePayment')}
                                   </Button>
                                 </Space>
                               );
@@ -1021,6 +1010,7 @@ const AccountPayablesPage = () => {
                         ]}
                         dataSource={record.audits}
                         pagination={false}
+                        locale={tableLocale}
                       />
                     ),
                   }}
@@ -1030,192 +1020,171 @@ const AccountPayablesPage = () => {
           ]}
         />
 
-        <Modal
-          title="Ghi nhận thanh toán AP"
-          open={paymentModalOpen}
-          onCancel={() => setPaymentModalOpen(false)}
-          onOk={recordPayment}
-          okText="Ghi nhận"
-          destroyOnHidden
-        >
-          <Form form={paymentForm} layout="vertical">
-            <Form.Item label="Hóa đơn">
-              <Space orientation="vertical" size={0}>
-                <Text strong>{selectedPayable?.invoiceNumber || selectedPayable?._id}</Text>
-                <Text type="secondary">{selectedPayable?.vendor?.name}</Text>
-              </Space>
-            </Form.Item>
-            <Form.Item
-              name="amount"
-              label="Số tiền thanh toán"
-              rules={[{ required: true, message: 'Nhập số tiền thanh toán' }]}
+        {hasHydrated ? (
+          <>
+            <Modal
+              width={720}
+              title={t('modal.markPaidTitle')}
+              open={markPaidModalOpen}
+              onCancel={() => {
+                setMarkPaidModalOpen(false);
+                setSelectedBatch(null);
+                markPaidForm.resetFields();
+              }}
+              onOk={markSelectedBatchPaid}
+              okText={t('actions.markPaidAndAudit')}
+              cancelText={t('actions.cancel')}
+              forceRender
             >
-              <InputNumber
-                min={1}
-                max={selectedPayable ? remainingAmount(selectedPayable) : undefined}
-                style={{ width: '100%' }}
-              />
-            </Form.Item>
-            <Form.Item name="note" label="Ghi chú">
-              <Input.TextArea rows={3} placeholder="Số lệnh chi, chứng từ ngân hàng, ghi chú nội bộ..." />
-            </Form.Item>
-          </Form>
-        </Modal>
+              <Form form={markPaidForm} layout="vertical">
+                <Form.Item label={t('columns.batch')}>
+                  <Space orientation="vertical" size={0}>
+                    <Text strong>{selectedBatch?.batchNumber}</Text>
+                    <Text type="secondary">
+                      {selectedBatch ? formatAmount(selectedBatch.totalAmount, selectedBatch.currency) : '-'}
+                    </Text>
+                  </Space>
+                </Form.Item>
 
-        <Modal
-          width={720}
-          title="Ghi chi batch AP"
-          open={markPaidModalOpen}
-          onCancel={() => {
-            setMarkPaidModalOpen(false);
-            setSelectedBatch(null);
-          }}
-          onOk={markSelectedBatchPaid}
-          okText="Ghi chi & tạo audit"
-          destroyOnHidden
-        >
-          <Form form={markPaidForm} layout="vertical">
-            <Form.Item label="Batch">
-              <Space orientation="vertical" size={0}>
-                <Text strong>{selectedBatch?.batchNumber}</Text>
-                <Text type="secondary">
-                  {selectedBatch ? formatAmount(selectedBatch.totalAmount, selectedBatch.currency) : '-'}
-                </Text>
-              </Space>
-            </Form.Item>
+                <Space style={{ width: '100%' }} size={16} align="start">
+                  <Form.Item
+                    name="paymentDate"
+                    label={t('form.paymentDate')}
+                    rules={[{ required: true, message: t('validation.paymentDate') }]}
+                    style={{ flex: 1 }}
+                  >
+                    <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" />
+                  </Form.Item>
+                  <Form.Item
+                    name="bankTransferAt"
+                    label={t('form.bankTransferAt')}
+                    rules={[{ required: true, message: t('validation.bankTransferAt') }]}
+                    style={{ flex: 1 }}
+                  >
+                    <DatePicker showTime style={{ width: '100%' }} format="DD/MM/YYYY HH:mm" />
+                  </Form.Item>
+                </Space>
 
-            <Space style={{ width: '100%' }} size={16} align="start">
-              <Form.Item
-                name="paymentDate"
-                label="Ngày ghi chi"
-                rules={[{ required: true, message: 'Chọn ngày ghi chi' }]}
-                style={{ flex: 1 }}
-              >
-                <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" />
-              </Form.Item>
-              <Form.Item
-                name="bankTransferAt"
-                label="Thời điểm ngân hàng"
-                rules={[{ required: true, message: 'Chọn thời điểm chuyển tiền' }]}
-                style={{ flex: 1 }}
-              >
-                <DatePicker showTime style={{ width: '100%' }} format="DD/MM/YYYY HH:mm" />
-              </Form.Item>
-            </Space>
+                <Space style={{ width: '100%' }} size={16} align="start">
+                  <Form.Item
+                    name="paymentMethod"
+                    label={t('form.paymentMethod')}
+                    rules={[{ required: true, message: t('validation.paymentMethod') }]}
+                    style={{ flex: 1 }}
+                  >
+                    <Input placeholder="BANK_TRANSFER" />
+                  </Form.Item>
+                  <Form.Item name="exchangeRate" label={t('form.exchangeRate')} style={{ flex: 1 }}>
+                    <InputNumber min={0.000001} style={{ width: '100%' }} />
+                  </Form.Item>
+                </Space>
 
-            <Space style={{ width: '100%' }} size={16} align="start">
-              <Form.Item
-                name="paymentMethod"
-                label="Phương thức"
-                rules={[{ required: true, message: 'Nhập phương thức thanh toán' }]}
-                style={{ flex: 1 }}
-              >
-                <Input placeholder="BANK_TRANSFER" />
-              </Form.Item>
-              <Form.Item name="exchangeRate" label="Tỷ giá" style={{ flex: 1 }}>
-                <InputNumber min={0.000001} style={{ width: '100%' }} />
-              </Form.Item>
-            </Space>
+                <Form.Item
+                  name="bankReference"
+                  label={t('form.bankReference')}
+                  rules={[{ required: true, message: t('validation.bankReference') }]}
+                >
+                  <Input placeholder={t('form.bankReferencePlaceholder')} />
+                </Form.Item>
 
-            <Form.Item
-              name="bankReference"
-              label="Số tham chiếu ngân hàng"
-              rules={[{ required: true, message: 'Nhập số giao dịch/ủy nhiệm chi' }]}
-            >
-              <Input placeholder="Mã giao dịch ngân hàng hoặc số ủy nhiệm chi" />
-            </Form.Item>
-
-            <Form.Item name="bankProofFileId" hidden>
-              <Input />
-            </Form.Item>
-            <Form.Item name="bankProofUrl" label="File chứng từ ngân hàng">
-              <Input placeholder="/uploads/payments/..." />
-            </Form.Item>
-            <Space style={{ marginTop: -12, marginBottom: 16 }}>
-              <Upload customRequest={handleUploadPaymentProof} showUploadList={false} accept="image/*,.pdf">
-                <Button icon={<UploadOutlined />} loading={uploadingProof}>
-                  Upload chứng từ
-                </Button>
-              </Upload>
-              <Form.Item noStyle shouldUpdate={(prev, next) => prev.bankProofUrl !== next.bankProofUrl}>
-                {({ getFieldValue }) => {
-                  const proofUrl = getFieldValue('bankProofUrl');
-                  return proofUrl ? (
-                    <Button
-                      type="link"
-                      icon={<FileProtectOutlined />}
-                      onClick={() => window.open(resolveFileUrl(proofUrl), '_blank', 'noopener,noreferrer')}
-                    >
-                      Xem file
+                <Form.Item name="bankProofFileId" hidden>
+                  <Input />
+                </Form.Item>
+                <Form.Item name="bankProofUrl" label={t('form.bankProofUrl')}>
+                  <Input placeholder="/uploads/payments/..." />
+                </Form.Item>
+                <Space style={{ marginTop: -12, marginBottom: 16 }}>
+                  <Upload customRequest={handleUploadPaymentProof} showUploadList={false} accept="image/*,.pdf">
+                    <Button icon={<UploadOutlined />} loading={uploadingProof}>
+                      {t('actions.uploadProof')}
                     </Button>
-                  ) : null;
-                }}
-              </Form.Item>
-            </Space>
+                  </Upload>
+                  <Form.Item noStyle shouldUpdate={(prev, next) => prev.bankProofUrl !== next.bankProofUrl}>
+                    {({ getFieldValue }) => {
+                      const proofUrl = getFieldValue('bankProofUrl');
+                      return proofUrl ? (
+                        <Button
+                          type="link"
+                          icon={<FileProtectOutlined />}
+                          onClick={() => window.open(resolveFileUrl(proofUrl), '_blank', 'noopener,noreferrer')}
+                        >
+                          {t('actions.viewFile')}
+                        </Button>
+                      ) : null;
+                    }}
+                  </Form.Item>
+                </Space>
 
-            <Form.Item name="settlementNote" label="Ghi chú tất toán">
-              <Input.TextArea rows={3} placeholder="Nội dung chuyển khoản, invoice được tất toán, ghi chú kiểm soát..." />
-            </Form.Item>
-            <Form.Item name="note" label="Ghi chú hạch toán">
-              <Input.TextArea rows={2} placeholder="Ghi chú bổ sung đưa vào batch" />
-            </Form.Item>
-          </Form>
-        </Modal>
+                <Form.Item name="settlementNote" label={t('form.settlementNote')}>
+                  <Input.TextArea rows={3} placeholder={t('form.settlementNotePlaceholder')} />
+                </Form.Item>
+                <Form.Item name="note" label={t('form.accountingNote')}>
+                  <Input.TextArea rows={2} placeholder={t('form.accountingNotePlaceholder')} />
+                </Form.Item>
+              </Form>
+            </Modal>
 
-        <Modal
-          width={760}
-          title="Tạo batch thanh toán AP"
-          open={batchModalOpen}
-          onCancel={() => setBatchModalOpen(false)}
-          onOk={createBatch}
-          okText="Tạo batch"
-          destroyOnHidden
-        >
-          <Form form={batchForm} layout="vertical">
-            <Table<IAccountPayable>
-              size="small"
-              rowKey="_id"
-              pagination={false}
-              dataSource={selectedPayables}
-              columns={[
-                {
-                  title: 'Hóa đơn',
-                  render: (_, record) => (
-                    <Space orientation="vertical" size={0}>
-                      <Text strong>{record.invoiceNumber || record._id}</Text>
-                      <Text type="secondary">{record.vendor?.name}</Text>
-                    </Space>
-                  ),
-                },
-                {
-                  title: 'Còn lại',
-                  align: 'right' as const,
-                  render: (_, record) => <Text strong>{formatAmount(remainingAmount(record), record.currency)}</Text>,
-                },
-              ]}
-              style={{ marginBottom: 16 }}
-            />
+            <Modal
+              width={760}
+              title={t('modal.createBatchTitle')}
+              open={batchModalOpen}
+              onCancel={() => {
+                setBatchModalOpen(false);
+                batchForm.resetFields();
+              }}
+              onOk={createBatch}
+              okText={t('actions.createBatch')}
+              cancelText={t('actions.cancel')}
+              forceRender
+            >
+              <Form form={batchForm} layout="vertical">
+                <Table<IAccountPayable>
+                  size="small"
+                  rowKey="_id"
+                  pagination={false}
+                  dataSource={selectedPayables}
+                  locale={tableLocale}
+                  columns={[
+                    {
+                      title: t('columns.invoice'),
+                      render: (_, record) => (
+                        <Space orientation="vertical" size={0}>
+                          <Text strong>{record.invoiceNumber || record._id}</Text>
+                          <Text type="secondary">{record.vendor?.name}</Text>
+                        </Space>
+                      ),
+                    },
+                    {
+                      title: t('columns.remainingAmount'),
+                      align: 'right' as const,
+                      render: (_, record) => <Text strong>{formatAmount(remainingAmount(record), record.currency)}</Text>,
+                    },
+                  ]}
+                  style={{ marginBottom: 16 }}
+                />
 
-            <Space style={{ width: '100%' }} size={16} align="start">
-              <Form.Item name="paymentDate" label="Ngày dự kiến chi" style={{ flex: 1 }}>
-                <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" />
-              </Form.Item>
-              <Form.Item name="paymentMethod" label="Phương thức" style={{ flex: 1 }}>
-                <Input placeholder="BANK_TRANSFER" />
-              </Form.Item>
-              <Form.Item name="exchangeRate" label="Tỷ giá" style={{ flex: 1 }}>
-                <InputNumber min={0.000001} style={{ width: '100%' }} />
-              </Form.Item>
-            </Space>
+                <Space style={{ width: '100%' }} size={16} align="start">
+                  <Form.Item name="paymentDate" label={t('form.plannedPaymentDate')} style={{ flex: 1 }}>
+                    <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" />
+                  </Form.Item>
+                  <Form.Item name="paymentMethod" label={t('form.paymentMethod')} style={{ flex: 1 }}>
+                    <Input placeholder="BANK_TRANSFER" />
+                  </Form.Item>
+                  <Form.Item name="exchangeRate" label={t('form.exchangeRate')} style={{ flex: 1 }}>
+                    <InputNumber min={0.000001} style={{ width: '100%' }} />
+                  </Form.Item>
+                </Space>
 
-            <Form.Item name="bankReference" label="Số tham chiếu ngân hàng">
-              <Input placeholder="Ủy nhiệm chi / số giao dịch ngân hàng" />
-            </Form.Item>
-            <Form.Item name="note" label="Ghi chú">
-              <Input.TextArea rows={3} placeholder="Lý do chi, nhóm hóa đơn, lưu ý phê duyệt..." />
-            </Form.Item>
-          </Form>
-        </Modal>
+                <Form.Item name="bankReference" label={t('form.bankReference')}>
+                  <Input placeholder={t('form.batchBankReferencePlaceholder')} />
+                </Form.Item>
+                <Form.Item name="note" label={t('form.note')}>
+                  <Input.TextArea rows={3} placeholder={t('form.batchNotePlaceholder')} />
+                </Form.Item>
+              </Form>
+            </Modal>
+          </>
+        ) : null}
       </Card>
     </AdminPageScroll>
   );

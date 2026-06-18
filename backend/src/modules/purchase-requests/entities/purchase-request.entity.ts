@@ -1,4 +1,15 @@
-import { BeforeInsert, Column, CreateDateColumn, DeleteDateColumn, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryColumn, UpdateDateColumn } from 'typeorm';
+import {
+  BeforeInsert,
+  Column,
+  CreateDateColumn,
+  DeleteDateColumn,
+  Entity,
+  JoinColumn,
+  ManyToOne,
+  OneToMany,
+  PrimaryColumn,
+  UpdateDateColumn,
+} from 'typeorm';
 import { PurchaseRequestItem } from './purchase-request-item.entity';
 import { User } from '@/modules/users/entities/user.entity';
 import { createEntityId } from '@/common/ids/entity-id.util';
@@ -10,14 +21,14 @@ export enum PurchaseRequestStatus {
   REJECTED = 'REJECTED',
   PARTIAL_PO = 'PARTIAL_PO',
   COMPLETED = 'COMPLETED',
-  CANCELLED = 'CANCELLED'
+  CANCELLED = 'CANCELLED',
 }
 
 export enum PurchaseRequestPriority {
   LOW = 'LOW',
   MEDIUM = 'MEDIUM',
   HIGH = 'HIGH',
-  URGENT = 'URGENT'
+  URGENT = 'URGENT',
 }
 
 @Entity('purchase_requests')
@@ -37,7 +48,7 @@ export class PurchaseRequest {
   @Column({
     type: 'enum',
     enum: PurchaseRequestPriority,
-    default: PurchaseRequestPriority.MEDIUM
+    default: PurchaseRequestPriority.MEDIUM,
   })
   priority: PurchaseRequestPriority;
 
@@ -47,7 +58,7 @@ export class PurchaseRequest {
   @Column({
     type: 'enum',
     enum: PurchaseRequestStatus,
-    default: PurchaseRequestStatus.DRAFT
+    default: PurchaseRequestStatus.DRAFT,
   })
   status: PurchaseRequestStatus;
 
@@ -86,7 +97,10 @@ export class PurchaseRequest {
   @Column({ type: 'text', nullable: true })
   rejectionReason: string | null;
 
-  @OneToMany(() => PurchaseRequestItem, (item) => item.purchaseRequest, { cascade: true, orphanedRowAction: 'delete' })
+  @OneToMany(() => PurchaseRequestItem, (item) => item.purchaseRequest, {
+    cascade: true,
+    orphanedRowAction: 'delete',
+  })
   items: PurchaseRequestItem[];
 
   @Column({ type: 'text', nullable: true })

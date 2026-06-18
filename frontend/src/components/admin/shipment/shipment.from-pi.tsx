@@ -12,12 +12,13 @@ import {
   DatePicker,
 } from 'antd';
 import { TruckOutlined } from '@ant-design/icons';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { sendRequest } from '@/lib/api-client';
 import { useTranslations } from 'next-intl';
-import dayjs from 'dayjs';
 import { getAccessToken } from '@/lib/auth-token';
+import PortSelect from '@/components/admin/ports/PortSelect';
+import { normalizeCountryCode } from '@/constants/geo';
 
 const { Text } = Typography;
 
@@ -31,10 +32,15 @@ const ShipmentFromPIModal = ({ open, setOpen, pi }: IProps) => {
   const { notification } = App.useApp();
   const { data: session } = useSession();
   const [form] = Form.useForm();
+  const watchedPol = Form.useWatch('pol', form);
+  const watchedPod = Form.useWatch('pod', form);
   const tShipment = useTranslations('Shipment');
   const tInc = useTranslations('Incoterms');
   const [submitting, setSubmitting] = useState(false);
   const [forwarders, setForwarders] = useState<any[]>([]);
+  const destinationCountryCode = useMemo(() => (
+    normalizeCountryCode(pi?.customer?.country || pi?.salesContract?.buyer?.country)
+  ), [pi]);
 
   useEffect(() => {
     const fetchForwarders = async () => {
@@ -57,8 +63,10 @@ const ShipmentFromPIModal = ({ open, setOpen, pi }: IProps) => {
   useEffect(() => {
     if (open && pi) {
       form.setFieldsValue({
-        pol: 'Hai Phong Port, Vietnam',
-        pod: pi.customer?.address || '',
+        pol: pi.portOfLoading || pi.salesContract?.pol,
+        pol_port_id: pi.portOfLoading_port_id || pi.salesContract?.pol_port_id,
+        pod: pi.portOfDischarge || pi.salesContract?.pod,
+        pod_port_id: pi.portOfDischarge_port_id || pi.salesContract?.pod_port_id,
       });
     }
   }, [open, pi, form]);
@@ -81,7 +89,9 @@ const ShipmentFromPIModal = ({ open, setOpen, pi }: IProps) => {
         logisticsPartnerId: values.logisticsPartnerId,
         bookingNumber: values.bookingNumber,
         pol: values.pol,
+        pol_port_id: values.pol_port_id,
         pod: values.pod,
+        pod_port_id: values.pod_port_id,
         vesselName: values.vesselFlight,
         etd: values.etd ? values.etd.format('YYYY-MM-DD') : undefined,
         eta: values.eta ? values.eta.format('YYYY-MM-DD') : undefined,
@@ -158,12 +168,41 @@ const ShipmentFromPIModal = ({ open, setOpen, pi }: IProps) => {
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-          <Form.Item label={tShipment('createFromPI.form.pol')} name="pol">
-            <Input placeholder={tShipment('createFromPI.form.polPlaceholder')} />
-          </Form.Item>
-          <Form.Item label={tShipment('createFromPI.form.pod')} name="pod">
-            <Input placeholder={tShipment('createFromPI.form.podPlaceholder')} />
-          </Form.Item>
+          <div>
+            <Form.Item name="pol" hidden>
+              <Input />
+            </Form.Item>
+            <Form.Item label={tShipment('createFromPI.form.pol')} name="pol_port_id">
+              <PortSelect
+                placeholder={tShipment('createFromPI.form.polPlaceholder')}
+                legacyText={watchedPol}
+                afterChange={(value) => {
+                  form.setFieldsValue({
+                    pol_port_id: value ?? null,
+                    pol: null,
+                  });
+                }}
+              />
+            </Form.Item>
+          </div>
+          <div>
+            <Form.Item name="pod" hidden>
+              <Input />
+            </Form.Item>
+            <Form.Item label={tShipment('createFromPI.form.pod')} name="pod_port_id">
+              <PortSelect
+                placeholder={tShipment('createFromPI.form.podPlaceholder')}
+                countryCode={destinationCountryCode}
+                legacyText={watchedPod}
+                afterChange={(value) => {
+                  form.setFieldsValue({
+                    pod_port_id: value ?? null,
+                    pod: null,
+                  });
+                }}
+              />
+            </Form.Item>
+          </div>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>

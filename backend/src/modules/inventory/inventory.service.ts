@@ -1,17 +1,38 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository, EntityManager, In, SelectQueryBuilder } from 'typeorm';
+import {
+  DataSource,
+  Repository,
+  EntityManager,
+  In,
+  SelectQueryBuilder,
+} from 'typeorm';
 import { createHash } from 'crypto';
 import { Product } from '../products/entities/product.entity';
-import { InventoryLedger, InventoryTransactionType } from './entities/inventory-ledger.entity';
-import { CustomerReturn, CustomerReturnItem, CustomerReturnStatus } from './entities/customer-return.entity';
+import {
+  InventoryLedger,
+  InventoryTransactionType,
+} from './entities/inventory-ledger.entity';
+import {
+  CustomerReturn,
+  CustomerReturnItem,
+  CustomerReturnStatus,
+} from './entities/customer-return.entity';
 import { Partner, PartnerType } from '../partners/entities/partner.entity';
-import { Shipment, ShipmentStatus } from '../shipments/entities/shipment.entity';
+import {
+  Shipment,
+  ShipmentStatus,
+} from '../shipments/entities/shipment.entity';
 import { SalesContract } from '../sales-contracts/entities/sales-contract.entity';
 import { AccountingService } from '../accounting/accounting.service';
 import { LotsService } from '../lots/lots.service';
 import {
   InventoryCount,
+  InventoryCountAuditEvent,
   InventoryCountItem,
   InventoryCountStatus,
 } from './entities/inventory-count.entity';
@@ -20,6 +41,7 @@ import {
   CreateInventoryCountDto,
   InventoryCountLineDto,
   SubmitInventoryCountDto,
+  UpdateInventoryCountItemsDto,
 } from './dto/create-inventory-count.dto';
 import { createOpaqueCode } from '@/common/ids/entity-id.util';
 import {
@@ -99,10 +121,14 @@ export class InventoryService {
     qb: SelectQueryBuilder<InventoryLedger>,
     sort: unknown,
   ): void {
-    const rawSort = typeof sort === 'string' && sort.trim() ? sort.trim() : '-createdAt';
-    const direction: InventorySortDirection = rawSort.startsWith('-') ? 'DESC' : 'ASC';
+    const rawSort =
+      typeof sort === 'string' && sort.trim() ? sort.trim() : '-createdAt';
+    const direction: InventorySortDirection = rawSort.startsWith('-')
+      ? 'DESC'
+      : 'ASC';
     const field = rawSort.replace(/^-/, '');
-    const column = AUDIT_TRAIL_SORT_COLUMNS[field] || AUDIT_TRAIL_SORT_COLUMNS.createdAt;
+    const column =
+      AUDIT_TRAIL_SORT_COLUMNS[field] || AUDIT_TRAIL_SORT_COLUMNS.createdAt;
 
     qb.orderBy(column, direction);
 
@@ -159,7 +185,9 @@ export class InventoryService {
     note?: string | null,
     metadata?: Record<string, unknown>,
   ) {
-    const auditTrail = Array.isArray(delivery.auditTrail) ? [...delivery.auditTrail] : [];
+    const auditTrail = Array.isArray(delivery.auditTrail)
+      ? [...delivery.auditTrail]
+      : [];
     auditTrail.push({
       eventType,
       actorUsername,
@@ -177,7 +205,9 @@ export class InventoryService {
     note?: string | null,
     metadata?: Record<string, unknown>,
   ) {
-    const auditTrail = Array.isArray(adjustment.auditTrail) ? [...adjustment.auditTrail] : [];
+    const auditTrail = Array.isArray(adjustment.auditTrail)
+      ? [...adjustment.auditTrail]
+      : [];
     auditTrail.push({
       eventType,
       actorUsername,
@@ -186,6 +216,26 @@ export class InventoryService {
       metadata,
     });
     adjustment.auditTrail = auditTrail;
+  }
+
+  private appendInventoryCountAudit(
+    count: InventoryCount,
+    eventType: InventoryCountAuditEvent['eventType'],
+    actorUsername: string,
+    note?: string | null,
+    metadata?: Record<string, unknown>,
+  ) {
+    const auditTrail = Array.isArray(count.auditTrail)
+      ? [...count.auditTrail]
+      : [];
+    auditTrail.push({
+      eventType,
+      actorUsername,
+      occurredAt: new Date().toISOString(),
+      note: note || null,
+      metadata,
+    });
+    count.auditTrail = auditTrail;
   }
 
   private async buildAdjustmentValuationSnapshot(
@@ -199,8 +249,10 @@ export class InventoryService {
     const stockBefore = Number(product.currentStock || 0);
     const reservedBefore = Number(product.reservedStock || 0);
     const stockValueBefore = Number(remainingCost?.stockValue || 0);
-    const fallbackValueBefore = stockBefore * Number(unitCost || product.purchasePriceVnd || 0);
-    const resolvedStockValueBefore = stockValueBefore > 0 ? stockValueBefore : fallbackValueBefore;
+    const fallbackValueBefore =
+      stockBefore * Number(unitCost || product.purchasePriceVnd || 0);
+    const resolvedStockValueBefore =
+      stockValueBefore > 0 ? stockValueBefore : fallbackValueBefore;
     const stockAfter = stockBefore + Number(quantityDelta || 0);
 
     return {
@@ -212,7 +264,9 @@ export class InventoryService {
       unitCost: Number(unitCost || 0),
       stockValueBefore: resolvedStockValueBefore,
       stockAfter,
-      stockValueAfter: resolvedStockValueBefore + Number(quantityDelta || 0) * Number(unitCost || 0),
+      stockValueAfter:
+        resolvedStockValueBefore +
+        Number(quantityDelta || 0) * Number(unitCost || 0),
       valuationMethod: 'FIFO',
     };
   }
@@ -241,14 +295,27 @@ export class InventoryService {
     return count;
   }
 
-  private async getRemainingCostMap(manager: EntityManager, productIds: string[]) {
-    if (!productIds.length) return new Map<string, { remainingQuantity: number; stockValue: number }>();
+  private async getRemainingCostMap(
+    manager: EntityManager,
+    productIds: string[],
+  ) {
+    if (!productIds.length)
+      return new Map<
+        string,
+        { remainingQuantity: number; stockValue: number }
+      >();
 
     const rows = await manager
       .createQueryBuilder(InventoryLedger, 'ledger')
       .select('ledger.productId', 'productId')
-      .addSelect('COALESCE(SUM(ledger.remainingQuantity), 0)', 'remainingQuantity')
-      .addSelect('COALESCE(SUM(ledger.remainingQuantity * ledger.unitPrice), 0)', 'stockValue')
+      .addSelect(
+        'COALESCE(SUM(ledger.remainingQuantity), 0)',
+        'remainingQuantity',
+      )
+      .addSelect(
+        'COALESCE(SUM(ledger.remainingQuantity * ledger.unitPrice), 0)',
+        'stockValue',
+      )
       .where('ledger.productId IN (:...productIds)', { productIds })
       .andWhere('ledger.remainingQuantity > 0')
       .groupBy('ledger.productId')
@@ -303,7 +370,9 @@ export class InventoryService {
       });
 
       if (products.length !== lineByProduct.size) {
-        throw new BadRequestException('Một hoặc nhiều sản phẩm kiểm kê không tồn tại');
+        throw new BadRequestException(
+          'Một hoặc nhiều sản phẩm kiểm kê không tồn tại',
+        );
       }
     } else {
       products = await manager.find(Product, {
@@ -316,14 +385,18 @@ export class InventoryService {
       throw new BadRequestException('Không có sản phẩm để tạo phiếu kiểm kê');
     }
 
-    const costMap = await this.getRemainingCostMap(manager, products.map((product) => product._id));
+    const costMap = await this.getRemainingCostMap(
+      manager,
+      products.map((product) => product._id),
+    );
 
     return products.map((product) => {
       const line = lineByProduct.get(product._id);
       const remainingCost = costMap.get(product._id);
       const fallbackCost = Number(product.purchasePriceVnd || 0);
       const unitCost = remainingCost?.remainingQuantity
-        ? Number(remainingCost.stockValue) / Number(remainingCost.remainingQuantity)
+        ? Number(remainingCost.stockValue) /
+          Number(remainingCost.remainingQuantity)
         : fallbackCost;
 
       return this.buildCountItem(
@@ -336,9 +409,111 @@ export class InventoryService {
   }
 
   /**
-   * Cốt lõi của Kho: Cập nhật tồn kho an toàn tuyệt đối với Pessimistic Write Lock.
-   * Chống Race Condition khi 2 request xuất kho cùng lúc.
+   * Apply physical count lines and keep variance math centralized.
    */
+  private applyInventoryCountLines(
+    count: InventoryCount,
+    lines: InventoryCountLineDto[],
+  ) {
+    const itemByProduct = new Map(
+      (count.items || []).map((item) => [item.productId, item]),
+    );
+    const seenProductIds = new Set<string>();
+
+    for (const line of lines) {
+      if (seenProductIds.has(line.productId)) {
+        throw new BadRequestException(
+          `Duplicate product ${line.productId} in inventory count`,
+        );
+      }
+      seenProductIds.add(line.productId);
+
+      const item = itemByProduct.get(line.productId);
+      if (!item) {
+        throw new BadRequestException(
+          `Product ${line.productId} does not belong to this inventory count`,
+        );
+      }
+
+      const countedQuantity = Number(line.countedQuantity);
+      if (!Number.isFinite(countedQuantity) || countedQuantity < 0) {
+        throw new BadRequestException(
+          `Invalid counted quantity for product ${line.productId}`,
+        );
+      }
+
+      item.countedQuantity = countedQuantity;
+      item.varianceQuantity =
+        countedQuantity - Number(item.systemQuantity || 0);
+      item.varianceValue =
+        Number(item.varianceQuantity) * Number(item.unitCost || 0);
+
+      if (line.note !== undefined) {
+        item.note = line.note?.trim() || null;
+      }
+    }
+  }
+
+  private summarizeInventoryCountVariance(count: InventoryCount) {
+    const items = count.items || [];
+    const surplusValue = items.reduce((sum, item) => {
+      const varianceQuantity = Number(item.varianceQuantity || 0);
+      return varianceQuantity > 0
+        ? sum + Math.abs(Number(item.varianceValue || 0))
+        : sum;
+    }, 0);
+    const shortageValue = items.reduce((sum, item) => {
+      const varianceQuantity = Number(item.varianceQuantity || 0);
+      return varianceQuantity < 0
+        ? sum + Math.abs(Number(item.varianceValue || 0))
+        : sum;
+    }, 0);
+    const totalVarianceQuantity = items.reduce(
+      (sum, item) => sum + Number(item.varianceQuantity || 0),
+      0,
+    );
+
+    return {
+      totalVarianceQuantity,
+      totalVarianceValue: surplusValue + shortageValue,
+      netVarianceValue: surplusValue - shortageValue,
+      surplusValue,
+      shortageValue,
+      varianceLineCount: items.filter(
+        (item) => Number(item.varianceQuantity || 0) !== 0,
+      ).length,
+    };
+  }
+
+  private buildInventoryCountApprovalMetadata(count: InventoryCount) {
+    const summary = this.summarizeInventoryCountVariance(count);
+
+    return {
+      countId: count._id,
+      countNumber: count.countNumber,
+      warehouseName: count.warehouseName,
+      countDate: count.countDate,
+      ...summary,
+      items: (count.items || []).map((item) => ({
+        _id: item._id,
+        productId: item.productId,
+        product: item.product
+          ? {
+              _id: item.product._id,
+              sku: item.product.sku,
+              vietnameseName: item.product.vietnameseName,
+            }
+          : null,
+        systemQuantity: Number(item.systemQuantity || 0),
+        countedQuantity: Number(item.countedQuantity || 0),
+        varianceQuantity: Number(item.varianceQuantity || 0),
+        unitPrice: Number(item.unitCost || 0),
+        varianceValue: Number(item.varianceValue || 0),
+        note: item.note || null,
+      })),
+    };
+  }
+
   async executeInventoryTransaction(
     productId: string,
     quantityChange: number,
@@ -352,6 +527,7 @@ export class InventoryService {
     referenceNumber?: string,
     createdBy?: string,
     isQuarantine = false,
+    autoPostAccounting = true,
   ): Promise<InventoryLedger> {
     const runInTransaction = async (manager: EntityManager) => {
       // 1. Pessimistic Write Lock: Khóa dòng Product này lại, các request khác phải chờ
@@ -369,13 +545,13 @@ export class InventoryService {
       // 2. Business Logic: Không cho phép tồn kho âm
       if (newStock < 0) {
         throw new BadRequestException(
-          `Tồn kho không đủ cho sản phẩm ${product.sku}. Hiện tại: ${product.currentStock}, Yêu cầu: ${Math.abs(quantityChange)}`
+          `Tồn kho không đủ cho sản phẩm ${product.sku}. Hiện tại: ${product.currentStock}, Yêu cầu: ${Math.abs(quantityChange)}`,
         );
       }
 
       // 3. FIFO Logic: Bóc tách lô hàng (Cost-Picking)
       let calculatedUnitPrice = unitPrice;
-      
+
       if (quantityChange > 0) {
         // Nhập kho: Đây là một lô mới
         // remainingQuantity được set bằng quantityChange
@@ -385,7 +561,8 @@ export class InventoryService {
         let totalCost = 0;
 
         // TypeORM logic fix: use Raw or MoreThan
-        const batches = await manager.createQueryBuilder(InventoryLedger, 'ledger')
+        const batches = await manager
+          .createQueryBuilder(InventoryLedger, 'ledger')
           .where('ledger.productId = :productId', { productId })
           .andWhere('ledger.remainingQuantity > 0')
           .orderBy('ledger.createdAt', 'ASC')
@@ -396,7 +573,8 @@ export class InventoryService {
           if (neededQty <= 0) break;
 
           const consumeQty = Math.min(batch.remainingQuantity, neededQty);
-          batch.remainingQuantity = Number(batch.remainingQuantity) - consumeQty;
+          batch.remainingQuantity =
+            Number(batch.remainingQuantity) - consumeQty;
           totalCost += consumeQty * Number(batch.unitPrice);
           neededQty -= consumeQty;
 
@@ -424,7 +602,8 @@ export class InventoryService {
         unitPrice: calculatedUnitPrice,
         balanceAfter: newStock,
         remainingQuantity: quantityChange > 0 ? quantityChange : 0,
-        lotNumber: lotNumber || (quantityChange > 0 ? `LOT-${Date.now()}` : undefined),
+        lotNumber:
+          lotNumber || (quantityChange > 0 ? `LOT-${Date.now()}` : undefined),
         referenceId,
         partnerId,
         referenceNumber,
@@ -437,36 +616,75 @@ export class InventoryService {
 
       // 6. AUTO-POSTING TO ACCOUNTING (Mục tiêu: Đạt chuẩn Senior ERP)
       const totalValue = Math.abs(quantityChange) * calculatedUnitPrice;
-      if (totalValue > 0) {
-        const journalItems: { accountCode: string; debit: number; credit: number; partnerId?: string }[] = [];
+      if (autoPostAccounting && totalValue > 0) {
+        const journalItems: {
+          accountCode: string;
+          debit: number;
+          credit: number;
+          partnerId?: string;
+        }[] = [];
         if (quantityChange > 0) {
           if (transactionType === InventoryTransactionType.RETURN) {
             // Customer returns reverse COGS; they are not supplier receipts or provisional AP.
-            journalItems.push({ accountCode: '156', debit: totalValue, credit: 0 });
-            journalItems.push({ accountCode: '632', debit: 0, credit: totalValue, partnerId });
+            journalItems.push({
+              accountCode: '156',
+              debit: totalValue,
+              credit: 0,
+            });
+            journalItems.push({
+              accountCode: '632',
+              debit: 0,
+              credit: totalValue,
+              partnerId,
+            });
           } else {
             // Nhập kho: Nợ 156 (Hàng hóa), Có 3388 (Hàng mua chưa có hóa đơn - provisional)
-            journalItems.push({ accountCode: '156', debit: totalValue, credit: 0 });
-            journalItems.push({ accountCode: '3388', debit: 0, credit: totalValue, partnerId });
+            journalItems.push({
+              accountCode: '156',
+              debit: totalValue,
+              credit: 0,
+            });
+            journalItems.push({
+              accountCode: '3388',
+              debit: 0,
+              credit: totalValue,
+              partnerId,
+            });
           }
         } else {
           // Xuất kho: Nợ 632 (Giá vốn), Có 156 (Hàng hóa)
-          journalItems.push({ accountCode: '632', debit: totalValue, credit: 0 });
-          journalItems.push({ accountCode: '156', debit: 0, credit: totalValue, partnerId });
+          journalItems.push({
+            accountCode: '632',
+            debit: totalValue,
+            credit: 0,
+          });
+          journalItems.push({
+            accountCode: '156',
+            debit: 0,
+            credit: totalValue,
+            partnerId,
+          });
         }
 
-        await this.accountingService.createJournalEntry({
-          description: `Auto-post from Inventory: ${transactionType} - ${product.sku} (${quantityChange})`,
-          referenceType: 'INVENTORY_LEDGER',
-          referenceId: savedLedger._id,
-          entryDate: new Date(),
-          items: journalItems,
-        }, manager);
+        await this.accountingService.createJournalEntry(
+          {
+            description: `Auto-post from Inventory: ${transactionType} - ${product.sku} (${quantityChange})`,
+            referenceType: 'INVENTORY_LEDGER',
+            referenceId: savedLedger._id,
+            entryDate: new Date(),
+            items: journalItems,
+          },
+          manager,
+        );
       }
 
       // 7. UPDATE LOT QUANTITY (Mục tiêu: Đạt chuẩn Module 10)
       if (lotNumber) {
-        await this.lotsService.updateQuantity(lotNumber, quantityChange, manager);
+        await this.lotsService.updateQuantity(
+          lotNumber,
+          quantityChange,
+          manager,
+        );
       }
 
       return savedLedger;
@@ -482,7 +700,12 @@ export class InventoryService {
   /**
    * Giữ hàng (Reservation) khi chốt Sales Contract
    */
-  async reserveStock(productId: string, reserveQty: number, referenceId: string, manager: EntityManager) {
+  async reserveStock(
+    productId: string,
+    reserveQty: number,
+    referenceId: string,
+    manager: EntityManager,
+  ) {
     const product = await manager.findOne(Product, {
       where: { _id: productId },
       lock: { mode: 'pessimistic_write' },
@@ -490,16 +713,17 @@ export class InventoryService {
 
     if (!product) throw new BadRequestException(`Product not found`);
 
-    const availableQty = Number(product.currentStock) - Number(product.reservedStock);
+    const availableQty =
+      Number(product.currentStock) - Number(product.reservedStock);
     if (availableQty < reserveQty) {
       throw new BadRequestException(
-        `Không đủ hàng khả dụng (Available Qty) để giữ chỗ. Khả dụng: ${availableQty}, Yêu cầu giữ: ${reserveQty}`
+        `Không đủ hàng khả dụng (Available Qty) để giữ chỗ. Khả dụng: ${availableQty}, Yêu cầu giữ: ${reserveQty}`,
       );
     }
 
     product.reservedStock = Number(product.reservedStock) + reserveQty;
     await manager.save(product);
-    
+
     // Ghi log reserve
     const ledgerEntry = manager.create(InventoryLedger, {
       productId,
@@ -515,7 +739,12 @@ export class InventoryService {
   /**
    * Giải phóng hàng (Release) khi hủy PI/Contract
    */
-  async releaseStock(productId: string, releaseQty: number, referenceId: string, manager: EntityManager) {
+  async releaseStock(
+    productId: string,
+    releaseQty: number,
+    referenceId: string,
+    manager: EntityManager,
+  ) {
     const product = await manager.findOne(Product, {
       where: { _id: productId },
       lock: { mode: 'pessimistic_write' },
@@ -523,9 +752,12 @@ export class InventoryService {
 
     if (!product) throw new BadRequestException(`Product not found`);
 
-    product.reservedStock = Math.max(0, Number(product.reservedStock) - releaseQty);
+    product.reservedStock = Math.max(
+      0,
+      Number(product.reservedStock) - releaseQty,
+    );
     await manager.save(product);
-    
+
     // Ghi log release
     const ledgerEntry = manager.create(InventoryLedger, {
       productId,
@@ -541,20 +773,28 @@ export class InventoryService {
   private async loadShipmentForExportDelivery(
     manager: EntityManager,
     shipmentRef: string,
-  ) {
-    const shipment = await manager.findOne(Shipment, {
+  ): Promise<Shipment> {
+    const lockedShipment = await manager.findOne(Shipment, {
       where: { _id: shipmentRef },
+      lock: { mode: 'pessimistic_write' },
+    });
+
+    if (!lockedShipment) throw new NotFoundException('Shipment not found');
+
+    const shipment = await manager.findOne(Shipment, {
+      where: { _id: lockedShipment._id },
       relations: [
         'salesContract',
         'salesContract.items',
         'salesContract.items.product',
       ],
-      lock: { mode: 'pessimistic_write' },
     });
 
     if (!shipment) throw new NotFoundException('Shipment not found');
     if (!shipment.salesContract || !shipment.salesContract.items?.length) {
-      throw new BadRequestException('Shipment has no Sales Contract lines for export delivery');
+      throw new BadRequestException(
+        'Shipment has no Sales Contract lines for export delivery',
+      );
     }
 
     return shipment;
@@ -580,12 +820,18 @@ export class InventoryService {
     dto: CreateExportDeliveryFromShipmentDto,
     actorUsername: string,
   ) {
-    const shipment = await this.loadShipmentForExportDelivery(manager, shipmentRef);
+    const shipment = await this.loadShipmentForExportDelivery(
+      manager,
+      shipmentRef,
+    );
     if (shipment.isStockIssued) {
       throw new BadRequestException('Shipment stock was already issued');
     }
 
-    const existing = await this.findActiveExportDeliveryForShipment(manager, shipment._id);
+    const existing = await this.findActiveExportDeliveryForShipment(
+      manager,
+      shipment._id,
+    );
     if (existing) {
       throw new BadRequestException(
         `Shipment ${shipment.shipmentNumber} already has export delivery ${existing.deliveryNumber}`,
@@ -606,12 +852,20 @@ export class InventoryService {
       cancelledByUsername: null,
       cancelledAt: null,
       cancellationReason: null,
-      note: dto.note || `Export delivery draft for shipment ${shipment.shipmentNumber}`,
+      note:
+        dto.note ||
+        `Export delivery draft for shipment ${shipment.shipmentNumber}`,
       auditTrail: null,
     });
-    this.appendExportDeliveryAudit(delivery, 'CREATED', actorUsername, dto.note || null, {
-      shipmentNumber: shipment.shipmentNumber,
-    });
+    this.appendExportDeliveryAudit(
+      delivery,
+      'CREATED',
+      actorUsername,
+      dto.note || null,
+      {
+        shipmentNumber: shipment.shipmentNumber,
+      },
+    );
 
     const savedDelivery = await manager.save(delivery);
     const deliveryItems = shipment.salesContract.items
@@ -642,7 +896,13 @@ export class InventoryService {
     await manager.save(ExportDeliveryItem, deliveryItems);
     return manager.findOne(ExportDelivery, {
       where: { _id: savedDelivery._id },
-      relations: ['buyer', 'shipment', 'salesContract', 'items', 'items.product'],
+      relations: [
+        'buyer',
+        'shipment',
+        'salesContract',
+        'items',
+        'items.product',
+      ],
     });
   }
 
@@ -658,17 +918,22 @@ export class InventoryService {
     });
     if (!delivery) throw new NotFoundException('Export delivery not found');
     if (delivery.status === ExportDeliveryStatus.ISSUED) {
-      throw new BadRequestException(`Export delivery ${delivery.deliveryNumber} was already issued`);
+      throw new BadRequestException(
+        `Export delivery ${delivery.deliveryNumber} was already issued`,
+      );
     }
     if (delivery.status === ExportDeliveryStatus.CANCELLED) {
-      throw new BadRequestException(`Export delivery ${delivery.deliveryNumber} was cancelled`);
+      throw new BadRequestException(
+        `Export delivery ${delivery.deliveryNumber} was cancelled`,
+      );
     }
 
     const shipment = await manager.findOne(Shipment, {
       where: { _id: delivery.shipmentId },
       lock: { mode: 'pessimistic_write' },
     });
-    if (!shipment) throw new NotFoundException('Shipment not found for export delivery');
+    if (!shipment)
+      throw new NotFoundException('Shipment not found for export delivery');
     if (shipment.isStockIssued) {
       throw new BadRequestException('Shipment stock was already issued');
     }
@@ -718,10 +983,16 @@ export class InventoryService {
     delivery.issuedByUsername = actorUsername;
     delivery.issuedAt = issuedAt;
     delivery.note = dto.note || delivery.note;
-    this.appendExportDeliveryAudit(delivery, 'ISSUED', actorUsername, dto.note || null, {
-      shipmentNumber: shipment.shipmentNumber,
-      lineCount: items.length,
-    });
+    this.appendExportDeliveryAudit(
+      delivery,
+      'ISSUED',
+      actorUsername,
+      dto.note || null,
+      {
+        shipmentNumber: shipment.shipmentNumber,
+        lineCount: items.length,
+      },
+    );
     await manager.save(delivery);
 
     shipment.isStockIssued = true;
@@ -731,7 +1002,13 @@ export class InventoryService {
 
     return manager.findOne(ExportDelivery, {
       where: { _id: delivery._id },
-      relations: ['buyer', 'shipment', 'salesContract', 'items', 'items.product'],
+      relations: [
+        'buyer',
+        'shipment',
+        'salesContract',
+        'items',
+        'items.product',
+      ],
     });
   }
 
@@ -742,7 +1019,12 @@ export class InventoryService {
   ) {
     const username = this.getActorUsername(user);
     return this.dataSource.transaction((manager) =>
-      this.createExportDeliveryDraftInTransaction(manager, shipmentRef, dto, username),
+      this.createExportDeliveryDraftInTransaction(
+        manager,
+        shipmentRef,
+        dto,
+        username,
+      ),
     );
   }
 
@@ -753,7 +1035,12 @@ export class InventoryService {
   ) {
     const username = this.getActorUsername(user);
     return this.dataSource.transaction((manager) =>
-      this.issueExportDeliveryInTransaction(manager, deliveryRef, dto, username),
+      this.issueExportDeliveryInTransaction(
+        manager,
+        deliveryRef,
+        dto,
+        username,
+      ),
     );
   }
 
@@ -770,7 +1057,9 @@ export class InventoryService {
       });
       if (!delivery) throw new NotFoundException('Export delivery not found');
       if (delivery.status === ExportDeliveryStatus.ISSUED) {
-        throw new BadRequestException('Issued export delivery cannot be cancelled; create a reversal workflow instead');
+        throw new BadRequestException(
+          'Issued export delivery cannot be cancelled; create a reversal workflow instead',
+        );
       }
       if (delivery.status === ExportDeliveryStatus.CANCELLED) return delivery;
 
@@ -778,12 +1067,23 @@ export class InventoryService {
       delivery.cancelledByUsername = username;
       delivery.cancelledAt = new Date();
       delivery.cancellationReason = dto.reason.trim();
-      this.appendExportDeliveryAudit(delivery, 'CANCELLED', username, dto.reason);
+      this.appendExportDeliveryAudit(
+        delivery,
+        'CANCELLED',
+        username,
+        dto.reason,
+      );
       await manager.save(delivery);
 
       return manager.findOne(ExportDelivery, {
         where: { _id: delivery._id },
-        relations: ['buyer', 'shipment', 'salesContract', 'items', 'items.product'],
+        relations: [
+          'buyer',
+          'shipment',
+          'salesContract',
+          'items',
+          'items.product',
+        ],
       });
     });
   }
@@ -795,19 +1095,35 @@ export class InventoryService {
   ) {
     const runInTransaction = async (manager: EntityManager) => {
       const username = this.getActorUsername(user);
-      const existing = await this.findActiveExportDeliveryForShipment(manager, shipment._id);
+      const existing = await this.findActiveExportDeliveryForShipment(
+        manager,
+        shipment._id,
+      );
       if (existing) {
-        return this.issueExportDeliveryInTransaction(manager, existing._id, {}, username);
+        return this.issueExportDeliveryInTransaction(
+          manager,
+          existing._id,
+          {},
+          username,
+        );
       }
 
       const draft = await this.createExportDeliveryDraftInTransaction(
         manager,
         shipment._id,
-        { note: `Export delivery draft for shipment ${shipment.shipmentNumber}` },
+        {
+          note: `Export delivery draft for shipment ${shipment.shipmentNumber}`,
+        },
         username,
       );
-      if (!draft) throw new BadRequestException('Cannot create export delivery draft');
-      return this.issueExportDeliveryInTransaction(manager, draft._id, {}, username);
+      if (!draft)
+        throw new BadRequestException('Cannot create export delivery draft');
+      return this.issueExportDeliveryInTransaction(
+        manager,
+        draft._id,
+        {},
+        username,
+      );
     };
 
     if (transactionManager) {
@@ -833,13 +1149,21 @@ export class InventoryService {
       .skip(offset)
       .take(pageSize);
 
-    if (query.status) qb.andWhere('delivery.status = :status', { status: query.status });
-    if (query.shipmentId) qb.andWhere('delivery.shipmentId = :shipmentId', { shipmentId: query.shipmentId });
-    if (query.buyerId) qb.andWhere('delivery.buyerId = :buyerId', { buyerId: query.buyerId });
-    if (query.search) {
-      qb.andWhere('(delivery.deliveryNumber ILIKE :search OR shipment.shipmentNumber ILIKE :search)', {
-        search: `%${query.search}%`,
+    if (query.status)
+      qb.andWhere('delivery.status = :status', { status: query.status });
+    if (query.shipmentId)
+      qb.andWhere('delivery.shipmentId = :shipmentId', {
+        shipmentId: query.shipmentId,
       });
+    if (query.buyerId)
+      qb.andWhere('delivery.buyerId = :buyerId', { buyerId: query.buyerId });
+    if (query.search) {
+      qb.andWhere(
+        '(delivery.deliveryNumber ILIKE :search OR shipment.shipmentNumber ILIKE :search)',
+        {
+          search: `%${query.search}%`,
+        },
+      );
     }
 
     const [results, total] = await qb.getManyAndCount();
@@ -867,7 +1191,14 @@ export class InventoryService {
   /**
    * Điều chỉnh tồn kho (Adjustment) - Mục 5.3.3 PRD
    */
-  async adjustStock(productId: string, adjustmentQty: number, reason: string, user: any, lotNumber?: string, unitPrice: number = 0) {
+  async adjustStock(
+    productId: string,
+    adjustmentQty: number,
+    reason: string,
+    user: any,
+    lotNumber?: string,
+    unitPrice: number = 0,
+  ) {
     const username = this.getActorUsername(user);
 
     return this.dataSource.transaction(async (manager) => {
@@ -875,10 +1206,14 @@ export class InventoryService {
         where: { _id: productId },
         lock: { mode: 'pessimistic_write' },
       });
-      if (!product) throw new BadRequestException(`Product ${productId} not found`);
+      if (!product)
+        throw new BadRequestException(`Product ${productId} not found`);
 
-      const resolvedUnitPrice = Number(unitPrice || product.purchasePriceVnd || 0);
-      const amountVnd = Math.abs(Number(adjustmentQty || 0)) * resolvedUnitPrice;
+      const resolvedUnitPrice = Number(
+        unitPrice || product.purchasePriceVnd || 0,
+      );
+      const amountVnd =
+        Math.abs(Number(adjustmentQty || 0)) * resolvedUnitPrice;
       const valuationSnapshot = await this.buildAdjustmentValuationSnapshot(
         manager,
         product,
@@ -975,13 +1310,17 @@ export class InventoryService {
       where: { _id: adjustment.productId },
       lock: { mode: 'pessimistic_write' },
     });
-    if (!product) throw new BadRequestException(`Product ${adjustment.productId} not found`);
-    const appliedValuationSnapshot = await this.buildAdjustmentValuationSnapshot(
-      manager,
-      product,
-      Number(adjustment.adjustmentQuantity),
-      Number(adjustment.unitPrice || 0),
-    );
+    if (!product)
+      throw new BadRequestException(
+        `Product ${adjustment.productId} not found`,
+      );
+    const appliedValuationSnapshot =
+      await this.buildAdjustmentValuationSnapshot(
+        manager,
+        product,
+        Number(adjustment.adjustmentQuantity),
+        Number(adjustment.unitPrice || 0),
+      );
 
     const ledger = await this.executeInventoryTransaction(
       adjustment.productId,
@@ -1026,7 +1365,8 @@ export class InventoryService {
         where: { _id: recordId },
         lock: { mode: 'pessimistic_write' },
       });
-      if (!adjustment) throw new NotFoundException('Inventory adjustment not found');
+      if (!adjustment)
+        throw new NotFoundException('Inventory adjustment not found');
       if (adjustment.status !== InventoryAdjustmentStatus.PENDING_APPROVAL) {
         return adjustment;
       }
@@ -1049,7 +1389,8 @@ export class InventoryService {
         where: { _id: recordId },
         lock: { mode: 'pessimistic_write' },
       });
-      if (!adjustment) throw new NotFoundException('Inventory adjustment not found');
+      if (!adjustment)
+        throw new NotFoundException('Inventory adjustment not found');
       if (adjustment.status !== InventoryAdjustmentStatus.PENDING_APPROVAL) {
         return adjustment;
       }
@@ -1058,7 +1399,12 @@ export class InventoryService {
       adjustment.rejectedByUsername = actorUsername;
       adjustment.rejectedAt = new Date();
       adjustment.rejectionReason = reason || 'Rejected by approval workflow';
-      this.appendAdjustmentAudit(adjustment, 'REJECTED', actorUsername, adjustment.rejectionReason);
+      this.appendAdjustmentAudit(
+        adjustment,
+        'REJECTED',
+        actorUsername,
+        adjustment.rejectionReason,
+      );
       return manager.save(adjustment);
     });
   }
@@ -1076,12 +1422,19 @@ export class InventoryService {
       .skip(offset)
       .take(pageSize);
 
-    if (query.status) qb.andWhere('adjustment.status = :status', { status: query.status });
-    if (query.productId) qb.andWhere('adjustment.productId = :productId', { productId: query.productId });
-    if (query.search) {
-      qb.andWhere('(adjustment.adjustmentNumber ILIKE :search OR product.sku ILIKE :search)', {
-        search: `%${query.search}%`,
+    if (query.status)
+      qb.andWhere('adjustment.status = :status', { status: query.status });
+    if (query.productId)
+      qb.andWhere('adjustment.productId = :productId', {
+        productId: query.productId,
       });
+    if (query.search) {
+      qb.andWhere(
+        '(adjustment.adjustmentNumber ILIKE :search OR product.sku ILIKE :search)',
+        {
+          search: `%${query.search}%`,
+        },
+      );
     }
 
     const [results, total] = await qb.getManyAndCount();
@@ -1096,7 +1449,8 @@ export class InventoryService {
       where: { _id: recordId },
       relations: ['product', 'ledgerEntry'],
     });
-    if (!adjustment) throw new NotFoundException('Inventory adjustment not found');
+    if (!adjustment)
+      throw new NotFoundException('Inventory adjustment not found');
     return adjustment;
   }
 
@@ -1114,10 +1468,19 @@ export class InventoryService {
         warehouseName: dto.warehouseName || 'Main Warehouse',
         status: InventoryCountStatus.DRAFT,
         createdByUsername: username,
+        approvalWorkflowRequestId: null,
+        auditTrail: null,
+      });
+      this.appendInventoryCountAudit(count, 'CREATED', username, null, {
+        warehouseName: count.warehouseName,
+        countDate: countDate.toISOString().slice(0, 10),
       });
 
       const savedCount = await manager.save(count);
-      const snapshotItems = await this.resolveCountSnapshotItems(manager, dto.items);
+      const snapshotItems = await this.resolveCountSnapshotItems(
+        manager,
+        dto.items,
+      );
       const items = snapshotItems.map((item) =>
         manager.create(InventoryCountItem, {
           ...item,
@@ -1152,7 +1515,9 @@ export class InventoryService {
     }
 
     if (query.search) {
-      qb.andWhere('count.countNumber ILIKE :search', { search: `%${query.search}%` });
+      qb.andWhere('count.countNumber ILIKE :search', {
+        search: `%${query.search}%`,
+      });
     }
 
     const [results, total] = await qb.getManyAndCount();
@@ -1181,41 +1546,107 @@ export class InventoryService {
     return count;
   }
 
-  async submitInventoryCount(recordId: string, dto: SubmitInventoryCountDto, user: any) {
+  async updateInventoryCountItems(
+    recordId: string,
+    dto: UpdateInventoryCountItemsDto,
+    user: any,
+  ) {
     const username = this.getActorUsername(user);
 
     return this.dataSource.transaction(async (manager) => {
-      const count = await this.findInventoryCountForUpdate(manager, recordId);
+      const count = await this.findInventoryCountForUpdate(
+        manager,
+        recordId,
+        true,
+      );
+
+      if (count.status !== InventoryCountStatus.DRAFT) {
+        throw new BadRequestException(
+          'Only draft inventory counts can be edited',
+        );
+      }
+
+      this.applyInventoryCountLines(count, dto.items);
+      this.appendInventoryCountAudit(count, 'COUNT_SAVED', username, null, {
+        ...this.summarizeInventoryCountVariance(count),
+        lineCount: dto.items.length,
+      });
+      await manager.save(InventoryCountItem, count.items);
+      await manager.save(count);
+
+      return manager.findOne(InventoryCount, {
+        where: { _id: count._id },
+        relations: ['items', 'items.product'],
+      });
+    });
+  }
+
+  async submitInventoryCount(
+    recordId: string,
+    dto: SubmitInventoryCountDto,
+    user: any,
+  ) {
+    const username = this.getActorUsername(user);
+
+    return this.dataSource.transaction(async (manager) => {
+      const count = await this.findInventoryCountForUpdate(
+        manager,
+        recordId,
+        true,
+      );
 
       if (!count) {
         throw new NotFoundException('Không tìm thấy phiếu kiểm kê');
       }
 
       if (count.status !== InventoryCountStatus.DRAFT) {
-        throw new BadRequestException('Chỉ phiếu kiểm kê nháp mới được gửi duyệt');
+        throw new BadRequestException(
+          'Chỉ phiếu kiểm kê nháp mới được gửi duyệt',
+        );
       }
 
       if (dto.items?.length) {
-        const itemByProduct = new Map(count.items.map((item) => [item.productId, item]));
-
-        for (const line of dto.items) {
-          const item = itemByProduct.get(line.productId);
-          if (!item) {
-            throw new BadRequestException(`Sản phẩm ${line.productId} không thuộc phiếu kiểm kê này`);
-          }
-
-          item.countedQuantity = Number(line.countedQuantity);
-          item.varianceQuantity = Number(line.countedQuantity) - Number(item.systemQuantity);
-          item.varianceValue = Number(item.varianceQuantity) * Number(item.unitCost || 0);
-          item.note = line.note || item.note;
-        }
-
+        this.applyInventoryCountLines(count, dto.items);
         await manager.save(InventoryCountItem, count.items);
       }
+
+      const approvalMetadata = this.buildInventoryCountApprovalMetadata(count);
+      const approvalRequest =
+        await this.approvalMatrixService.createRequestInTransaction(
+          manager,
+          {
+            documentType: ApprovalDocumentType.INVENTORY_COUNT,
+            documentId: count._id,
+            documentNumber: count.countNumber,
+            title: `Approve inventory count ${count.countNumber}`,
+            currency: 'VND',
+            amount: approvalMetadata.totalVarianceValue,
+            amountVnd: approvalMetadata.totalVarianceValue,
+            metadata: {
+              ...approvalMetadata,
+              source: 'inventory.submitInventoryCount',
+            },
+          },
+          user,
+        );
 
       count.status = InventoryCountStatus.SUBMITTED;
       count.submittedByUsername = username;
       count.submittedAt = new Date();
+      count.approvalWorkflowRequestId = approvalRequest?._id || null;
+      this.appendInventoryCountAudit(count, 'SUBMITTED', username, null, {
+        ...this.summarizeInventoryCountVariance(count),
+      });
+      this.appendInventoryCountAudit(
+        count,
+        'APPROVAL_REQUESTED',
+        username,
+        null,
+        {
+          approvalWorkflowRequestId: count.approvalWorkflowRequestId,
+          amountVnd: approvalMetadata.totalVarianceValue,
+        },
+      );
 
       await manager.save(count);
 
@@ -1226,9 +1657,13 @@ export class InventoryService {
     });
   }
 
-  async approveInventoryCount(recordId: string, dto: ApproveInventoryCountDto, user: any) {
+  async approveInventoryCount(
+    recordId: string,
+    dto: ApproveInventoryCountDto,
+    user: any,
+    isWorkflowDecision = false,
+  ) {
     const username = this.getActorUsername(user);
-    const roleName = this.getActorRoleName(user);
 
     return this.dataSource.transaction(async (manager) => {
       const count = await this.findInventoryCountForUpdate(manager, recordId);
@@ -1238,20 +1673,46 @@ export class InventoryService {
       }
 
       if (count.status !== InventoryCountStatus.SUBMITTED) {
-        throw new BadRequestException('Chỉ phiếu kiểm kê đã gửi duyệt mới được phê duyệt');
+        throw new BadRequestException(
+          'Chỉ phiếu kiểm kê đã gửi duyệt mới được phê duyệt',
+        );
       }
 
-      if (count.submittedByUsername === username && roleName !== 'ADMIN' && roleName !== 'SUPER ADMIN') {
-        throw new BadRequestException('Người gửi duyệt không được tự phê duyệt phiếu kiểm kê');
+      if (count.approvalWorkflowRequestId && !isWorkflowDecision) {
+        throw new BadRequestException(
+          'Inventory count must be approved from Approval Matrix',
+        );
       }
+
+      const roleName = this.getActorRoleName(user);
+
+      if (
+        count.submittedByUsername === username &&
+        !['ADMIN', 'SUPER ADMIN', 'SUPER_ADMIN'].includes(roleName)
+      ) {
+        throw new BadRequestException(
+          'Người gửi duyệt không được tự phê duyệt phiếu kiểm kê',
+        );
+      }
+
+      const ledgerEntries: Array<{
+        ledgerEntryId: string;
+        productId: string;
+        varianceQuantity: number;
+        amountVnd: number;
+      }> = [];
+      let surplusValue = 0;
+      let shortageValue = 0;
 
       for (const item of count.items) {
         const varianceQuantity = Number(item.varianceQuantity || 0);
         if (varianceQuantity === 0) continue;
+        const amountVnd =
+          Math.abs(varianceQuantity) * Number(item.unitCost || 0);
 
         // Khi duyệt kiểm kê, chênh lệch mới được ghi vào ledger và hạch toán.
         // Đây là điểm kiểm soát để số tồn kho không đổi chỉ vì dữ liệu đếm nháp.
-        await this.executeInventoryTransaction(
+        const ledger = await this.executeInventoryTransaction(
           item.productId,
           varianceQuantity,
           InventoryTransactionType.ADJUSTMENT,
@@ -1263,13 +1724,93 @@ export class InventoryService {
           undefined,
           count.countNumber,
           username,
+          false,
+          false,
         );
+
+        if (varianceQuantity > 0) {
+          surplusValue += amountVnd;
+        } else {
+          shortageValue += amountVnd;
+        }
+
+        ledgerEntries.push({
+          ledgerEntryId: ledger._id,
+          productId: item.productId,
+          varianceQuantity,
+          amountVnd,
+        });
       }
+
+      const journalItems: {
+        accountCode: string;
+        debit: number;
+        credit: number;
+      }[] = [];
+      if (surplusValue > 0) {
+        journalItems.push({
+          accountCode: '156',
+          debit: surplusValue,
+          credit: 0,
+        });
+        journalItems.push({
+          accountCode: '3381',
+          debit: 0,
+          credit: surplusValue,
+        });
+      }
+      if (shortageValue > 0) {
+        journalItems.push({
+          accountCode: '1381',
+          debit: shortageValue,
+          credit: 0,
+        });
+        journalItems.push({
+          accountCode: '156',
+          debit: 0,
+          credit: shortageValue,
+        });
+      }
+
+      const journal = journalItems.length
+        ? await this.accountingService.createJournalEntry(
+            {
+              description: `Inventory count variance ${count.countNumber}`,
+              referenceType: 'INVENTORY_COUNT',
+              referenceId: count._id,
+              createdByUsername: username,
+              items: journalItems,
+            },
+            manager,
+          )
+        : null;
 
       count.status = InventoryCountStatus.APPROVED;
       count.approvedByUsername = username;
       count.approvedAt = new Date();
       count.approvalNote = dto.approvalNote || null;
+      this.appendInventoryCountAudit(
+        count,
+        'APPROVED',
+        username,
+        dto.approvalNote || null,
+        {
+          ...this.summarizeInventoryCountVariance(count),
+          approvalWorkflowRequestId: count.approvalWorkflowRequestId,
+        },
+      );
+      if (ledgerEntries.length || journal) {
+        this.appendInventoryCountAudit(count, 'LEDGER_POSTED', username, null, {
+          ledgerEntries,
+          journalEntryId: journal?._id || null,
+          surplusValue,
+          shortageValue,
+          accountingPolicy: {
+            surplus: 'Dr 156 / Cr 3381',
+            shortage: 'Dr 1381 / Cr 156',
+          },
+        });
+      }
 
       await manager.save(count);
 
@@ -1280,25 +1821,53 @@ export class InventoryService {
     });
   }
 
-  async rejectInventoryCount(recordId: string, reason: string, user: any) {
+  async rejectInventoryCount(
+    recordId: string,
+    reason: string,
+    user: any,
+    isWorkflowDecision = false,
+  ) {
     const username = this.getActorUsername(user);
-    const roleName = this.getActorRoleName(user);
 
     return this.dataSource.transaction(async (manager) => {
       const count = await this.findInventoryCountForUpdate(manager, recordId);
 
       if (count.status !== InventoryCountStatus.SUBMITTED) {
-        throw new BadRequestException('Chỉ phiếu kiểm kê đã gửi duyệt mới được từ chối');
+        throw new BadRequestException(
+          'Chỉ phiếu kiểm kê đã gửi duyệt mới được từ chối',
+        );
       }
 
-      if (count.submittedByUsername === username && roleName !== 'ADMIN' && roleName !== 'SUPER ADMIN') {
-        throw new BadRequestException('Người gửi duyệt không được tự từ chối phiếu kiểm kê');
+      if (count.approvalWorkflowRequestId && !isWorkflowDecision) {
+        throw new BadRequestException(
+          'Inventory count must be rejected from Approval Matrix',
+        );
+      }
+
+      const roleName = this.getActorRoleName(user);
+
+      if (
+        count.submittedByUsername === username &&
+        !['ADMIN', 'SUPER ADMIN', 'SUPER_ADMIN'].includes(roleName)
+      ) {
+        throw new BadRequestException(
+          'Người gửi duyệt không được tự từ chối phiếu kiểm kê',
+        );
       }
 
       count.status = InventoryCountStatus.CANCELLED;
       count.approvedByUsername = username;
       count.approvedAt = new Date();
       count.approvalNote = reason || 'Rejected from approval center';
+      this.appendInventoryCountAudit(
+        count,
+        'REJECTED',
+        username,
+        count.approvalNote,
+        {
+          approvalWorkflowRequestId: count.approvalWorkflowRequestId,
+        },
+      );
 
       await manager.save(count);
 
@@ -1309,13 +1878,43 @@ export class InventoryService {
     });
   }
 
+  async approveInventoryCountFromWorkflow(
+    recordId: string,
+    actorUsername: string,
+    approvalNote?: string | null,
+  ) {
+    return this.approveInventoryCount(
+      recordId,
+      { approvalNote: approvalNote || 'Approved from approval matrix' },
+      { username: actorUsername },
+      true,
+    );
+  }
+
+  async rejectInventoryCountFromWorkflow(
+    recordId: string,
+    actorUsername: string,
+    reason?: string | null,
+  ) {
+    return this.rejectInventoryCount(
+      recordId,
+      reason || 'Rejected from approval matrix',
+      { username: actorUsername },
+      true,
+    );
+  }
+
   async createCustomerReturn(dto: CreateCustomerReturnDto, user: any) {
     const username = this.getActorUsername(user);
 
     return this.dataSource.transaction(async (manager) => {
-      const buyer = await manager.findOne(Partner, { where: { _id: dto.buyerId } });
+      const buyer = await manager.findOne(Partner, {
+        where: { _id: dto.buyerId },
+      });
       if (!buyer || buyer.partnerType !== PartnerType.CUSTOMER) {
-        throw new BadRequestException('Buyer không tồn tại hoặc không phải đối tác mua hàng');
+        throw new BadRequestException(
+          'Buyer không tồn tại hoặc không phải đối tác mua hàng',
+        );
       }
 
       let salesContractId = dto.salesContractId || null;
@@ -1326,28 +1925,44 @@ export class InventoryService {
         });
         if (!shipment) throw new BadRequestException('Shipment không tồn tại');
         salesContractId = salesContractId || shipment.salesContractId;
-        if (shipment.salesContract?.buyerId && shipment.salesContract.buyerId !== dto.buyerId) {
+        if (
+          shipment.salesContract?.buyerId &&
+          shipment.salesContract.buyerId !== dto.buyerId
+        ) {
           throw new BadRequestException('Shipment không thuộc buyer đã chọn');
         }
       }
 
       if (salesContractId) {
-        const contract = await manager.findOne(SalesContract, { where: { _id: salesContractId } });
-        if (!contract) throw new BadRequestException('Sales contract không tồn tại');
+        const contract = await manager.findOne(SalesContract, {
+          where: { _id: salesContractId },
+        });
+        if (!contract)
+          throw new BadRequestException('Sales contract không tồn tại');
         if (contract.buyerId !== dto.buyerId) {
-          throw new BadRequestException('Sales contract không thuộc buyer đã chọn');
+          throw new BadRequestException(
+            'Sales contract không thuộc buyer đã chọn',
+          );
         }
       }
 
       const productIds = [...new Set(dto.items.map((item) => item.productId))];
-      const products = await manager.find(Product, { where: { _id: In(productIds) } });
+      const products = await manager.find(Product, {
+        where: { _id: In(productIds) },
+      });
       if (products.length !== productIds.length) {
-        throw new BadRequestException('Một hoặc nhiều sản phẩm trả hàng không tồn tại');
+        throw new BadRequestException(
+          'Một hoặc nhiều sản phẩm trả hàng không tồn tại',
+        );
       }
-      const productById = new Map(products.map((product) => [product._id, product]));
+      const productById = new Map(
+        products.map((product) => [product._id, product]),
+      );
 
       const returnDoc = manager.create(CustomerReturn, {
-        returnNumber: this.createReturnNumber(dto.returnDate ? new Date(dto.returnDate) : new Date()),
+        returnNumber: this.createReturnNumber(
+          dto.returnDate ? new Date(dto.returnDate) : new Date(),
+        ),
         buyerId: dto.buyerId,
         shipmentId: dto.shipmentId || null,
         salesContractId,
@@ -1376,7 +1991,13 @@ export class InventoryService {
       await manager.save(CustomerReturnItem, items);
       return manager.findOne(CustomerReturn, {
         where: { _id: savedReturn._id },
-        relations: ['buyer', 'shipment', 'salesContract', 'items', 'items.product'],
+        relations: [
+          'buyer',
+          'shipment',
+          'salesContract',
+          'items',
+          'items.product',
+        ],
       });
     });
   }
@@ -1397,13 +2018,21 @@ export class InventoryService {
       .skip(offset)
       .take(pageSize);
 
-    if (query.status) qb.andWhere('returnDoc.status = :status', { status: query.status });
-    if (query.buyerId) qb.andWhere('returnDoc.buyerId = :buyerId', { buyerId: query.buyerId });
-    if (query.shipmentId) qb.andWhere('returnDoc.shipmentId = :shipmentId', { shipmentId: query.shipmentId });
-    if (query.search) {
-      qb.andWhere('(returnDoc.returnNumber ILIKE :search OR buyer.name ILIKE :search)', {
-        search: `%${query.search}%`,
+    if (query.status)
+      qb.andWhere('returnDoc.status = :status', { status: query.status });
+    if (query.buyerId)
+      qb.andWhere('returnDoc.buyerId = :buyerId', { buyerId: query.buyerId });
+    if (query.shipmentId)
+      qb.andWhere('returnDoc.shipmentId = :shipmentId', {
+        shipmentId: query.shipmentId,
       });
+    if (query.search) {
+      qb.andWhere(
+        '(returnDoc.returnNumber ILIKE :search OR buyer.name ILIKE :search)',
+        {
+          search: `%${query.search}%`,
+        },
+      );
     }
 
     const [results, total] = await qb.getManyAndCount();
@@ -1416,9 +2045,16 @@ export class InventoryService {
   async findCustomerReturn(recordId: string) {
     const returnDoc = await this.customerReturnRepository.findOne({
       where: { _id: recordId },
-      relations: ['buyer', 'shipment', 'salesContract', 'items', 'items.product'],
+      relations: [
+        'buyer',
+        'shipment',
+        'salesContract',
+        'items',
+        'items.product',
+      ],
     });
-    if (!returnDoc) throw new NotFoundException('Không tìm thấy phiếu trả hàng');
+    if (!returnDoc)
+      throw new NotFoundException('Không tìm thấy phiếu trả hàng');
     return returnDoc;
   }
 
@@ -1433,15 +2069,26 @@ export class InventoryService {
     return this.customerReturnRepository.save(returnDoc);
   }
 
-  async approveCustomerReturn(recordId: string, dto: CustomerReturnDecisionDto, user: any) {
+  async approveCustomerReturn(
+    recordId: string,
+    dto: CustomerReturnDecisionDto,
+    user: any,
+  ) {
     const username = this.getActorUsername(user);
     const roleName = this.getActorRoleName(user);
     const returnDoc = await this.findCustomerReturn(recordId);
     if (returnDoc.status !== CustomerReturnStatus.SUBMITTED) {
-      throw new BadRequestException('Chỉ phiếu đã gửi duyệt mới được phê duyệt');
+      throw new BadRequestException(
+        'Chỉ phiếu đã gửi duyệt mới được phê duyệt',
+      );
     }
-    if (returnDoc.submittedByUsername === username && !['ADMIN', 'SUPER ADMIN', 'SUPER_ADMIN'].includes(roleName)) {
-      throw new BadRequestException('Người gửi duyệt không được tự duyệt phiếu trả hàng');
+    if (
+      returnDoc.submittedByUsername === username &&
+      !['ADMIN', 'SUPER ADMIN', 'SUPER_ADMIN'].includes(roleName)
+    ) {
+      throw new BadRequestException(
+        'Người gửi duyệt không được tự duyệt phiếu trả hàng',
+      );
     }
     returnDoc.status = CustomerReturnStatus.APPROVED;
     returnDoc.approvedByUsername = username;
@@ -1450,10 +2097,20 @@ export class InventoryService {
     return this.customerReturnRepository.save(returnDoc);
   }
 
-  async rejectCustomerReturn(recordId: string, dto: CustomerReturnDecisionDto, user: any) {
+  async rejectCustomerReturn(
+    recordId: string,
+    dto: CustomerReturnDecisionDto,
+    user: any,
+  ) {
     const returnDoc = await this.findCustomerReturn(recordId);
-    if (![CustomerReturnStatus.SUBMITTED, CustomerReturnStatus.APPROVED].includes(returnDoc.status)) {
-      throw new BadRequestException('Chỉ phiếu đã gửi duyệt hoặc đã duyệt mới được từ chối');
+    if (
+      ![CustomerReturnStatus.SUBMITTED, CustomerReturnStatus.APPROVED].includes(
+        returnDoc.status,
+      )
+    ) {
+      throw new BadRequestException(
+        'Chỉ phiếu đã gửi duyệt hoặc đã duyệt mới được từ chối',
+      );
     }
     returnDoc.status = CustomerReturnStatus.REJECTED;
     returnDoc.approvedByUsername = this.getActorUsername(user);
@@ -1462,19 +2119,30 @@ export class InventoryService {
     return this.customerReturnRepository.save(returnDoc);
   }
 
-  async receiveCustomerReturn(recordId: string, dto: CustomerReturnDecisionDto, user: any) {
+  async receiveCustomerReturn(
+    recordId: string,
+    dto: CustomerReturnDecisionDto,
+    user: any,
+  ) {
     const username = this.getActorUsername(user);
 
     return this.dataSource.transaction(async (manager) => {
       const returnDoc = await manager.findOne(CustomerReturn, {
         where: { _id: recordId },
-        relations: ['items', 'items.product'],
         lock: { mode: 'pessimistic_write' },
       });
-      if (!returnDoc) throw new NotFoundException('Không tìm thấy phiếu trả hàng');
+      if (!returnDoc)
+        throw new NotFoundException('Không tìm thấy phiếu trả hàng');
       if (returnDoc.status !== CustomerReturnStatus.APPROVED) {
-        throw new BadRequestException('Chỉ phiếu đã duyệt mới được nhập lại kho');
+        throw new BadRequestException(
+          'Chỉ phiếu đã duyệt mới được nhập lại kho',
+        );
       }
+
+      returnDoc.items = await manager.find(CustomerReturnItem, {
+        where: { customerReturnId: returnDoc._id },
+        relations: ['product'],
+      });
 
       for (const item of returnDoc.items || []) {
         await this.executeInventoryTransaction(
@@ -1501,7 +2169,13 @@ export class InventoryService {
 
       return manager.findOne(CustomerReturn, {
         where: { _id: returnDoc._id },
-        relations: ['buyer', 'shipment', 'salesContract', 'items', 'items.product'],
+        relations: [
+          'buyer',
+          'shipment',
+          'salesContract',
+          'items',
+          'items.product',
+        ],
       });
     });
   }
@@ -1518,11 +2192,24 @@ export class InventoryService {
       .skip(offset)
       .take(pageSize);
 
-    if (query.productId) qb.andWhere('ledger.productId = :productId', { productId: query.productId });
-    if (query.lotNumber) qb.andWhere('ledger.lotNumber ILIKE :lotNumber', { lotNumber: `%${query.lotNumber}%` });
-    if (query.shipmentId) qb.andWhere('ledger.referenceId = :shipmentId', { shipmentId: query.shipmentId });
-    if (query.buyerId) qb.andWhere('ledger.partnerId = :buyerId', { buyerId: query.buyerId });
-    if (query.transactionType) qb.andWhere('ledger.transactionType = :transactionType', { transactionType: query.transactionType });
+    if (query.productId)
+      qb.andWhere('ledger.productId = :productId', {
+        productId: query.productId,
+      });
+    if (query.lotNumber)
+      qb.andWhere('ledger.lotNumber ILIKE :lotNumber', {
+        lotNumber: `%${query.lotNumber}%`,
+      });
+    if (query.shipmentId)
+      qb.andWhere('ledger.referenceId = :shipmentId', {
+        shipmentId: query.shipmentId,
+      });
+    if (query.buyerId)
+      qb.andWhere('ledger.partnerId = :buyerId', { buyerId: query.buyerId });
+    if (query.transactionType)
+      qb.andWhere('ledger.transactionType = :transactionType', {
+        transactionType: query.transactionType,
+      });
 
     const [results, total] = await qb.getManyAndCount();
     return {
@@ -1555,7 +2242,9 @@ export class InventoryService {
         stockValue += (currentStock - remainingQuantity) * fallbackCost;
       }
 
-      const fifoUnitCost = currentStock ? stockValue / currentStock : fallbackCost;
+      const fifoUnitCost = currentStock
+        ? stockValue / currentStock
+        : fallbackCost;
       const avgUnitCost = remainingQuantity
         ? Number(remainingCost?.stockValue || 0) / remainingQuantity
         : fallbackCost;
@@ -1586,11 +2275,14 @@ export class InventoryService {
 
   async createPeriodSnapshot(dto: CreateInventoryPeriodSnapshotDto, user: any) {
     const username = this.getActorUsername(user);
-    const valuationMethod: InventoryValuationMethod = dto.valuationMethod || 'FIFO';
+    const valuationMethod: InventoryValuationMethod =
+      dto.valuationMethod || 'FIFO';
     const periodKey = dto.periodKey.trim().toUpperCase();
 
     if (new Date(dto.periodStartDate) > new Date(dto.periodEndDate)) {
-      throw new BadRequestException('Period start date must be before end date');
+      throw new BadRequestException(
+        'Period start date must be before end date',
+      );
     }
 
     return this.dataSource.transaction(async (manager) => {
@@ -1680,21 +2372,33 @@ export class InventoryService {
     const snapshot = await this.periodSnapshotRepository.findOne({
       where: { _id: recordId },
     });
-    if (!snapshot) throw new NotFoundException('Inventory period snapshot not found');
+    if (!snapshot)
+      throw new NotFoundException('Inventory period snapshot not found');
     return snapshot;
   }
 
   async findAllAuditTrail(query: any) {
-    const { current = 1, pageSize = 10, referenceNumber, transactionType, startDate, endDate, sort } = query;
+    const {
+      current = 1,
+      pageSize = 10,
+      referenceNumber,
+      transactionType,
+      startDate,
+      endDate,
+      sort,
+    } = query;
     const normalizedCurrent = Number(current) || 1;
     const normalizedPageSize = Number(pageSize) || 10;
     const offset = (normalizedCurrent - 1) * normalizedPageSize;
 
-    const qb = this.ledgerRepository.createQueryBuilder('ledger')
+    const qb = this.ledgerRepository
+      .createQueryBuilder('ledger')
       .leftJoinAndSelect('ledger.product', 'product');
 
     if (referenceNumber) {
-      qb.andWhere('ledger.referenceNumber ILIKE :ref', { ref: `%${referenceNumber}%` });
+      qb.andWhere('ledger.referenceNumber ILIKE :ref', {
+        ref: `%${referenceNumber}%`,
+      });
     }
 
     if (transactionType) {
@@ -1702,9 +2406,9 @@ export class InventoryService {
     }
 
     if (startDate && endDate) {
-      qb.andWhere('ledger.createdAt BETWEEN :start AND :end', { 
-        start: new Date(startDate), 
-        end: new Date(endDate) 
+      qb.andWhere('ledger.createdAt BETWEEN :start AND :end', {
+        start: new Date(startDate),
+        end: new Date(endDate),
       });
     }
 
@@ -1718,9 +2422,9 @@ export class InventoryService {
         current: normalizedCurrent,
         pageSize: normalizedPageSize,
         pages: Math.ceil(total / normalizedPageSize),
-        total
+        total,
       },
-      results
+      results,
     };
   }
 }

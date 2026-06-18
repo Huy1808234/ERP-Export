@@ -35,7 +35,9 @@ export class PortalSupportMessage {
   @Column({ type: 'varchar', length: 40 })
   ticket_id: string;
 
-  @ManyToOne(() => PortalSupportTicket, (ticket) => ticket.messages, { onDelete: 'CASCADE' })
+  @ManyToOne(() => PortalSupportTicket, (ticket) => ticket.messages, {
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'ticket_id' })
   ticket: PortalSupportTicket;
 

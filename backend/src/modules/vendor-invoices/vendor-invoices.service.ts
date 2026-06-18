@@ -1,11 +1,24 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, Not, EntityManager } from 'typeorm';
-import { VendorInvoice, VendorInvoiceStatus } from './entities/vendor-invoice.entity';
+import {
+  VendorInvoice,
+  VendorInvoiceStatus,
+} from './entities/vendor-invoice.entity';
 import { VendorInvoiceItem } from './entities/vendor-invoice-item.entity';
 import { CreateVendorInvoiceDto } from './dto/create-vendor-invoice.dto';
-import { PurchaseOrder, PurchaseOrderStatus } from '../purchase-orders/entities/purchase-order.entity';
-import { AccountPayable, APStatus } from '../account-payables/entities/account-payable.entity';
+import {
+  PurchaseOrder,
+  PurchaseOrderStatus,
+} from '../purchase-orders/entities/purchase-order.entity';
+import {
+  AccountPayable,
+  APStatus,
+} from '../account-payables/entities/account-payable.entity';
 import { AccountingService } from '../accounting/accounting.service';
 import { GoodsReceiptItem } from '../goods-receipts/entities/goods-receipt-item.entity';
 import { PurchaseOrderItem } from '../purchase-orders/entities/purchase-order-item.entity';
@@ -36,7 +49,9 @@ export class VendorInvoicesService {
     private accountingService: AccountingService,
   ) {}
 
-  private groupPurchaseOrderItems(poItems: PurchaseOrderItem[]): PurchaseOrderItemGroups {
+  private groupPurchaseOrderItems(
+    poItems: PurchaseOrderItem[],
+  ): PurchaseOrderItemGroups {
     const by_id = new Map<string, PurchaseOrderItem>();
     const byProductId = new Map<string, PurchaseOrderItem[]>();
 
@@ -59,10 +74,14 @@ export class VendorInvoicesService {
     if (purchaseOrderItem_id) {
       const poItem = groups.by_id.get(purchaseOrderItem_id);
       if (!poItem) {
-        throw new BadRequestException(`Dong PO ${purchaseOrderItem_id} khong thuoc PO nay`);
+        throw new BadRequestException(
+          `Dong PO ${purchaseOrderItem_id} khong thuoc PO nay`,
+        );
       }
       if (poItem.productId !== productId) {
-        throw new BadRequestException(`Product tren invoice line khong khop dong PO ${purchaseOrderItem_id}`);
+        throw new BadRequestException(
+          `Product tren invoice line khong khop dong PO ${purchaseOrderItem_id}`,
+        );
       }
       return poItem;
     }
@@ -135,14 +154,21 @@ export class VendorInvoicesService {
         .filter((item) => item.quantity > 0);
 
       if (invoiceItemsInput.length === 0) {
-        throw new BadRequestException('Hoa don phai co it nhat mot dong hang da nhap kho');
+        throw new BadRequestException(
+          'Hoa don phai co it nhat mot dong hang da nhap kho',
+        );
       }
 
       const existing = await queryRunner.manager.findOne(VendorInvoice, {
-        where: { invoiceNumber: invoiceData.invoiceNumber, vendorId: invoiceData.vendorId },
+        where: {
+          invoiceNumber: invoiceData.invoiceNumber,
+          vendorId: invoiceData.vendorId,
+        },
       });
       if (existing) {
-        throw new BadRequestException('So hoa don nay da ton tai cho nha cung cap nay');
+        throw new BadRequestException(
+          'So hoa don nay da ton tai cho nha cung cap nay',
+        );
       }
 
       const po = await this.findPurchaseOrderForInvoice(
@@ -150,10 +176,14 @@ export class VendorInvoicesService {
         invoiceData.purchaseOrderId,
       );
       if (!INVOICE_ELIGIBLE_PO_STATUSES.includes(po.status)) {
-        throw new BadRequestException('Chi duoc ghi nhan hoa don cho PO da co phieu nhap kho');
+        throw new BadRequestException(
+          'Chi duoc ghi nhan hoa don cho PO da co phieu nhap kho',
+        );
       }
       if (po.vendorId !== invoiceData.vendorId) {
-        throw new BadRequestException('Nha cung cap tren hoa don khong khop voi PO');
+        throw new BadRequestException(
+          'Nha cung cap tren hoa don khong khop voi PO',
+        );
       }
 
       const existingInvoices = await queryRunner.manager.find(VendorInvoice, {
@@ -167,15 +197,21 @@ export class VendorInvoicesService {
         .getRepository(GoodsReceiptItem)
         .createQueryBuilder('item')
         .leftJoin('item.goodsReceipt', 'gr')
-        .where('gr.purchaseOrderId = :purchaseOrderId', { purchaseOrderId: invoiceData.purchaseOrderId })
+        .where('gr.purchaseOrderId = :purchaseOrderId', {
+          purchaseOrderId: invoiceData.purchaseOrderId,
+        })
         .getMany();
 
       const existingInvoiceItems = await queryRunner.manager
         .getRepository(VendorInvoiceItem)
         .createQueryBuilder('item')
         .leftJoin('item.vendorInvoice', 'inv')
-        .where('inv.purchaseOrderId = :purchaseOrderId', { purchaseOrderId: invoiceData.purchaseOrderId })
-        .andWhere('inv.status != :status', { status: VendorInvoiceStatus.CANCELLED })
+        .where('inv.purchaseOrderId = :purchaseOrderId', {
+          purchaseOrderId: invoiceData.purchaseOrderId,
+        })
+        .andWhere('inv.status != :status', {
+          status: VendorInvoiceStatus.CANCELLED,
+        })
         .getMany();
 
       const poItemGroups = this.groupPurchaseOrderItems(po.items);
@@ -184,7 +220,8 @@ export class VendorInvoicesService {
       const invoicedQtyByGrLine = new Map<string, number>();
 
       grItems.forEach((item) => {
-        const acceptedQty = Number(item.quantityReceived) - Number(item.quantityRejected || 0);
+        const acceptedQty =
+          Number(item.quantityReceived) - Number(item.quantityRejected || 0);
         const lineKey = this.resolveLegacyLineKey(
           poItemGroups,
           item.productId,
@@ -192,7 +229,10 @@ export class VendorInvoicesService {
         );
         if (!lineKey) return;
 
-        receivedQtyByPoLine.set(lineKey, (receivedQtyByPoLine.get(lineKey) || 0) + acceptedQty);
+        receivedQtyByPoLine.set(
+          lineKey,
+          (receivedQtyByPoLine.get(lineKey) || 0) + acceptedQty,
+        );
       });
 
       existingInvoiceItems.forEach((item) => {
@@ -211,7 +251,8 @@ export class VendorInvoicesService {
         if (item.goodsReceiptItem_id) {
           invoicedQtyByGrLine.set(
             item.goodsReceiptItem_id,
-            (invoicedQtyByGrLine.get(item.goodsReceiptItem_id) || 0) + Number(item.quantity),
+            (invoicedQtyByGrLine.get(item.goodsReceiptItem_id) || 0) +
+              Number(item.quantity),
           );
         }
       });
@@ -233,15 +274,23 @@ export class VendorInvoicesService {
         const pendingInvoiceQty = newInvoiceQtyByPoLine.get(poItem._id) || 0;
         const remainingInvoiceQty = receivedQty - alreadyInvoicedQty;
 
-        if (pendingInvoiceQty + item.quantity > remainingInvoiceQty + QTY_EPSILON) {
+        if (
+          pendingInvoiceQty + item.quantity >
+          remainingInvoiceQty + QTY_EPSILON
+        ) {
           throw new BadRequestException(
             `So luong hoa don cua dong PO ${poItem._id} vuot qua so luong hang da nhap kho hop le con lai`,
           );
         }
 
         if (item.goodsReceiptItem_id) {
-          const grLine = grItems.find((line) => line._id === item.goodsReceiptItem_id);
-          if (!grLine) throw new BadRequestException(`Dong GRN ${item.goodsReceiptItem_id} khong thuoc PO nay`);
+          const grLine = grItems.find(
+            (line) => line._id === item.goodsReceiptItem_id,
+          );
+          if (!grLine)
+            throw new BadRequestException(
+              `Dong GRN ${item.goodsReceiptItem_id} khong thuoc PO nay`,
+            );
 
           const grLineKey = this.resolveLegacyLineKey(
             poItemGroups,
@@ -249,50 +298,92 @@ export class VendorInvoicesService {
             grLine.purchaseOrderItem_id,
           );
           if (grLineKey !== poItem._id) {
-            throw new BadRequestException(`Dong GRN ${item.goodsReceiptItem_id} khong khop dong PO invoice`);
+            throw new BadRequestException(
+              `Dong GRN ${item.goodsReceiptItem_id} khong khop dong PO invoice`,
+            );
           }
 
-          const acceptedOnGrLine = Number(grLine.quantityReceived) - Number(grLine.quantityRejected || 0);
-          const alreadyInvoicedOnGrLine = invoicedQtyByGrLine.get(grLine._id) || 0;
+          const acceptedOnGrLine =
+            Number(grLine.quantityReceived) -
+            Number(grLine.quantityRejected || 0);
+          const alreadyInvoicedOnGrLine =
+            invoicedQtyByGrLine.get(grLine._id) || 0;
           const pendingOnGrLine = newInvoiceQtyByGrLine.get(grLine._id) || 0;
-          if (pendingOnGrLine + item.quantity > acceptedOnGrLine - alreadyInvoicedOnGrLine + QTY_EPSILON) {
+          if (
+            pendingOnGrLine + item.quantity >
+            acceptedOnGrLine - alreadyInvoicedOnGrLine + QTY_EPSILON
+          ) {
             throw new BadRequestException(
               `So luong hoa don cua dong GRN ${grLine._id} vuot qua so luong accepted con lai`,
             );
           }
-          newInvoiceQtyByGrLine.set(grLine._id, pendingOnGrLine + item.quantity);
+          newInvoiceQtyByGrLine.set(
+            grLine._id,
+            pendingOnGrLine + item.quantity,
+          );
         }
 
-        if (Math.abs(item.unitPrice - Number(poItem.unitPrice)) > MONEY_EPSILON) {
-          throw new BadRequestException(`Don gia hoa don cua san pham ${item.productId} khong khop voi PO`);
+        if (
+          Math.abs(item.unitPrice - Number(poItem.unitPrice)) > MONEY_EPSILON
+        ) {
+          throw new BadRequestException(
+            `Don gia hoa don cua san pham ${item.productId} khong khop voi PO`,
+          );
         }
 
         const expectedLineAmount = item.quantity * item.unitPrice;
         if (Math.abs(item.amount - expectedLineAmount) > MONEY_EPSILON) {
-          throw new BadRequestException(`Thanh tien hoa don cua san pham ${item.productId} khong dung`);
+          throw new BadRequestException(
+            `Thanh tien hoa don cua san pham ${item.productId} khong dung`,
+          );
         }
 
         calculatedAmount += expectedLineAmount;
-        newInvoiceQtyByPoLine.set(poItem._id, pendingInvoiceQty + item.quantity);
+        newInvoiceQtyByPoLine.set(
+          poItem._id,
+          pendingInvoiceQty + item.quantity,
+        );
       }
 
       const taxRate = Number(invoiceData.taxRate ?? 0);
       const calculatedTaxAmount = (calculatedAmount * taxRate) / 100;
       const calculatedTotalAmount = calculatedAmount + calculatedTaxAmount;
 
-      if (Math.abs(Number(invoiceData.amount) - calculatedAmount) > MONEY_EPSILON) {
-        throw new BadRequestException('Tong tien truoc thue khong khop voi chi tiet hoa don');
+      if (
+        Math.abs(Number(invoiceData.amount) - calculatedAmount) > MONEY_EPSILON
+      ) {
+        throw new BadRequestException(
+          'Tong tien truoc thue khong khop voi chi tiet hoa don',
+        );
       }
-      if (Math.abs(Number(invoiceData.taxAmount || 0) - calculatedTaxAmount) > MONEY_EPSILON) {
-        throw new BadRequestException('Tien thue khong khop voi chi tiet hoa don');
+      if (
+        Math.abs(Number(invoiceData.taxAmount || 0) - calculatedTaxAmount) >
+        MONEY_EPSILON
+      ) {
+        throw new BadRequestException(
+          'Tien thue khong khop voi chi tiet hoa don',
+        );
       }
-      if (Math.abs(Number(invoiceData.totalAmount) - calculatedTotalAmount) > MONEY_EPSILON) {
-        throw new BadRequestException('Tong tien hoa don khong khop voi chi tiet hoa don');
+      if (
+        Math.abs(Number(invoiceData.totalAmount) - calculatedTotalAmount) >
+        MONEY_EPSILON
+      ) {
+        throw new BadRequestException(
+          'Tong tien hoa don khong khop voi chi tiet hoa don',
+        );
       }
 
-      const totalInvoiced = existingInvoices.reduce((sum, inv) => sum + Number(inv.totalAmount), 0);
-      if (totalInvoiced + calculatedTotalAmount > Number(po.totalAmount) + MONEY_EPSILON) {
-        throw new BadRequestException('Tong gia tri hoa don vuot qua gia tri PO');
+      const totalInvoiced = existingInvoices.reduce(
+        (sum, inv) => sum + Number(inv.totalAmount),
+        0,
+      );
+      if (
+        totalInvoiced + calculatedTotalAmount >
+        Number(po.totalAmount) + MONEY_EPSILON
+      ) {
+        throw new BadRequestException(
+          'Tong gia tri hoa don vuot qua gia tri PO',
+        );
       }
 
       const invoice = queryRunner.manager.create(VendorInvoice, {
@@ -306,31 +397,39 @@ export class VendorInvoicesService {
 
       const savedInvoice = await queryRunner.manager.save(invoice);
 
-      const invoiceItems = invoiceItemsInput.map((item) => queryRunner.manager.create(VendorInvoiceItem, {
-        ...item,
-        vendorInvoiceId: savedInvoice._id,
-      }));
+      const invoiceItems = invoiceItemsInput.map((item) =>
+        queryRunner.manager.create(VendorInvoiceItem, {
+          ...item,
+          vendorInvoiceId: savedInvoice._id,
+        }),
+      );
       await queryRunner.manager.save(invoiceItems);
 
       const invoicedQtyAfterSave = new Map(invoicedQtyByPoLine);
       newInvoiceQtyByPoLine.forEach((quantity, poLine_id) => {
-        invoicedQtyAfterSave.set(poLine_id, (invoicedQtyAfterSave.get(poLine_id) || 0) + quantity);
+        invoicedQtyAfterSave.set(
+          poLine_id,
+          (invoicedQtyAfterSave.get(poLine_id) || 0) + quantity,
+        );
       });
 
-      const allOrderedReceived = po.items.every((item) => (
-        (receivedQtyByPoLine.get(item._id) || 0) >= Number(item.quantity) - QTY_EPSILON
-      ));
+      const allOrderedReceived = po.items.every(
+        (item) =>
+          (receivedQtyByPoLine.get(item._id) || 0) >=
+          Number(item.quantity) - QTY_EPSILON,
+      );
       const allReceivedInvoiced = po.items.every((item) => {
         const receivedQty = receivedQtyByPoLine.get(item._id) || 0;
         const invoicedQty = invoicedQtyAfterSave.get(item._id) || 0;
         return invoicedQty >= receivedQty - QTY_EPSILON;
       });
 
-      po.status = allOrderedReceived && allReceivedInvoiced
-        ? PurchaseOrderStatus.COMPLETED
-        : allOrderedReceived
-          ? PurchaseOrderStatus.RECEIVED
-          : PurchaseOrderStatus.PARTIAL_RECEIPT;
+      po.status =
+        allOrderedReceived && allReceivedInvoiced
+          ? PurchaseOrderStatus.COMPLETED
+          : allOrderedReceived
+            ? PurchaseOrderStatus.RECEIVED
+            : PurchaseOrderStatus.PARTIAL_RECEIPT;
       await queryRunner.manager.save(po);
 
       const ap = queryRunner.manager.create(AccountPayable, {
@@ -346,7 +445,12 @@ export class VendorInvoicesService {
       });
       await queryRunner.manager.save(ap);
 
-      const journalItems: { accountCode: string; debit: number; credit: number; partnerId?: string }[] = [
+      const journalItems: {
+        accountCode: string;
+        debit: number;
+        credit: number;
+        partnerId?: string;
+      }[] = [
         {
           accountCode: '3388',
           debit: Number(savedInvoice.amount),
@@ -369,13 +473,16 @@ export class VendorInvoicesService {
         partnerId: savedInvoice.vendorId,
       });
 
-      await this.accountingService.createJournalEntry({
-        description: `Ghi nhan hoa don NCC: ${savedInvoice.invoiceSeries ? savedInvoice.invoiceSeries + ' / ' : ''}${savedInvoice.invoiceNumber} (PO: ${po.poNumber})`,
-        referenceType: 'VENDOR_INVOICE',
-        referenceId: savedInvoice._id,
-        entryDate: savedInvoice.invoiceDate,
-        items: journalItems,
-      }, queryRunner.manager);
+      await this.accountingService.createJournalEntry(
+        {
+          description: `Ghi nhan hoa don NCC: ${savedInvoice.invoiceSeries ? savedInvoice.invoiceSeries + ' / ' : ''}${savedInvoice.invoiceNumber} (PO: ${po.poNumber})`,
+          referenceType: 'VENDOR_INVOICE',
+          referenceId: savedInvoice._id,
+          entryDate: savedInvoice.invoiceDate,
+          items: journalItems,
+        },
+        queryRunner.manager,
+      );
 
       await queryRunner.commitTransaction();
       return savedInvoice;
@@ -403,14 +510,22 @@ export class VendorInvoicesService {
 
     if (filters.invoiceNumber) {
       const raw = String(filters.invoiceNumber);
-      const value = raw.includes('/') ? raw.replace(/\//g, '').replace(/i$/, '') : raw;
-      qb.andWhere('invoice.invoiceNumber ILIKE :invoiceNumber', { invoiceNumber: `%${value}%` });
+      const value = raw.includes('/')
+        ? raw.replace(/\//g, '').replace(/i$/, '')
+        : raw;
+      qb.andWhere('invoice.invoiceNumber ILIKE :invoiceNumber', {
+        invoiceNumber: `%${value}%`,
+      });
     }
     if (filters.purchaseOrderId) {
-      qb.andWhere('invoice.purchaseOrderId = :purchaseOrderId', { purchaseOrderId: filters.purchaseOrderId });
+      qb.andWhere('invoice.purchaseOrderId = :purchaseOrderId', {
+        purchaseOrderId: filters.purchaseOrderId,
+      });
     }
     if (filters.vendorId) {
-      qb.andWhere('invoice.vendorId = :vendorId', { vendorId: filters.vendorId });
+      qb.andWhere('invoice.vendorId = :vendorId', {
+        vendorId: filters.vendorId,
+      });
     }
     if (filters.status) {
       qb.andWhere('invoice.status = :status', { status: filters.status });
@@ -436,7 +551,14 @@ export class VendorInvoicesService {
   async findOne(invoiceRef: string) {
     const invoice = await this.invoiceRepository.findOne({
       where: { _id: invoiceRef },
-      relations: ['purchaseOrder', 'vendor', 'items', 'items.product', 'items.purchaseOrderItem', 'items.goodsReceiptItem'],
+      relations: [
+        'purchaseOrder',
+        'vendor',
+        'items',
+        'items.product',
+        'items.purchaseOrderItem',
+        'items.goodsReceiptItem',
+      ],
     });
     if (!invoice) throw new NotFoundException('Vendor Invoice not found');
     return invoice;
@@ -452,33 +574,67 @@ export class VendorInvoicesService {
    * Tinh toan trang thai doi chieu 3 chieu cho PO.
    */
   async getMatchingStatus(purchaseOrderId: string) {
-    const poItems = await this.dataSource.getRepository(PurchaseOrderItem).find({
-      where: { purchaseOrderId },
-      relations: ['product'],
-    });
+    const poItems = await this.dataSource
+      .getRepository(PurchaseOrderItem)
+      .find({
+        where: { purchaseOrderId },
+        relations: ['product'],
+      });
 
-    const grItems = await this.dataSource.getRepository(GoodsReceiptItem).createQueryBuilder('item')
+    const grItems = await this.dataSource
+      .getRepository(GoodsReceiptItem)
+      .createQueryBuilder('item')
       .leftJoin('item.goodsReceipt', 'gr')
       .where('gr.purchaseOrderId = :purchaseOrderId', { purchaseOrderId })
       .getMany();
 
-    const invItems = await this.itemRepository.createQueryBuilder('item')
+    const invItems = await this.itemRepository
+      .createQueryBuilder('item')
       .leftJoin('item.vendorInvoice', 'inv')
       .where('inv.purchaseOrderId = :purchaseOrderId', { purchaseOrderId })
-      .andWhere('inv.status != :status', { status: VendorInvoiceStatus.CANCELLED })
+      .andWhere('inv.status != :status', {
+        status: VendorInvoiceStatus.CANCELLED,
+      })
       .getMany();
 
     const poItemGroups = this.groupPurchaseOrderItems(poItems);
 
     return poItems.map((poItem) => {
       const receivedQty = grItems
-        .filter((gr) => this.resolveLegacyLineKey(poItemGroups, gr.productId, gr.purchaseOrderItem_id) === poItem._id)
-        .reduce((sum, gr) => sum + Number(gr.quantityReceived) - Number(gr.quantityRejected || 0), 0);
+        .filter(
+          (gr) =>
+            this.resolveLegacyLineKey(
+              poItemGroups,
+              gr.productId,
+              gr.purchaseOrderItem_id,
+            ) === poItem._id,
+        )
+        .reduce(
+          (sum, gr) =>
+            sum +
+            Number(gr.quantityReceived) -
+            Number(gr.quantityRejected || 0),
+          0,
+        );
       const rejectedQty = grItems
-        .filter((gr) => this.resolveLegacyLineKey(poItemGroups, gr.productId, gr.purchaseOrderItem_id) === poItem._id)
+        .filter(
+          (gr) =>
+            this.resolveLegacyLineKey(
+              poItemGroups,
+              gr.productId,
+              gr.purchaseOrderItem_id,
+            ) === poItem._id,
+        )
         .reduce((sum, gr) => sum + Number(gr.quantityRejected || 0), 0);
       const invoicedQty = invItems
-        .filter((inv) => this.resolveLegacyLineKey(poItemGroups, inv.productId, inv.purchaseOrderItem_id) === poItem._id)
+        .filter(
+          (inv) =>
+            this.resolveLegacyLineKey(
+              poItemGroups,
+              inv.productId,
+              inv.purchaseOrderItem_id,
+            ) === poItem._id,
+        )
         .reduce((sum, inv) => sum + Number(inv.quantity), 0);
 
       return {
@@ -491,15 +647,27 @@ export class VendorInvoicesService {
         rejectedQty,
         invoicedQty,
         unitPrice: Number(poItem.unitPrice),
-        status: this.calculateMatchStatus(Number(poItem.quantity), receivedQty, invoicedQty),
+        status: this.calculateMatchStatus(
+          Number(poItem.quantity),
+          receivedQty,
+          invoicedQty,
+        ),
       };
     });
   }
 
-  private calculateMatchStatus(ordered: number, received: number, invoiced: number) {
+  private calculateMatchStatus(
+    ordered: number,
+    received: number,
+    invoiced: number,
+  ) {
     if (invoiced > received + QTY_EPSILON) return 'OVER_INVOICED';
     if (received <= QTY_EPSILON && invoiced <= QTY_EPSILON) return 'PENDING';
-    if (Math.abs(invoiced - received) <= QTY_EPSILON && invoiced <= ordered + QTY_EPSILON) return 'MATCHED';
+    if (
+      Math.abs(invoiced - received) <= QTY_EPSILON &&
+      invoiced <= ordered + QTY_EPSILON
+    )
+      return 'MATCHED';
     if (invoiced < received) return 'PARTIAL';
     return 'PENDING';
   }

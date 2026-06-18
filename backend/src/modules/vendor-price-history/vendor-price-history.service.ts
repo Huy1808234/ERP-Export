@@ -1,7 +1,14 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Partner, PartnerType } from '@/modules/partners/entities/partner.entity';
+import {
+  Partner,
+  PartnerType,
+} from '@/modules/partners/entities/partner.entity';
 import { Product } from '@/modules/products/entities/product.entity';
 import { CreateVendorPriceHistoryDto } from './dto/create-vendor-price-history.dto';
 import { UpdateVendorPriceHistoryDto } from './dto/update-vendor-price-history.dto';
@@ -82,13 +89,17 @@ export class VendorPriceHistoryService {
       payload.effectiveDate = new Date(payload.effectiveDate as any) as any;
     }
 
-    await this.vendorPriceHistoryRepository.update({ _id: history._id }, payload);
+    await this.vendorPriceHistoryRepository.update(
+      { _id: history._id },
+      payload,
+    );
     return this.findOne(id);
   }
 
   async remove(id: string) {
     const result = await this.vendorPriceHistoryRepository.delete({ _id: id });
-    if (result.affected === 0) throw new NotFoundException('Khong tim thay lich su gia');
+    if (result.affected === 0)
+      throw new NotFoundException('Khong tim thay lich su gia');
     return { id, deletedCount: result.affected };
   }
 }

@@ -108,19 +108,34 @@ export default function BuyerSigningPage() {
       }
 
       setSession(res.data);
-      form.setFieldsValue({
-        signerName: res.data.invitation.signerName,
-        signerTitle: res.data.invitation.signerTitle || undefined,
-        consentText: defaultConsentText,
-      });
     } finally {
       setLoading(false);
     }
-  }, [form, token]);
+  }, [token]);
 
   useEffect(() => {
     fetchSession();
   }, [fetchSession]);
+
+  const signerName = session?.invitation.signerName;
+  const signerTitle = session?.invitation.signerTitle;
+
+  useEffect(() => {
+    if (!signerName || loading || error || auditPacket) return;
+
+    form.setFieldsValue({
+      signerName,
+      signerTitle: signerTitle || undefined,
+      consentText: defaultConsentText,
+    });
+  }, [
+    auditPacket,
+    error,
+    form,
+    loading,
+    signerName,
+    signerTitle,
+  ]);
 
   const verifyOtp = async () => {
     if (!token || otp.trim().length !== 6) {

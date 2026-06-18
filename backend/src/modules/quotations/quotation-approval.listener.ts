@@ -49,7 +49,8 @@ export class QuotationApprovalListener {
     quotation.status = QuotationStatus.REJECTED;
     quotation.rejectedByUsername = payload.actorUsername;
     quotation.rejectedAt = new Date();
-    quotation.rejectionReason = payload.reason || 'Rejected by approval workflow';
+    quotation.rejectionReason =
+      payload.reason || 'Rejected by approval workflow';
     await this.quotationRepository.save(quotation);
   }
 }

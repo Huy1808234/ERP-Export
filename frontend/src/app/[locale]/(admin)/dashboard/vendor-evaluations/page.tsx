@@ -9,7 +9,6 @@ import {
   Col,
   DatePicker,
   Divider,
-  Drawer,
   Form,
   Input,
   InputNumber,
@@ -21,14 +20,17 @@ import {
   Space,
   Statistic,
   Table,
+  Tabs,
   Tag,
   Typography,
+  theme,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import {
   AuditOutlined,
   CheckCircleOutlined,
   ClockCircleOutlined,
+  CloseCircleOutlined,
   LineChartOutlined,
   PlusOutlined,
   ProfileOutlined,
@@ -36,8 +38,9 @@ import {
   SendOutlined,
   WarningOutlined,
 } from '@ant-design/icons';
-import dayjs from 'dayjs';
+import dayjs, { type Dayjs } from 'dayjs';
 import { useSession } from 'next-auth/react';
+import { useTranslations } from 'next-intl';
 import AdminPageScroll from '@/components/layout/admin.page-scroll';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { sendRequest } from '@/lib/api-client';
@@ -223,6 +226,18 @@ interface IVendorDashboard {
   scorecards: IVendorScorecard[];
 }
 
+interface IVendorEvaluationFormValues {
+  vendorId: string;
+  evaluationMonth?: Dayjs;
+  qualityScore: number;
+  deliveryScore: number;
+  priceScore: number;
+  communicationScore?: number;
+  onTimeDeliveryRate?: number;
+  defectRate?: number;
+  note?: string;
+}
+
 const progressStatus = (score?: number | null) => {
   if (score === null || score === undefined) return 'normal';
   if (score >= 85) return 'success';
@@ -244,18 +259,13 @@ const statusColor: Record<VendorEvaluationStatus, string> = {
   REJECTED: 'red',
 };
 
-const statusLabel: Record<VendorEvaluationStatus, string> = {
-  DRAFT: 'Nhap',
-  SUBMITTED: 'Cho duyet',
-  APPROVED: 'Da duyet',
-  REJECTED: 'Tu choi',
-};
-
 const VendorEvaluationsPage = () => {
+  const t = useTranslations('VendorEvaluations');
   const { data: session } = useSession();
   const accessToken = getAccessToken(session);
   const { message } = App.useApp();
-  const [form] = Form.useForm();
+  const [form] = Form.useForm<IVendorEvaluationFormValues>();
+  const { token } = theme.useToken();
 
   const [dashboard, setDashboard] = useState<IVendorDashboard | null>(null);
   const [evaluations, setEvaluations] = useState<IVendorEvaluation[]>([]);
@@ -263,9 +273,12 @@ const VendorEvaluationsPage = () => {
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [search, setSearch] = useState('');
+  const [activeSection, setActiveSection] = useState('scorecard');
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [selectedScorecard, setSelectedScorecard] = useState<IVendorScorecard | null>(null);
   const [selectedDetail, setSelectedDetail] = useState<IVendorScorecardDetail | null>(null);
+  const [detailMonth, setDetailMonth] = useState<Dayjs>(dayjs().startOf('month'));
 
   const headers = useMemo(() => (
     accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined
@@ -337,39 +350,103 @@ const VendorEvaluationsPage = () => {
     ? Number((operationalSummary.onTimeSum / operationalSummary.onTimeCount).toFixed(2))
     : 0;
 
+  const emptyTableText = t('empty.noData');
+  const tableLocale = { emptyText: emptyTableText };
+  const detailMetricCardStyle: React.CSSProperties = { height: '100%' };
+  const detailMetricBodyStyle: React.CSSProperties = { padding: 14 };
+
+  const formatMaybePercent = (value?: number | null): string => (
+    value !== null && value !== undefined ? t('format.percent', { value }) : '-'
+  );
+
+  const hasApprovedEvaluation = (record: IVendorScorecard): boolean => Boolean(record.latestEvaluation);
+
+  const officialScore = (record: IVendorScorecard): number | null => (
+    record.latestEvaluation?.overallScore ?? null
+  );
+
+  const officialGrade = (record: IVendorScorecard): VendorGrade | null => (
+    record.latestEvaluation?.grade ?? null
+  );
+
+  const officialComponentScore = (
+    record: IVendorScorecard,
+    key: 'qualityScore' | 'deliveryScore' | 'priceScore',
+  ): number | string => (
+    record.latestEvaluation ? record.latestEvaluation[key] : '-'
+  );
+
+  const statusText = (status: VendorEvaluationStatus): string => t(`status.${status}`);
+  const apStatusText = (status: string): string => {
+    const knownStatuses = ['UNPAID', 'PARTIAL', 'PAID', 'OVERDUE', 'CANCELLED'];
+    return knownStatuses.includes(status) ? t(`apStatus.${status}`) : status;
+  };
+
+  const normalizedSearch = search.trim().toLowerCase();
+
+  const filteredScorecards = useMemo(() => {
+    if (!normalizedSearch) return dashboard?.scorecards ?? [];
+
+    return (dashboard?.scorecards ?? []).filter((item) => (
+      item.vendor?.name?.toLowerCase().includes(normalizedSearch)
+      || item.vendor?.partnerType?.toLowerCase().includes(normalizedSearch)
+      || item.latestEvaluation?.note?.toLowerCase().includes(normalizedSearch)
+      || item.latestEvaluation?._id?.toLowerCase().includes(normalizedSearch)
+    ));
+  }, [dashboard?.scorecards, normalizedSearch]);
+
+  const filteredDuePayables = useMemo(() => {
+    if (!normalizedSearch) return dashboard?.dueSoonPayables ?? [];
+
+    return (dashboard?.dueSoonPayables ?? []).filter((item) => (
+      item.vendor?.name?.toLowerCase().includes(normalizedSearch)
+      || item.vendorId.toLowerCase().includes(normalizedSearch)
+      || item.invoiceNumber?.toLowerCase().includes(normalizedSearch)
+      || item.status.toLowerCase().includes(normalizedSearch)
+    ));
+  }, [dashboard?.dueSoonPayables, normalizedSearch]);
+
   const filteredEvaluations = useMemo(() => {
-    const keyword = search.trim().toLowerCase();
-    if (!keyword) return evaluations;
+    if (!normalizedSearch) return evaluations;
 
     return evaluations.filter((item) => (
-      item.vendor?.name?.toLowerCase().includes(keyword)
-      || item.note?.toLowerCase().includes(keyword)
-      || item._id.toLowerCase().includes(keyword)
+      item.vendor?.name?.toLowerCase().includes(normalizedSearch)
+      || item.note?.toLowerCase().includes(normalizedSearch)
+      || item._id.toLowerCase().includes(normalizedSearch)
     ));
-  }, [evaluations, search]);
+  }, [evaluations, normalizedSearch]);
 
   const createEvaluation = async () => {
     const values = await form.validateFields();
     if (!headers) return;
+    const evaluationMonth = values.evaluationMonth;
 
     const res = await sendRequest<IBackendRes<IVendorEvaluation>>({
       url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/vendor-evaluations`,
       method: 'POST',
       headers,
       body: {
-        ...values,
-        periodStart: values.periodStart ? values.periodStart.format('YYYY-MM-DD') : undefined,
-        periodEnd: values.periodEnd ? values.periodEnd.format('YYYY-MM-DD') : undefined,
+        vendorId: values.vendorId,
+        qualityScore: values.qualityScore,
+        deliveryScore: values.deliveryScore,
+        priceScore: values.priceScore,
+        communicationScore: values.communicationScore,
+        onTimeDeliveryRate: values.onTimeDeliveryRate,
+        defectRate: values.defectRate,
+        note: values.note,
+        periodStart: evaluationMonth ? evaluationMonth.startOf('month').format('YYYY-MM-DD') : undefined,
+        periodEnd: evaluationMonth ? evaluationMonth.endOf('month').format('YYYY-MM-DD') : undefined,
       },
     });
 
     if (res?.data) {
-      message.success('Da tao danh gia nha cung cap');
+      message.success(t('messages.createSuccess'));
       setModalOpen(false);
+      setActiveSection('workflow');
       form.resetFields();
-      fetchRows();
+      await fetchRows();
     } else {
-      message.error(res?.message || 'Khong tao duoc danh gia');
+      message.error(res?.message || t('messages.createError'));
     }
   };
 
@@ -380,50 +457,79 @@ const VendorEvaluationsPage = () => {
       url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/vendor-evaluations/${record._id}/${action}`,
       method: 'PATCH',
       headers,
-      body: action === 'approve' ? { approvalNote: 'Approved from vendor evaluation dashboard' } : undefined,
+      body: action === 'approve'
+        ? { approvalNote: 'Approved from vendor evaluation dashboard' }
+        : action === 'reject'
+          ? { approvalNote: 'Rejected from vendor evaluation dashboard' }
+          : undefined,
     });
 
     if (res?.data) {
-      message.success('Da cap nhat workflow danh gia');
-      fetchRows();
+      message.success(t(`messages.${action}Success`));
+      setActiveSection(action === 'approve' ? 'scorecard' : 'workflow');
+      await fetchRows();
     } else {
-      message.error(res?.message || 'Khong cap nhat duoc danh gia');
+      message.error(res?.message || t('messages.workflowError'));
     }
   };
 
-  const openVendorDrilldown = async (record: IVendorScorecard) => {
+  const loadVendorDrilldown = async (
+    record: IVendorScorecard,
+    monthValue: Dayjs,
+    clearDetail = false,
+  ) => {
     if (!headers || !record.vendor?._id) return;
 
-    setDetailOpen(true);
     setDetailLoading(true);
-    setSelectedDetail(null);
+    if (clearDetail) setSelectedDetail(null);
     try {
       const res = await sendRequest<IBackendRes<IVendorScorecardDetail>>({
         url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/vendor-evaluations/vendors/${record.vendor._id}/scorecard`,
         method: 'GET',
-        queryParams: { months: 6 },
+        queryParams: { months: 6, month: monthValue.format('YYYY-MM') },
         headers,
       });
 
       if (res?.data) {
         setSelectedDetail(res.data);
       } else {
-        message.error(res?.message || 'Khong tai duoc scorecard NCC');
+        message.error(res?.message || t('messages.detailError'));
       }
     } finally {
       setDetailLoading(false);
     }
   };
 
+  const openVendorDrilldown = async (record: IVendorScorecard) => {
+    const currentMonth = dayjs().startOf('month');
+    setSelectedScorecard(record);
+    setDetailMonth(currentMonth);
+    setDetailOpen(true);
+    await loadVendorDrilldown(record, currentMonth, true);
+  };
+
+  const closeVendorDrilldown = () => {
+    setDetailOpen(false);
+    setSelectedScorecard(null);
+    setSelectedDetail(null);
+  };
+
+  const handleDetailMonthChange = async (value: Dayjs | null) => {
+    if (!value || !selectedScorecard) return;
+    const selectedMonth = value.startOf('month');
+    setDetailMonth(selectedMonth);
+    await loadVendorDrilldown(selectedScorecard, selectedMonth);
+  };
+
   const trendColumns: ColumnsType<IVendorTrendPoint> = [
     {
-      title: 'Thang',
+      title: t('columns.month'),
       dataIndex: 'month',
       key: 'month',
       width: 96,
     },
     {
-      title: 'Tong',
+      title: t('columns.total'),
       key: 'overallScore',
       render: (_, record) => (
         <Space>
@@ -433,76 +539,74 @@ const VendorEvaluationsPage = () => {
       ),
     },
     {
-      title: 'Q/D/P',
+      title: t('columns.componentScores'),
       key: 'componentScores',
       render: (_, record) => `${record.qualityScore ?? '-'} / ${record.deliveryScore ?? '-'} / ${record.priceScore ?? '-'}`,
     },
     {
-      title: 'On-time',
+      title: t('columns.onTime'),
       key: 'onTimeDeliveryRate',
-      render: (_, record) => record.onTimeDeliveryRate !== null && record.onTimeDeliveryRate !== undefined
-        ? `${record.onTimeDeliveryRate}%`
-        : '-',
+      render: (_, record) => formatMaybePercent(record.onTimeDeliveryRate),
     },
     {
-      title: 'Defect',
+      title: t('columns.defect'),
       key: 'defectRate',
-      render: (_, record) => record.defectRate !== null && record.defectRate !== undefined ? `${record.defectRate}%` : '-',
+      render: (_, record) => formatMaybePercent(record.defectRate),
     },
   ];
 
   const poGrnColumns: ColumnsType<IPoGrnPerformance> = [
     {
-      title: 'PO/GRN',
+      title: t('columns.poGrn'),
       key: 'document',
       render: (_, record) => (
         <Space orientation="vertical" size={0}>
           <Text strong>{record.poNumber || record.purchaseOrderId || '-'}</Text>
           <Text type="secondary" style={{ fontSize: 12 }}>
-            {record.type === 'GRN' ? record.grNumber : 'Chua co GRN'}
+            {record.type === 'GRN' ? record.grNumber : t('fallback.noGrn')}
           </Text>
         </Space>
       ),
     },
     {
-      title: 'Ngay giao',
+      title: t('columns.deliveryDate'),
       key: 'dates',
       width: 170,
       render: (_, record) => (
         <Space orientation="vertical" size={0}>
-          <Text>Du kien: {record.expectedDeliveryDate ? dayjs(record.expectedDeliveryDate).format('DD/MM/YYYY') : '-'}</Text>
+          <Text>{t('labels.expectedDate', { date: record.expectedDeliveryDate ? dayjs(record.expectedDeliveryDate).format('DD/MM/YYYY') : '-' })}</Text>
           <Text type="secondary" style={{ fontSize: 12 }}>
-            Nhan: {record.receivedDate ? dayjs(record.receivedDate).format('DD/MM/YYYY') : '-'}
+            {t('labels.receivedDate', { date: record.receivedDate ? dayjs(record.receivedDate).format('DD/MM/YYYY') : '-' })}
           </Text>
         </Space>
       ),
     },
     {
-      title: 'Dung han',
+      title: t('columns.onTimeStatus'),
       key: 'onTime',
       width: 120,
       render: (_, record) => {
-        if (record.isOnTime === null || record.isOnTime === undefined) return <Tag>Chua do</Tag>;
+        if (record.isOnTime === null || record.isOnTime === undefined) return <Tag>{t('labels.unmeasured')}</Tag>;
         return record.isOnTime
-          ? <Tag color="green">Dung han</Tag>
-          : <Tag color="red">Tre {record.daysLate ?? 0} ngay</Tag>;
+          ? <Tag color="green">{t('labels.onTime')}</Tag>
+          : <Tag color="red">{t('labels.lateDays', { days: record.daysLate ?? 0 })}</Tag>;
       },
     },
     {
-      title: 'SL/QC',
+      title: t('columns.quantityQc'),
       key: 'quantity',
       width: 150,
       render: (_, record) => (
         <Space orientation="vertical" size={0}>
-          <Text>Nhap: {record.receivedQuantity}</Text>
+          <Text>{t('labels.receivedQuantity', { quantity: record.receivedQuantity })}</Text>
           <Text type={record.rejectedQuantity > 0 ? 'danger' : 'secondary'} style={{ fontSize: 12 }}>
-            Reject: {record.rejectedQuantity} | Issue: {record.qualityIssueCount ?? 0}
+            {t('labels.rejectedAndIssue', { rejected: record.rejectedQuantity, issue: record.qualityIssueCount ?? 0 })}
           </Text>
         </Space>
       ),
     },
     {
-      title: 'Trang thai',
+      title: t('columns.status'),
       key: 'status',
       width: 120,
       render: (_, record) => <Tag>{record.status || '-'}</Tag>,
@@ -511,7 +615,7 @@ const VendorEvaluationsPage = () => {
 
   const claimColumns: ColumnsType<IVendorClaimItem> = [
     {
-      title: 'Claim/QC',
+      title: t('columns.claimQc'),
       key: 'claim',
       render: (_, record) => (
         <Space orientation="vertical" size={0}>
@@ -521,7 +625,7 @@ const VendorEvaluationsPage = () => {
       ),
     },
     {
-      title: 'Nguon',
+      title: t('columns.source'),
       key: 'source',
       width: 150,
       render: (_, record) => (
@@ -532,7 +636,7 @@ const VendorEvaluationsPage = () => {
       ),
     },
     {
-      title: 'Trang thai',
+      title: t('columns.status'),
       key: 'status',
       width: 160,
       render: (_, record) => (
@@ -545,24 +649,24 @@ const VendorEvaluationsPage = () => {
       ),
     },
     {
-      title: 'Aging',
+      title: t('columns.aging'),
       key: 'aging',
       width: 100,
-      render: (_, record) => <Text type={record.ageDays > 30 ? 'danger' : undefined}>{record.ageDays} ngay</Text>,
+      render: (_, record) => <Text type={record.ageDays > 30 ? 'danger' : undefined}>{t('labels.days', { days: record.ageDays })}</Text>,
     },
     {
-      title: 'SL loi',
+      title: t('columns.defectQuantity'),
       key: 'quantity',
       width: 140,
       render: (_, record) => (
         <Space orientation="vertical" size={0}>
-          <Text>Reject: {record.rejectedQuantity}</Text>
-          <Text type="secondary" style={{ fontSize: 12 }}>Backorder: {record.backorderQuantity}</Text>
+          <Text>{t('labels.rejectedQuantity', { quantity: record.rejectedQuantity })}</Text>
+          <Text type="secondary" style={{ fontSize: 12 }}>{t('labels.backorderQuantity', { quantity: record.backorderQuantity })}</Text>
         </Space>
       ),
     },
     {
-      title: 'Xu ly',
+      title: t('columns.resolution'),
       key: 'resolution',
       width: 150,
       render: (_, record) => (
@@ -578,7 +682,7 @@ const VendorEvaluationsPage = () => {
 
   const scoreColumns: ColumnsType<IVendorScorecard> = [
     {
-      title: 'Nha cung cap',
+      title: t('columns.vendor'),
       key: 'vendor',
       render: (_, record) => (
         <Space orientation="vertical" size={0}>
@@ -594,74 +698,79 @@ const VendorEvaluationsPage = () => {
       ),
     },
     {
-      title: 'Tong diem',
+      title: t('columns.totalScore'),
       key: 'overallScore',
       width: 220,
-      render: (_, record) => (
-        <Space orientation="vertical" size={4} style={{ width: '100%' }}>
-          <Space>
-            <Text strong>{record.overallScore ?? '-'}</Text>
-            {record.grade ? <Tag color={gradeColor[record.grade]}>{record.grade}</Tag> : <Tag>Chua co</Tag>}
-            {record.scoreTrend !== null && record.scoreTrend !== undefined ? (
-              <Tag color={record.scoreTrend >= 0 ? 'green' : 'red'}>
-                {record.scoreTrend >= 0 ? '+' : ''}{record.scoreTrend}
-              </Tag>
-            ) : null}
+      render: (_, record) => {
+        const score = officialScore(record);
+        const grade = officialGrade(record);
+
+        return (
+          <Space orientation="vertical" size={4} style={{ width: '100%' }}>
+            <Space wrap>
+              <Text strong>{score ?? '-'}</Text>
+              {grade ? <Tag color={gradeColor[grade]}>{grade}</Tag> : <Tag>{t('labels.noApprovedScore')}</Tag>}
+              {record.scoreTrend !== null && record.scoreTrend !== undefined && hasApprovedEvaluation(record) ? (
+                <Tag color={record.scoreTrend >= 0 ? 'green' : 'red'}>
+                  {record.scoreTrend >= 0 ? '+' : ''}{record.scoreTrend}
+                </Tag>
+              ) : null}
+            </Space>
+            <Progress
+              percent={Number(score || 0)}
+              size="small"
+              status={progressStatus(score)}
+              showInfo={false}
+            />
           </Space>
-          <Progress
-            percent={Number(record.overallScore || 0)}
-            size="small"
-            status={progressStatus(record.overallScore)}
-            showInfo={false}
-          />
-        </Space>
-      ),
+        );
+      },
     },
     {
-      title: 'Chat luong',
+      title: t('columns.quality'),
       key: 'quality',
-      render: (_, record) => record.qualityScore ?? '-',
+      render: (_, record) => officialComponentScore(record, 'qualityScore'),
     },
     {
-      title: 'Giao hang',
+      title: t('columns.delivery'),
       key: 'delivery',
-      render: (_, record) => record.deliveryScore ?? '-',
+      render: (_, record) => officialComponentScore(record, 'deliveryScore'),
     },
     {
-      title: 'Gia ca',
+      title: t('columns.price'),
       key: 'price',
-      render: (_, record) => record.priceScore ?? '-',
+      render: (_, record) => officialComponentScore(record, 'priceScore'),
     },
     {
-      title: 'KPI PO/GRN',
+      title: t('columns.kpiPoGrn'),
       key: 'ops',
       width: 190,
       render: (_, record) => (
         <Space orientation="vertical" size={0}>
-          <Text>On-time: {record.onTimeDeliveryRate ?? '-'}%</Text>
-          <Text type="secondary" style={{ fontSize: 12 }}>Defect: {record.defectRate ?? '-'}%</Text>
+          <Text>{t('labels.onTimeValue', { value: record.onTimeDeliveryRate ?? '-' })}</Text>
+          <Text type="secondary" style={{ fontSize: 12 }}>{t('labels.defectValue', { value: record.defectRate ?? '-' })}</Text>
         </Space>
       ),
     },
     {
-      title: 'Claim/QC',
+      title: t('columns.claimQc'),
       key: 'claims',
       width: 160,
       render: (_, record) => (
         <Space orientation="vertical" size={0}>
-          <Text>Claim: {record.claimCount ?? 0}</Text>
-          <Text type="secondary" style={{ fontSize: 12 }}>Reject: {record.rejectionCount ?? 0}</Text>
+          <Text>{t('labels.claimCount', { count: record.claimCount ?? 0 })}</Text>
+          <Text type="secondary" style={{ fontSize: 12 }}>{t('labels.rejectCount', { count: record.rejectionCount ?? 0 })}</Text>
         </Space>
       ),
     },
     {
-      title: 'Drilldown',
+      title: t('columns.drilldown'),
       key: 'drilldown',
       align: 'right',
       width: 130,
       render: (_, record) => (
         <Button icon={<ProfileOutlined />} onClick={() => openVendorDrilldown(record)}>
-          Chi tiet
+          {t('actions.details')}
         </Button>
       ),
     },
@@ -669,7 +778,7 @@ const VendorEvaluationsPage = () => {
 
   const evaluationColumns: ColumnsType<IVendorEvaluation> = [
     {
-      title: 'Ho so danh gia',
+      title: t('columns.evaluationProfile'),
       key: 'evaluation',
       render: (_, record) => (
         <Space orientation="vertical" size={0}>
@@ -681,19 +790,19 @@ const VendorEvaluationsPage = () => {
       ),
     },
     {
-      title: 'Diem',
+      title: t('columns.score'),
       key: 'scores',
       render: (_, record) => (
         <Space orientation="vertical" size={2}>
           <Text>Q: {record.qualityScore} / D: {record.deliveryScore} / P: {record.priceScore}</Text>
           <Text type="secondary" style={{ fontSize: 12 }}>
-            On-time {record.onTimeDeliveryRate}% | Defect {record.defectRate}%
+            {t('labels.onTimeDefect', { onTime: record.onTimeDeliveryRate, defect: record.defectRate })}
           </Text>
         </Space>
       ),
     },
     {
-      title: 'Tong',
+      title: t('columns.total'),
       key: 'overall',
       width: 160,
       render: (_, record) => (
@@ -712,41 +821,41 @@ const VendorEvaluationsPage = () => {
       ),
     },
     {
-      title: 'Trang thai',
+      title: t('columns.status'),
       dataIndex: 'status',
       key: 'status',
-      render: (value: VendorEvaluationStatus) => <Tag color={statusColor[value]}>{statusLabel[value]}</Tag>,
+      render: (value: VendorEvaluationStatus) => <Tag color={statusColor[value]}>{statusText(value)}</Tag>,
     },
     {
-      title: 'Nguoi xu ly',
+      title: t('columns.actor'),
       key: 'actor',
       render: (_, record) => (
         <Space orientation="vertical" size={0}>
           <Text>{record.evaluatedByUsername || '-'}</Text>
           {record.approvedByUsername ? (
-            <Text type="secondary" style={{ fontSize: 12 }}>Duyet: {record.approvedByUsername}</Text>
+            <Text type="secondary" style={{ fontSize: 12 }}>{t('labels.approvedBy', { username: record.approvedByUsername })}</Text>
           ) : null}
         </Space>
       ),
     },
     {
-      title: 'Thao tac',
+      title: t('columns.actions'),
       key: 'actions',
       align: 'right',
-      width: 260,
+      width: 360,
       render: (_, record) => (
-        <Space>
+        <Space wrap>
           <Button
             icon={<SendOutlined />}
             disabled={record.status !== 'DRAFT' && record.status !== 'REJECTED'}
             onClick={() => mutateEvaluation(record, 'submit')}
           >
-            Gui duyet
+            {t('actions.submit')}
           </Button>
           <Popconfirm
-            title="Duyet danh gia nay?"
-            okText="Duyet"
-            cancelText="Huy"
+            title={t('confirm.approveTitle')}
+            okText={t('actions.approve')}
+            cancelText={t('actions.cancel')}
             onConfirm={() => mutateEvaluation(record, 'approve')}
           >
             <Button
@@ -754,7 +863,21 @@ const VendorEvaluationsPage = () => {
               icon={<CheckCircleOutlined />}
               disabled={record.status !== 'SUBMITTED'}
             >
-              Duyet
+              {t('actions.approve')}
+            </Button>
+          </Popconfirm>
+          <Popconfirm
+            title={t('confirm.rejectTitle')}
+            okText={t('actions.reject')}
+            cancelText={t('actions.cancel')}
+            onConfirm={() => mutateEvaluation(record, 'reject')}
+          >
+            <Button
+              danger
+              icon={<CloseCircleOutlined />}
+              disabled={record.status !== 'SUBMITTED'}
+            >
+              {t('actions.reject')}
             </Button>
           </Popconfirm>
         </Space>
@@ -764,7 +887,7 @@ const VendorEvaluationsPage = () => {
 
   const dueColumns: ColumnsType<IDuePayable> = [
     {
-      title: 'Hoa don AP',
+      title: t('columns.apInvoice'),
       key: 'invoice',
       render: (_, record) => (
         <Space orientation="vertical" size={0}>
@@ -774,7 +897,7 @@ const VendorEvaluationsPage = () => {
       ),
     },
     {
-      title: 'Con phai tra',
+      title: t('columns.remainingAmount'),
       key: 'remainingAmount',
       align: 'right',
       render: (_, record) => (
@@ -782,45 +905,47 @@ const VendorEvaluationsPage = () => {
       ),
     },
     {
-      title: 'Han thanh toan',
+      title: t('columns.dueDate'),
       key: 'dueDate',
       render: (_, record) => (
         <Space orientation="vertical" size={0}>
           <Text>{record.dueDate ? dayjs(record.dueDate).format('DD/MM/YYYY') : '-'}</Text>
           <Tag color={record.isOverdue ? 'red' : 'orange'}>
-            {record.isOverdue ? `Qua han ${Math.abs(record.daysUntilDue || 0)} ngay` : `Con ${record.daysUntilDue ?? '-'} ngay`}
+            {record.isOverdue
+              ? t('labels.overdueDays', { days: Math.abs(record.daysUntilDue || 0) })
+              : t('labels.dueInDays', { days: record.daysUntilDue ?? '-' })}
           </Tag>
         </Space>
       ),
     },
     {
-      title: 'Trang thai',
+      title: t('columns.status'),
       dataIndex: 'status',
       key: 'status',
-      render: (value: string) => <Tag color={value === 'PARTIAL' ? 'blue' : 'gold'}>{value}</Tag>,
+      render: (value: string) => <Tag color={value === 'PARTIAL' ? 'blue' : 'gold'}>{apStatusText(value)}</Tag>,
     },
   ];
 
   return (
     <AdminPageScroll>
       <PageHeader
-        title="Danh gia nha cung cap"
+        title={t('title')}
         icon={<AuditOutlined />}
-        description="Vendor scorecard, workflow duyet danh gia va canh bao cong no AP sap den han"
+        description={t('description')}
         extra={(
           <Space>
             <Input.Search
               allowClear
-              placeholder="Tim NCC hoac ghi chu"
+              placeholder={t('actions.searchPlaceholder')}
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               style={{ width: 280 }}
             />
             <Button icon={<ReloadOutlined />} onClick={fetchRows}>
-              Tai lai
+              {t('actions.reload')}
             </Button>
             <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>
-              Tao danh gia
+              {t('actions.create')}
             </Button>
           </Space>
         )}
@@ -829,42 +954,42 @@ const VendorEvaluationsPage = () => {
       <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
         <Col xs={24} md={8} xl={4}>
           <Card variant="borderless">
-            <Statistic title="Tong NCC" value={dashboard?.stats.vendorCount ?? 0} />
+            <Statistic title={t('stats.vendorCount')} value={dashboard?.stats.vendorCount ?? 0} />
           </Card>
         </Col>
         <Col xs={24} md={8} xl={4}>
           <Card variant="borderless">
-            <Statistic title="Da danh gia" value={dashboard?.stats.evaluatedVendors ?? 0} />
+            <Statistic title={t('stats.evaluatedVendors')} value={dashboard?.stats.evaluatedVendors ?? 0} />
           </Card>
         </Col>
         <Col xs={24} md={8} xl={4}>
           <Card variant="borderless">
-            <Statistic title="Diem TB" value={dashboard?.stats.avgScore ?? 0} precision={2} />
+            <Statistic title={t('stats.avgScore')} value={dashboard?.stats.avgScore ?? 0} precision={2} />
           </Card>
         </Col>
         <Col xs={24} md={8} xl={4}>
           <Card variant="borderless">
-            <Statistic title="Cho duyet" value={dashboard?.stats.submittedCount ?? 0} />
+            <Statistic title={t('stats.submittedCount')} value={dashboard?.stats.submittedCount ?? 0} />
           </Card>
         </Col>
         <Col xs={24} md={8} xl={4}>
           <Card variant="borderless">
-            <Statistic title="AP sap han" value={dashboard?.stats.dueSoonCount ?? 0} />
+            <Statistic title={t('stats.dueSoonCount')} value={dashboard?.stats.dueSoonCount ?? 0} />
           </Card>
         </Col>
         <Col xs={24} md={8} xl={4}>
           <Card variant="borderless">
-            <Statistic title="AP qua han" value={dashboard?.stats.overdueCount ?? 0} styles={{ content: { color: '#cf1322' } }} />
+            <Statistic title={t('stats.overdueCount')} value={dashboard?.stats.overdueCount ?? 0} styles={{ content: { color: '#cf1322' } }} />
           </Card>
         </Col>
         <Col xs={24} md={8} xl={4}>
           <Card variant="borderless">
-            <Statistic title="On-time PO/GRN" value={avgOperationalOnTime} suffix="%" precision={2} />
+            <Statistic title={t('stats.onTimePoGrn')} value={avgOperationalOnTime} suffix="%" precision={2} />
           </Card>
         </Col>
         <Col xs={24} md={8} xl={4}>
           <Card variant="borderless">
-            <Statistic title="Claim/QC NCC" value={operationalSummary.claimCount + operationalSummary.rejectionCount} styles={{ content: { color: '#fa8c16' } }} />
+            <Statistic title={t('stats.claimQc')} value={operationalSummary.claimCount + operationalSummary.rejectionCount} styles={{ content: { color: '#fa8c16' } }} />
           </Card>
         </Col>
       </Row>
@@ -874,70 +999,144 @@ const VendorEvaluationsPage = () => {
           type="error"
           showIcon
           icon={<WarningOutlined />}
-          title={`${dashboard?.stats.overdueCount} khoan AP da qua han`}
-          description="Ke toan/Purchasing can kiem tra dieu kien thanh toan, phe duyet chi va lien he nha cung cap."
+          title={t('alerts.overdueTitle', { count: dashboard?.stats.overdueCount ?? 0 })}
+          description={t('alerts.overdueDescription')}
           style={{ marginBottom: 16 }}
         />
       ) : null}
 
-      <Row gutter={[16, 16]}>
-        <Col xs={24} xl={14}>
-          <Card title="Scorecard NCC" variant="borderless">
-            <Table<IVendorScorecard>
-              rowKey={(record) => record.vendor._id}
-              columns={scoreColumns}
-              dataSource={dashboard?.scorecards ?? []}
-              loading={loading}
-              pagination={{ pageSize: 6 }}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} xl={10}>
-          <Card title="Canh bao AP sap den han" variant="borderless">
-            <Table<IDuePayable>
-              rowKey="_id"
-              columns={dueColumns}
-              dataSource={dashboard?.dueSoonPayables ?? []}
-              loading={loading}
-              pagination={{ pageSize: 5 }}
-            />
-          </Card>
-        </Col>
-      </Row>
+      <Tabs
+        activeKey={activeSection}
+        onChange={setActiveSection}
+        items={[
+          {
+            key: 'scorecard',
+            label: t('sections.scorecard'),
+            children: (
+              <Card title={t('sections.scorecard')} variant="borderless" style={{ overflow: 'hidden' }}>
+                <Table<IVendorScorecard>
+                  rowKey={(record) => record.vendor._id}
+                  columns={scoreColumns}
+                  dataSource={filteredScorecards}
+                  loading={loading}
+                  locale={tableLocale}
+                  pagination={{ pageSize: 8, showSizeChanger: true }}
+                  scroll={{ x: 980 }}
+                />
+              </Card>
+            ),
+          },
+          {
+            key: 'ap',
+            label: t('sections.apAlerts'),
+            children: (
+              <Card title={t('sections.apAlerts')} variant="borderless" style={{ overflow: 'hidden' }}>
+                <Table<IDuePayable>
+                  rowKey="_id"
+                  columns={dueColumns}
+                  dataSource={filteredDuePayables}
+                  loading={loading}
+                  locale={tableLocale}
+                  pagination={{ pageSize: 8, showSizeChanger: true }}
+                  scroll={{ x: 620 }}
+                />
+              </Card>
+            ),
+          },
+          {
+            key: 'workflow',
+            label: t('sections.workflow'),
+            children: (
+              <Card title={t('sections.workflow')} variant="borderless" style={{ overflow: 'hidden' }}>
+                <Alert
+                  type="info"
+                  showIcon
+                  title={t('alerts.workflowHintTitle')}
+                  description={t('alerts.workflowHintDescription')}
+                  style={{ marginBottom: 16 }}
+                />
+                <Table<IVendorEvaluation>
+                  rowKey="_id"
+                  columns={evaluationColumns}
+                  dataSource={filteredEvaluations}
+                  loading={loading}
+                  locale={tableLocale}
+                  pagination={{ pageSize: 10, showSizeChanger: true }}
+                  scroll={{ x: 1040 }}
+                />
+              </Card>
+            ),
+          },
+        ]}
+      />
 
-      <Card title="Workflow danh gia" variant="borderless" style={{ marginTop: 16 }}>
-        <Table<IVendorEvaluation>
-          rowKey="_id"
-          columns={evaluationColumns}
-          dataSource={filteredEvaluations}
-          loading={loading}
-          pagination={{ pageSize: 10, showSizeChanger: true }}
-        />
-      </Card>
-
-      <Drawer
-        title={selectedDetail ? `Scorecard NCC - ${selectedDetail.vendor.name}` : 'Scorecard NCC'}
+      <Modal
+        title={selectedDetail ? t('drawer.titleWithVendor', { vendor: selectedDetail.vendor.name }) : t('sections.scorecard')}
         open={detailOpen}
-        onClose={() => setDetailOpen(false)}
-        size={1040}
+        onCancel={closeVendorDrilldown}
+        footer={null}
+        width="min(1200px, calc(100vw - 32px))"
+        centered
+        destroyOnHidden
+        styles={{
+          header: {
+            background: token.colorBgContainer,
+            borderBottom: `1px solid ${token.colorBorderSecondary}`,
+            margin: 0,
+            padding: '16px 20px',
+          },
+          body: {
+            background: token.colorBgLayout,
+            maxHeight: 'calc(100vh - 140px)',
+            overflowY: 'auto',
+            padding: 20,
+          },
+        }}
       >
         {selectedDetail ? (
           <Space orientation="vertical" size={16} style={{ width: '100%' }}>
-            <Row gutter={[16, 16]}>
-              <Col xs={24} md={8} xl={4}>
-                <Card variant="borderless" loading={detailLoading}>
+            <Row justify="end" align="middle" gutter={[12, 12]}>
+              <Col>
+                <Space wrap>
+                  <Text type="secondary">{t('labels.viewMonth')}</Text>
+                  <DatePicker
+                    picker="month"
+                    format="MM/YYYY"
+                    value={detailMonth}
+                    allowClear={false}
+                    disabled={detailLoading}
+                    onChange={handleDetailMonthChange}
+                  />
+                </Space>
+              </Col>
+            </Row>
+            <Row gutter={[12, 12]}>
+              <Col xs={12} md={8} xl={4}>
+                <Card
+                  size="small"
+                  variant="borderless"
+                  loading={detailLoading}
+                  style={detailMetricCardStyle}
+                  styles={{ body: detailMetricBodyStyle }}
+                >
                   <Statistic
-                    title="Diem moi nhat"
+                    title={t('stats.latestScore')}
                     value={selectedDetail.summary.latestScore ?? 0}
                     precision={2}
                     suffix={selectedDetail.summary.latestGrade ? `/${selectedDetail.summary.latestGrade}` : ''}
                   />
                 </Card>
               </Col>
-              <Col xs={24} md={8} xl={4}>
-                <Card variant="borderless" loading={detailLoading}>
+              <Col xs={12} md={8} xl={4}>
+                <Card
+                  size="small"
+                  variant="borderless"
+                  loading={detailLoading}
+                  style={detailMetricCardStyle}
+                  styles={{ body: detailMetricBodyStyle }}
+                >
                   <Statistic
-                    title="Trend diem"
+                    title={t('stats.scoreTrend')}
                     value={selectedDetail.summary.scoreTrend ?? 0}
                     precision={2}
                     prefix={<LineChartOutlined />}
@@ -945,30 +1144,54 @@ const VendorEvaluationsPage = () => {
                   />
                 </Card>
               </Col>
-              <Col xs={24} md={8} xl={4}>
-                <Card variant="borderless" loading={detailLoading}>
-                  <Statistic title="On-time PO/GRN" value={selectedDetail.summary.onTimeRate ?? 0} suffix="%" precision={2} />
+              <Col xs={12} md={8} xl={4}>
+                <Card
+                  size="small"
+                  variant="borderless"
+                  loading={detailLoading}
+                  style={detailMetricCardStyle}
+                  styles={{ body: detailMetricBodyStyle }}
+                >
+                  <Statistic title={t('stats.onTimePoGrn')} value={selectedDetail.summary.onTimeRate ?? 0} suffix="%" precision={2} />
                 </Card>
               </Col>
-              <Col xs={24} md={8} xl={4}>
-                <Card variant="borderless" loading={detailLoading}>
-                  <Statistic title="GRN dung/tre" value={`${selectedDetail.summary.onTimeCount}/${selectedDetail.summary.delayedCount}`} />
+              <Col xs={12} md={8} xl={4}>
+                <Card
+                  size="small"
+                  variant="borderless"
+                  loading={detailLoading}
+                  style={detailMetricCardStyle}
+                  styles={{ body: detailMetricBodyStyle }}
+                >
+                  <Statistic title={t('stats.grnOnTimeLate')} value={`${selectedDetail.summary.onTimeCount}/${selectedDetail.summary.delayedCount}`} />
                 </Card>
               </Col>
-              <Col xs={24} md={8} xl={4}>
-                <Card variant="borderless" loading={detailLoading}>
+              <Col xs={12} md={8} xl={4}>
+                <Card
+                  size="small"
+                  variant="borderless"
+                  loading={detailLoading}
+                  style={detailMetricCardStyle}
+                  styles={{ body: detailMetricBodyStyle }}
+                >
                   <Statistic
-                    title="Claim dang mo"
+                    title={t('stats.openClaims')}
                     value={selectedDetail.summary.openClaimCount}
                     prefix={<ClockCircleOutlined />}
                     styles={{ content: { color: selectedDetail.summary.openClaimCount > 0 ? '#fa8c16' : undefined } }}
                   />
                 </Card>
               </Col>
-              <Col xs={24} md={8} xl={4}>
-                <Card variant="borderless" loading={detailLoading}>
+              <Col xs={12} md={8} xl={4}>
+                <Card
+                  size="small"
+                  variant="borderless"
+                  loading={detailLoading}
+                  style={detailMetricCardStyle}
+                  styles={{ body: detailMetricBodyStyle }}
+                >
                   <Statistic
-                    title="AP con lai"
+                    title={t('stats.remainingAp')}
                     value={selectedDetail.summary.payableRemainingAmount}
                     formatter={(value) => formatMoneyStatic(Number(value || 0), 'VND')}
                   />
@@ -980,117 +1203,169 @@ const VendorEvaluationsPage = () => {
               <Alert
                 type="warning"
                 showIcon
-                title={`Claim lau nhat dang mo ${selectedDetail.summary.oldestOpenClaimAgeDays} ngay`}
-                description="Can Purchasing/QC theo doi xu ly voi NCC de tranh tre credit note, replacement hoac purchase return."
+                title={t('alerts.oldClaimTitle', { days: selectedDetail.summary.oldestOpenClaimAgeDays ?? 0 })}
+                description={t('alerts.oldClaimDescription')}
               />
             ) : null}
 
-            <Card
-              title={(
-                <Space>
-                  <LineChartOutlined />
-                  Trend diem 6 thang
-                </Space>
-              )}
-              variant="borderless"
-            >
-              <Table<IVendorTrendPoint>
-                rowKey="month"
-                columns={trendColumns}
-                dataSource={selectedDetail.evaluationTrend}
-                loading={detailLoading}
-                pagination={false}
-                size="small"
-              />
-            </Card>
-
-            <Row gutter={[16, 16]}>
-              <Col xs={24} xl={8}>
-                <Card title="Claim aging" variant="borderless" loading={detailLoading}>
-                  <Statistic title="Open/Sent" value={selectedDetail.claimAging.open + selectedDetail.claimAging.sent} />
-                  <Divider />
-                  <Space orientation="vertical" style={{ width: '100%' }}>
-                    <Text>0-7 ngay: {selectedDetail.claimAging.buckets.days0To7}</Text>
-                    <Progress
-                      percent={Math.min((selectedDetail.claimAging.buckets.days0To7 / Math.max(selectedDetail.summary.openClaimCount, 1)) * 100, 100)}
-                      showInfo={false}
-                      size="small"
-                    />
-                    <Text>8-14 ngay: {selectedDetail.claimAging.buckets.days8To14}</Text>
-                    <Progress
-                      percent={Math.min((selectedDetail.claimAging.buckets.days8To14 / Math.max(selectedDetail.summary.openClaimCount, 1)) * 100, 100)}
-                      showInfo={false}
-                      size="small"
-                    />
-                    <Text>15-30 ngay: {selectedDetail.claimAging.buckets.days15To30}</Text>
-                    <Progress
-                      percent={Math.min((selectedDetail.claimAging.buckets.days15To30 / Math.max(selectedDetail.summary.openClaimCount, 1)) * 100, 100)}
-                      showInfo={false}
-                      size="small"
-                    />
-                    <Text type={selectedDetail.claimAging.buckets.over30 > 0 ? 'danger' : undefined}>
-                      &gt;30 ngay: {selectedDetail.claimAging.buckets.over30}
-                    </Text>
-                    <Progress
-                      percent={Math.min((selectedDetail.claimAging.buckets.over30 / Math.max(selectedDetail.summary.openClaimCount, 1)) * 100, 100)}
-                      showInfo={false}
-                      status={selectedDetail.claimAging.buckets.over30 > 0 ? 'exception' : 'normal'}
-                      size="small"
-                    />
-                    <Divider />
-                    <Text type="secondary">Resolved: {selectedDetail.claimAging.resolved} | Cancelled: {selectedDetail.claimAging.cancelled}</Text>
-                  </Space>
-                </Card>
-              </Col>
-              <Col xs={24} xl={16}>
-                <Card title="Claim/Rejection history" variant="borderless">
-                  <Table<IVendorClaimItem>
-                    rowKey="_id"
-                    columns={claimColumns}
-                    dataSource={selectedDetail.claimItems}
-                    loading={detailLoading}
-                    pagination={{ pageSize: 5 }}
-                    size="small"
-                  />
-                </Card>
-              </Col>
-            </Row>
-
-            <Card title="PO/GRN on-time drilldown" variant="borderless">
-              <Table<IPoGrnPerformance>
-                rowKey={(record) => `${record.type}-${record._id}`}
-                columns={poGrnColumns}
-                dataSource={selectedDetail.poGrnPerformance}
-                loading={detailLoading}
-                pagination={{ pageSize: 8 }}
-                size="small"
-              />
-            </Card>
-
-            <Card title="AP dang mo cua NCC" variant="borderless">
-              <Table<IDuePayable>
-                rowKey="_id"
-                columns={dueColumns}
-                dataSource={selectedDetail.payables}
-                loading={detailLoading}
-                pagination={{ pageSize: 5 }}
-                size="small"
-              />
-            </Card>
+            <Tabs
+              defaultActiveKey="scoreTrend"
+              tabBarStyle={{ marginBottom: 12 }}
+              items={[
+                {
+                  key: 'scoreTrend',
+                  label: t('sections.scoreTrend'),
+                  children: (
+                    <Card
+                      title={(
+                        <Space>
+                          <LineChartOutlined />
+                          {t('sections.scoreTrend')}
+                        </Space>
+                      )}
+                      variant="borderless"
+                      style={{ overflow: 'hidden', minHeight: 260 }}
+                    >
+                      <Table<IVendorTrendPoint>
+                        rowKey="month"
+                        columns={trendColumns}
+                        dataSource={selectedDetail.evaluationTrend}
+                        loading={detailLoading}
+                        locale={tableLocale}
+                        pagination={false}
+                        size="small"
+                        scroll={{ x: 640 }}
+                      />
+                    </Card>
+                  ),
+                },
+                {
+                  key: 'claimAging',
+                  label: t('sections.claimAging'),
+                  children: (
+                    <Card title={t('sections.claimAging')} variant="borderless" loading={detailLoading}>
+                      <Row gutter={[16, 16]} align="middle">
+                        <Col xs={24} md={6}>
+                          <Statistic title={t('stats.openSent')} value={selectedDetail.claimAging.open + selectedDetail.claimAging.sent} />
+                          <Divider style={{ margin: '12px 0' }} />
+                          <Text type="secondary">
+                            {t('labels.resolvedCancelled', { resolved: selectedDetail.claimAging.resolved, cancelled: selectedDetail.claimAging.cancelled })}
+                          </Text>
+                        </Col>
+                        <Col xs={24} md={18}>
+                          <Row gutter={[16, 12]}>
+                            <Col xs={24} md={12}>
+                              <Text>{t('labels.bucket0To7', { count: selectedDetail.claimAging.buckets.days0To7 })}</Text>
+                              <Progress
+                                percent={Math.min((selectedDetail.claimAging.buckets.days0To7 / Math.max(selectedDetail.summary.openClaimCount, 1)) * 100, 100)}
+                                showInfo={false}
+                                size="small"
+                              />
+                            </Col>
+                            <Col xs={24} md={12}>
+                              <Text>{t('labels.bucket8To14', { count: selectedDetail.claimAging.buckets.days8To14 })}</Text>
+                              <Progress
+                                percent={Math.min((selectedDetail.claimAging.buckets.days8To14 / Math.max(selectedDetail.summary.openClaimCount, 1)) * 100, 100)}
+                                showInfo={false}
+                                size="small"
+                              />
+                            </Col>
+                            <Col xs={24} md={12}>
+                              <Text>{t('labels.bucket15To30', { count: selectedDetail.claimAging.buckets.days15To30 })}</Text>
+                              <Progress
+                                percent={Math.min((selectedDetail.claimAging.buckets.days15To30 / Math.max(selectedDetail.summary.openClaimCount, 1)) * 100, 100)}
+                                showInfo={false}
+                                size="small"
+                              />
+                            </Col>
+                            <Col xs={24} md={12}>
+                              <Text type={selectedDetail.claimAging.buckets.over30 > 0 ? 'danger' : undefined}>
+                                {t('labels.bucketOver30', { count: selectedDetail.claimAging.buckets.over30 })}
+                              </Text>
+                              <Progress
+                                percent={Math.min((selectedDetail.claimAging.buckets.over30 / Math.max(selectedDetail.summary.openClaimCount, 1)) * 100, 100)}
+                                showInfo={false}
+                                status={selectedDetail.claimAging.buckets.over30 > 0 ? 'exception' : 'normal'}
+                                size="small"
+                              />
+                            </Col>
+                          </Row>
+                        </Col>
+                      </Row>
+                    </Card>
+                  ),
+                },
+                {
+                  key: 'claimHistory',
+                  label: t('sections.claimHistory'),
+                  children: (
+                    <Card title={t('sections.claimHistory')} variant="borderless" style={{ overflow: 'hidden', minHeight: 260 }}>
+                      <Table<IVendorClaimItem>
+                        rowKey="_id"
+                        columns={claimColumns}
+                        dataSource={selectedDetail.claimItems}
+                        loading={detailLoading}
+                        locale={tableLocale}
+                        pagination={{ pageSize: 6 }}
+                        size="small"
+                        scroll={{ x: 820 }}
+                      />
+                    </Card>
+                  ),
+                },
+                {
+                  key: 'poGrn',
+                  label: t('sections.poGrnDrilldown'),
+                  children: (
+                    <Card title={t('sections.poGrnDrilldown')} variant="borderless" style={{ overflow: 'hidden', minHeight: 260 }}>
+                      <Table<IPoGrnPerformance>
+                        rowKey={(record) => `${record.type}-${record._id}`}
+                        columns={poGrnColumns}
+                        dataSource={selectedDetail.poGrnPerformance}
+                        loading={detailLoading}
+                        locale={tableLocale}
+                        pagination={{ pageSize: 8 }}
+                        size="small"
+                        scroll={{ x: 760 }}
+                      />
+                    </Card>
+                  ),
+                },
+                {
+                  key: 'ap',
+                  label: t('sections.vendorOpenAp'),
+                  children: (
+                    <Card title={t('sections.vendorOpenAp')} variant="borderless" style={{ overflow: 'hidden', minHeight: 260 }}>
+                      <Table<IDuePayable>
+                        rowKey="_id"
+                        columns={dueColumns}
+                        dataSource={selectedDetail.payables}
+                        loading={detailLoading}
+                        locale={tableLocale}
+                        pagination={{ pageSize: 6 }}
+                        size="small"
+                        scroll={{ x: 620 }}
+                      />
+                    </Card>
+                  ),
+                },
+              ]}
+            />
           </Space>
         ) : (
           <Card variant="borderless" loading={detailLoading}>
-            {!detailLoading ? <Alert type="info" title="Chua co du lieu scorecard NCC" /> : null}
+            {!detailLoading ? <Alert type="info" title={t('empty.noScorecardDetail')} /> : null}
           </Card>
         )}
-      </Drawer>
+      </Modal>
 
       <Modal
-        title="Tao danh gia nha cung cap"
+        title={t('modal.createTitle')}
         open={modalOpen}
         onCancel={() => setModalOpen(false)}
         onOk={createEvaluation}
-        okText="Luu danh gia"
+        okText={t('modal.save')}
+        cancelText={t('actions.cancel')}
         width={760}
         destroyOnHidden
       >
@@ -1104,21 +1379,20 @@ const VendorEvaluationsPage = () => {
             communicationScore: 80,
             onTimeDeliveryRate: 100,
             defectRate: 0,
-            periodStart: dayjs().startOf('month'),
-            periodEnd: dayjs().endOf('month'),
+            evaluationMonth: dayjs().startOf('month'),
           }}
         >
           <Row gutter={16}>
             <Col span={24}>
               <Form.Item
                 name="vendorId"
-                label="Nha cung cap"
-                rules={[{ required: true, message: 'Chon nha cung cap' }]}
+                label={t('form.vendor')}
+                rules={[{ required: true, message: t('validation.vendor') }]}
               >
                 <Select
                   showSearch
                   optionFilterProp="label"
-                  placeholder="Chon supplier/logistics"
+                  placeholder={t('form.vendorPlaceholder')}
                   options={vendors.map((vendor) => ({
                     label: `${vendor.name} (${vendor.partnerType})`,
                     value: vendor._id,
@@ -1127,20 +1401,19 @@ const VendorEvaluationsPage = () => {
               </Form.Item>
             </Col>
             <Col xs={24} md={12}>
-              <Form.Item name="periodStart" label="Tu ngay">
-                <DatePicker style={{ width: '100%' }} />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={12}>
-              <Form.Item name="periodEnd" label="Den ngay">
-                <DatePicker style={{ width: '100%' }} />
+              <Form.Item
+                name="evaluationMonth"
+                label={t('form.evaluationMonth')}
+                rules={[{ required: true, message: t('validation.month') }]}
+              >
+                <DatePicker picker="month" format="MM/YYYY" style={{ width: '100%' }} />
               </Form.Item>
             </Col>
             <Col xs={24} md={8}>
               <Form.Item
                 name="qualityScore"
-                label="Chat luong"
-                rules={[{ required: true, message: 'Nhap diem' }]}
+                label={t('form.qualityScore')}
+                rules={[{ required: true, message: t('validation.score') }]}
               >
                 <InputNumber min={0} max={100} style={{ width: '100%' }} />
               </Form.Item>
@@ -1148,8 +1421,8 @@ const VendorEvaluationsPage = () => {
             <Col xs={24} md={8}>
               <Form.Item
                 name="deliveryScore"
-                label="Giao hang"
-                rules={[{ required: true, message: 'Nhap diem' }]}
+                label={t('form.deliveryScore')}
+                rules={[{ required: true, message: t('validation.score') }]}
               >
                 <InputNumber min={0} max={100} style={{ width: '100%' }} />
               </Form.Item>
@@ -1157,30 +1430,30 @@ const VendorEvaluationsPage = () => {
             <Col xs={24} md={8}>
               <Form.Item
                 name="priceScore"
-                label="Gia ca"
-                rules={[{ required: true, message: 'Nhap diem' }]}
+                label={t('form.priceScore')}
+                rules={[{ required: true, message: t('validation.score') }]}
               >
                 <InputNumber min={0} max={100} style={{ width: '100%' }} />
               </Form.Item>
             </Col>
             <Col xs={24} md={8}>
-              <Form.Item name="communicationScore" label="Phan hoi">
+              <Form.Item name="communicationScore" label={t('form.communicationScore')}>
                 <InputNumber min={0} max={100} style={{ width: '100%' }} />
               </Form.Item>
             </Col>
             <Col xs={24} md={8}>
-              <Form.Item name="onTimeDeliveryRate" label="On-time %">
+              <Form.Item name="onTimeDeliveryRate" label={t('form.onTimeRate')}>
                 <InputNumber min={0} max={100} style={{ width: '100%' }} />
               </Form.Item>
             </Col>
             <Col xs={24} md={8}>
-              <Form.Item name="defectRate" label="Defect %">
+              <Form.Item name="defectRate" label={t('form.defectRate')}>
                 <InputNumber min={0} max={100} style={{ width: '100%' }} />
               </Form.Item>
             </Col>
             <Col span={24}>
-              <Form.Item name="note" label="Ghi chu">
-                <Input.TextArea rows={3} placeholder="Nhan xet chat luong, giao hang, gia ca, su co neu co..." />
+              <Form.Item name="note" label={t('form.note')}>
+                <Input.TextArea rows={3} placeholder={t('form.notePlaceholder')} />
               </Form.Item>
             </Col>
           </Row>

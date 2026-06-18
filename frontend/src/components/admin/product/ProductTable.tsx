@@ -4,7 +4,7 @@ import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { 
   Table, Tag, Space, Button, Input, Card, Badge, 
   Typography, Divider, Tooltip, Row, Col, Statistic,
-  Dropdown, Drawer, Avatar, notification, Popconfirm, theme, Select, Form, Slider, InputNumber
+  Dropdown, Drawer, Avatar, notification, Popconfirm, theme, Select, Form, Slider, InputNumber, DatePicker
 } from 'antd';
 import {PlusOutlined, SearchOutlined, FilterOutlined, 
   ExportOutlined, EditOutlined, 
@@ -18,15 +18,17 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { useTranslations } from 'next-intl';
 import { useSession } from 'next-auth/react';
 import { useTheme } from '@/context/theme.context';
-import { sendRequest } from '@/lib/api-client';
+import { backendFetch, sendRequest } from '@/lib/api-client';
 import ProductModal from './ProductModal';
 import AdjustmentModal from './AdjustmentModal';
 import { IProduct } from "@/types/product";
 import type { ColumnsType, TableProps } from 'antd/es/table';
 import { getAccessToken } from '@/lib/auth-token';
 import { useHasMounted } from '@/hooks/useHasMounted';
+import type { Dayjs } from 'dayjs';
 
 const { Text } = Typography;
+const { RangePicker } = DatePicker;
 
 interface IMeta {
   current: number;
@@ -41,10 +43,26 @@ interface ProductTableProps {
 type ProductSortOrder = 'ascend' | 'descend';
 type ProductSortField = 'sku' | 'vietnameseName' | 'priceVnd' | 'isActive' | 'updatedAt';
 type ProductTableSorter = Parameters<NonNullable<TableProps<IProduct>['onChange']>>[2];
+type LedgerDateRange = [Dayjs, Dayjs] | null;
 
 interface ProductSortConfig {
   field: ProductSortField;
   order: ProductSortOrder;
+}
+
+interface ProductInventoryLedger {
+  _id: string;
+  transactionType: string;
+  quantityChange: number | string;
+  balanceAfter: number | string;
+  unitPrice?: number | string | null;
+  referenceId?: string | null;
+  referenceNumber?: string | null;
+  lotNumber?: string | null;
+  createdBy?: string | null;
+  notes?: string | null;
+  isQuarantine?: boolean;
+  createdAt?: string | null;
 }
 
 const DEFAULT_PRODUCT_SORT: ProductSortConfig = {
@@ -96,6 +114,21 @@ const getProductSortOrder = (
   sortConfig: ProductSortConfig,
   field: ProductSortField,
 ): ProductSortOrder | null => (sortConfig.field === field ? sortConfig.order : null);
+
+const inventoryTransactionColor: Record<string, string> = {
+  GOODS_RECEIPT: 'green',
+  SALES_DISPATCH: 'volcano',
+  ADJUSTMENT: 'blue',
+  RETURN: 'purple',
+  REJECTION: 'red',
+  RESERVE: 'gold',
+  RELEASE: 'cyan',
+};
+
+const formatLedgerNumber = (value: number | string | null | undefined) => {
+  const numeric = Number(value || 0);
+  return Number.isFinite(numeric) ? numeric.toLocaleString() : '-';
+};
 
 const ProductTable = ({ categories }: ProductTableProps) => {
   const hasMounted = useHasMounted();
@@ -155,6 +188,11 @@ const ProductTable = ({ categories }: ProductTableProps) => {
 
   const [isAdjOpen, setIsAdjOpen] = useState(false);
   const [productForAdj, setProductForAdj] = useState<IProduct | null>(null);
+  const [isLedgerDrawerOpen, setIsLedgerDrawerOpen] = useState(false);
+  const [productForLedger, setProductForLedger] = useState<IProduct | null>(null);
+  const [ledgerRows, setLedgerRows] = useState<ProductInventoryLedger[]>([]);
+  const [ledgerDateRange, setLedgerDateRange] = useState<LedgerDateRange>(null);
+  const [isFetchingLedger, setIsFetchingLedger] = useState(false);
   const [isChangeDrawerOpen, setIsChangeDrawerOpen] = useState(false);
   const [changeRequests, setChangeRequests] = useState<any[]>([]);
   const [isFetchingChanges, setIsFetchingChanges] = useState(false);
@@ -319,7 +357,7 @@ const ProductTable = ({ categories }: ProductTableProps) => {
         ...filters
       });
       const url = `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/products/export?${queryParams.toString()}`;
-      const response = await fetch(url, {
+      const response = await backendFetch(url, {
         method: 'GET',
         headers: { 'Authorization': `Bearer ${accessToken}` },
       });
@@ -340,6 +378,49 @@ const ProductTable = ({ categories }: ProductTableProps) => {
       api.error({ title: tProduct('notifications.exportError') });
     }
   };
+
+  const fetchProductLedger = useCallback(async (product: IProduct) => {
+    if (!accessToken || !product._id) return;
+
+    setProductForLedger(product);
+    setIsLedgerDrawerOpen(true);
+    setIsFetchingLedger(true);
+    setLedgerDateRange(null);
+
+    try {
+      const res = await sendRequest<IBackendRes<{ results: ProductInventoryLedger[]; total?: number }>>({
+        url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/inventory/ledger`,
+        method: 'GET',
+        queryParams: { productId: product._id },
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+
+      setLedgerRows(res?.data?.results ?? []);
+    } catch {
+      api.error({ title: 'Không tải được lịch sử kho', description: product.sku });
+      setLedgerRows([]);
+    } finally {
+      setIsFetchingLedger(false);
+    }
+  }, [accessToken, api]);
+
+  const filteredLedgerRows = useMemo(() => {
+    if (!ledgerDateRange) {
+      return ledgerRows;
+    }
+
+    const startAt = ledgerDateRange[0].startOf('day').valueOf();
+    const endAt = ledgerDateRange[1].endOf('day').valueOf();
+
+    return ledgerRows.filter((row) => {
+      if (!row.createdAt) {
+        return false;
+      }
+
+      const createdAt = new Date(row.createdAt).getTime();
+      return Number.isFinite(createdAt) && createdAt >= startAt && createdAt <= endAt;
+    });
+  }, [ledgerDateRange, ledgerRows]);
 
   const handleApproveChange = async (record: any) => {
     const isMatrixRequest = !!record.approvalWorkflowRequestId;
@@ -377,6 +458,91 @@ const ProductTable = ({ categories }: ProductTableProps) => {
       api.error({ title: 'Không từ chối được thay đổi', description: res?.message });
     }
   };
+
+  const ledgerColumns: ColumnsType<ProductInventoryLedger> = useMemo(() => [
+    {
+      title: 'Thời điểm',
+      dataIndex: 'createdAt',
+      width: 150,
+      render: (value: string | null) => (
+        <Space orientation="vertical" size={0}>
+          <Text>{value ? new Date(value).toLocaleDateString('vi-VN') : '-'}</Text>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            {value ? new Date(value).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : ''}
+          </Text>
+        </Space>
+      ),
+    },
+    {
+      title: 'Loại giao dịch',
+      dataIndex: 'transactionType',
+      width: 170,
+      render: (value: string, record) => (
+        <Space orientation="vertical" size={2}>
+          <Tag color={inventoryTransactionColor[value] || 'default'}>{value}</Tag>
+          {record.isQuarantine ? <Tag color="warning">Quarantine</Tag> : null}
+        </Space>
+      ),
+    },
+    {
+      title: 'Số lượng',
+      dataIndex: 'quantityChange',
+      align: 'right',
+      width: 110,
+      render: (value: number | string) => {
+        const numeric = Number(value || 0);
+        const color = numeric > 0 ? token.colorSuccess : numeric < 0 ? token.colorError : token.colorText;
+        return <Text strong style={{ color }}>{numeric > 0 ? '+' : ''}{formatLedgerNumber(numeric)}</Text>;
+      },
+    },
+    {
+      title: 'Tồn sau',
+      dataIndex: 'balanceAfter',
+      align: 'right',
+      width: 110,
+      render: (value: number | string) => <Text strong>{formatLedgerNumber(value)}</Text>,
+    },
+    {
+      title: 'Đơn giá',
+      dataIndex: 'unitPrice',
+      align: 'right',
+      width: 130,
+      render: (value: number | string | null) => (
+        value === null || value === undefined ? <Text type="secondary">-</Text> : <Text>{formatLedgerNumber(value)}</Text>
+      ),
+    },
+    {
+      title: 'Lot / Batch',
+      dataIndex: 'lotNumber',
+      width: 160,
+      render: (value: string | null) => value ? <Tag color="geekblue">{value}</Tag> : <Text type="secondary">-</Text>,
+    },
+    {
+      title: 'Chứng từ',
+      key: 'reference',
+      width: 220,
+      render: (_, record) => (
+        <Space orientation="vertical" size={0}>
+          <Text>{record.referenceNumber || '-'}</Text>
+          <Text type="secondary" style={{ fontSize: 12 }}>{record.referenceId || '-'}</Text>
+        </Space>
+      ),
+    },
+    {
+      title: 'Người tạo',
+      dataIndex: 'createdBy',
+      width: 130,
+      render: (value: string | null) => value || '-',
+    },
+    {
+      title: 'Ghi chú',
+      dataIndex: 'notes',
+      width: 260,
+      render: (value: string | null) => (
+        <Text style={{ whiteSpace: 'normal', wordBreak: 'break-word' }}>{value || '-'}</Text>
+      ),
+    },
+  ], [token]);
 
   // --- 4. Cấu hình Columns ---
   const columns: ColumnsType<IProduct> = useMemo(() => [
@@ -509,6 +675,7 @@ const ProductTable = ({ categories }: ProductTableProps) => {
                   key: 'ledger',
                   icon: <HistoryOutlined />,
                   label: tProduct('actions.ledger'),
+                  onClick: () => fetchProductLedger(record),
                 },
                 { type: 'divider' },
                 { 
@@ -534,7 +701,7 @@ const ProductTable = ({ categories }: ProductTableProps) => {
         </Space>
       ),
     },
-  ], [currencyRates, handleDelete, sortConfig, tProduct, tUom, token]);
+  ], [currencyRates, fetchProductLedger, handleDelete, sortConfig, tProduct, tUom, token]);
 
   const { isDark } = useTheme();
 
@@ -911,28 +1078,30 @@ const ProductTable = ({ categories }: ProductTableProps) => {
                 <Text style={{ whiteSpace: 'nowrap' }}>{value || '-'}</Text>
               ),
             },
-            {
-              title: tProduct('changeRequests.columns.actions'),
-              key: 'actions',
-              width: 95,
-              render: (_, record: any) => (
-                record.status === 'PENDING_APPROVAL' && canApproveProductChanges ? (
-                  <Space>
-                    <Tooltip title={tProduct('changeRequests.approve')}>
-                      <Button
-                        type="text"
-                        disabled={!record.approvalWorkflowRequestId && record.requestedByUsername === currentUsername && !['ADMIN', 'SUPER ADMIN', 'SUPER_ADMIN'].includes(currentRoleName)}
-                        icon={<CheckCircleOutlined style={{ color: token.colorSuccess }} />}
-                        onClick={() => handleApproveChange(record)}
-                      />
-                    </Tooltip>
-                    <Tooltip title={tProduct('changeRequests.reject')}>
-                      <Button type="text" icon={<CloseCircleOutlined style={{ color: token.colorError }} />} onClick={() => handleRejectChange(record)} />
-                    </Tooltip>
-                  </Space>
-                ) : null
-              ),
-            },
+            ...(canApproveProductChanges && changeRequests.some((request) => request.status === 'PENDING_APPROVAL')
+              ? [{
+                  title: tProduct('changeRequests.columns.actions'),
+                  key: 'actions',
+                  width: 95,
+                  render: (_: unknown, record: any) => (
+                    record.status === 'PENDING_APPROVAL' ? (
+                      <Space>
+                        <Tooltip title={tProduct('changeRequests.approve')}>
+                          <Button
+                            type="text"
+                            disabled={!record.approvalWorkflowRequestId && record.requestedByUsername === currentUsername && !['ADMIN', 'SUPER ADMIN', 'SUPER_ADMIN'].includes(currentRoleName)}
+                            icon={<CheckCircleOutlined style={{ color: token.colorSuccess }} />}
+                            onClick={() => handleApproveChange(record)}
+                          />
+                        </Tooltip>
+                        <Tooltip title={tProduct('changeRequests.reject')}>
+                          <Button type="text" icon={<CloseCircleOutlined style={{ color: token.colorError }} />} onClick={() => handleRejectChange(record)} />
+                        </Tooltip>
+                      </Space>
+                    ) : null
+                  ),
+                }]
+              : []),
           ]}
         />
       </Drawer>
@@ -952,6 +1121,69 @@ const ProductTable = ({ categories }: ProductTableProps) => {
         product={productForAdj}
         fetchData={fetchProducts}
       />
+
+      {hasMounted && (
+        <Drawer
+          title={(
+            <Space>
+              <HistoryOutlined />
+              <span>Lịch sử kho</span>
+              {productForLedger ? <Tag color="blue">{productForLedger.sku}</Tag> : null}
+            </Space>
+          )}
+          placement="right"
+          open={isLedgerDrawerOpen}
+          size={980}
+          onClose={() => setIsLedgerDrawerOpen(false)}
+          extra={(
+            <Button
+              icon={<ReloadOutlined />}
+              onClick={() => productForLedger && fetchProductLedger(productForLedger)}
+              disabled={!productForLedger}
+            >
+              Tải lại
+            </Button>
+          )}
+        >
+          {productForLedger ? (
+            <Space orientation="vertical" size={16} style={{ width: '100%' }}>
+              <Card variant="borderless" style={{ background: token.colorFillQuaternary }}>
+                <Space orientation="vertical" size={2}>
+                  <Text strong>{productForLedger.vietnameseName || productForLedger.englishName || productForLedger.sku}</Text>
+                  <Text type="secondary">
+                    Tồn hiện tại: <Text strong>{formatLedgerNumber(productForLedger.currentStock)}</Text>
+                    {' '}· SKU: {productForLedger.sku}
+                  </Text>
+                </Space>
+              </Card>
+              <Space wrap style={{ width: '100%', justifyContent: 'space-between' }}>
+                <RangePicker
+                  allowClear
+                  format="DD/MM/YYYY"
+                  placeholder={['Từ ngày', 'Đến ngày']}
+                  value={ledgerDateRange}
+                  onChange={(dates) => {
+                    setLedgerDateRange(dates && dates[0] && dates[1] ? [dates[0], dates[1]] : null);
+                  }}
+                  style={{ width: 280, maxWidth: '100%' }}
+                />
+                <Text type="secondary">
+                  Hiển thị {filteredLedgerRows.length}/{ledgerRows.length} dòng
+                </Text>
+              </Space>
+              <Table<ProductInventoryLedger>
+                rowKey="_id"
+                size="small"
+                loading={isFetchingLedger}
+                columns={ledgerColumns}
+                dataSource={filteredLedgerRows}
+                pagination={{ pageSize: 10, showSizeChanger: true }}
+                scroll={{ x: 1440 }}
+              />
+            </Space>
+          ) : null}
+        </Drawer>
+      )}
     </>
   );
 };

@@ -1,9 +1,21 @@
-import { BeforeInsert, Column, CreateDateColumn, DeleteDateColumn, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryColumn, UpdateDateColumn } from 'typeorm';
+import {
+  BeforeInsert,
+  Column,
+  CreateDateColumn,
+  DeleteDateColumn,
+  Entity,
+  JoinColumn,
+  ManyToOne,
+  OneToMany,
+  PrimaryColumn,
+  UpdateDateColumn,
+} from 'typeorm';
 import { Partner } from '@/modules/partners/entities/partner.entity';
 import { User } from '@/modules/users/entities/user.entity';
 import { QuotationItem } from './quotation-item.entity';
 import { ColumnNumericTransformer } from '@/helpers/typeorm.util';
 import { createEntityId } from '@/common/ids/entity-id.util';
+import { Port } from '@/modules/ports/entities/port.entity';
 
 export enum QuotationStatus {
   DRAFT = 'DRAFT',
@@ -12,7 +24,7 @@ export enum QuotationStatus {
   ACCEPTED = 'ACCEPTED',
   REJECTED = 'REJECTED',
   EXPIRED = 'EXPIRED',
-  CONVERTED = 'CONVERTED' // Chuyển thành PI
+  CONVERTED = 'CONVERTED', // Chuyển thành PI
 }
 
 export enum Incoterm {
@@ -21,7 +33,7 @@ export enum Incoterm {
   CIF = 'CIF',
   CFR = 'CFR',
   DDP = 'DDP',
-  DAP = 'DAP'
+  DAP = 'DAP',
 }
 
 @Entity('quotations')
@@ -46,7 +58,11 @@ export class Quotation {
   @JoinColumn({ name: 'customerId' })
   customer: Partner;
 
-  @Column({ type: 'enum', enum: QuotationStatus, default: QuotationStatus.DRAFT })
+  @Column({
+    type: 'enum',
+    enum: QuotationStatus,
+    default: QuotationStatus.DRAFT,
+  })
   status: QuotationStatus;
 
   @Column({ type: 'varchar', length: 40, nullable: true })
@@ -65,10 +81,24 @@ export class Quotation {
   incotermLocation: string; // e.g. "Cát Lái Port"
 
   @Column({ type: 'varchar', nullable: true })
-  portOfLoading: string;
+  portOfLoading: string | null;
+
+  @Column({ type: 'varchar', length: 40, nullable: true })
+  portOfLoading_port_id: string | null;
+
+  @ManyToOne(() => Port, { nullable: true })
+  @JoinColumn({ name: 'portOfLoading_port_id' })
+  portOfLoadingPort: Port | null;
 
   @Column({ type: 'varchar', nullable: true })
-  portOfDischarge: string;
+  portOfDischarge: string | null;
+
+  @Column({ type: 'varchar', length: 40, nullable: true })
+  portOfDischarge_port_id: string | null;
+
+  @ManyToOne(() => Port, { nullable: true })
+  @JoinColumn({ name: 'portOfDischarge_port_id' })
+  portOfDischargePort: Port | null;
 
   @Column({ type: 'timestamp' })
   issueDate: Date;
@@ -79,32 +109,80 @@ export class Quotation {
   @Column({ type: 'varchar', default: 'USD' })
   currency: string;
 
-  @Column({ type: 'numeric', precision: 15, scale: 6, default: 1, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 6,
+    default: 1,
+    transformer: new ColumnNumericTransformer(),
+  })
   exchangeRate: number; // Tỷ giá chốt tại thời điểm lập báo giá (quy đổi ra VND)
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   totalAmount: number;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   logisticsFee: number;
 
   // Granular Fees matching Sales Contract
-  @Column({ type: 'numeric', precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   domesticTransportCost: number;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   portCharges: number;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   seaFreight: number;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   insuranceCost: number;
 
   @Column({ type: 'varchar', default: 'USD' })
   logisticsFeeCurrency: string;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   otherFee: number;
 
   @Column({ type: 'varchar', default: 'USD' })

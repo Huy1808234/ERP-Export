@@ -1,7 +1,10 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { DataSource, EntityManager } from 'typeorm';
 import dayjs from 'dayjs';
-import { AccountingPeriod, AccountingPeriodStatus } from './entities/accounting-period.entity';
+import {
+  AccountingPeriod,
+  AccountingPeriodStatus,
+} from './entities/accounting-period.entity';
 
 export type AccountingPostingGuardInput = {
   entryDate: Date | string;
@@ -24,7 +27,9 @@ export class AccountingPeriodGuardService {
     }
 
     const postingDate = entryDate.format('YYYY-MM-DD');
-    const repository = (manager || this.dataSource.manager).getRepository(AccountingPeriod);
+    const repository = (manager || this.dataSource.manager).getRepository(
+      AccountingPeriod,
+    );
     const period = await repository
       .createQueryBuilder('period')
       .where('period.startDate <= :postingDate', { postingDate })

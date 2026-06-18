@@ -7,6 +7,10 @@
 node_modules/
 npm-debug.log
 yarn-error.log
+*.log
+*.err.log
+*.stdout.log
+*.stderr.log
 
 # Bỏ qua các thư mục cấu hình của trình soạn thảo (VSCode, WebStorm)
 .vscode/

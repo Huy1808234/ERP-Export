@@ -8,7 +8,12 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Brackets, Repository, SelectQueryBuilder } from 'typeorm';
 import { CreatePartnerDto } from './dto/create-partner.dto';
 import { UpdatePartnerDto } from './dto/update-partner.dto';
-import { BuyerRiskLevel, Partner, PartnerType } from './entities/partner.entity';
+import {
+  BuyerRegion,
+  BuyerRiskLevel,
+  Partner,
+  PartnerType,
+} from './entities/partner.entity';
 import { Quotation } from '@/modules/quotations/entities/quotation.entity';
 import {
   PIStatus,
@@ -16,13 +21,24 @@ import {
 } from '@/modules/proforma-invoices/entities/proforma-invoice.entity';
 import { Shipment } from '@/modules/shipments/entities/shipment.entity';
 import { PurchaseOrder } from '@/modules/purchase-orders/entities/purchase-order.entity';
-import { QCClaimStatus, QCResult, QualityCheck } from '@/modules/quality-control/entities/quality-check.entity';
+import {
+  QCClaimStatus,
+  QCResult,
+  QualityCheck,
+} from '@/modules/quality-control/entities/quality-check.entity';
 import { VendorInvoice } from '@/modules/vendor-invoices/entities/vendor-invoice.entity';
-import { AccountPayable, APStatus } from '@/modules/account-payables/entities/account-payable.entity';
+import {
+  AccountPayable,
+  APStatus,
+} from '@/modules/account-payables/entities/account-payable.entity';
 import { CurrenciesService } from '../currencies/currencies.service';
 import { ExchangeRateType } from '../currencies/entities/exchange-rate.entity';
 import { Decimal } from 'decimal.js';
 import * as XLSX from 'xlsx';
+import {
+  normalizeCountryCode,
+  resolveRegionByCountry,
+} from '@/common/geo.util';
 
 type PartnerFilterValue = string | number | boolean | RegExp | null | undefined;
 type PartnerFilter = Record<string, PartnerFilterValue>;
@@ -48,7 +64,16 @@ const PARTNER_SEARCH_COLUMNS = [
 const PARTNER_TEXT_FILTER_COLUMNS = new Set<string>(PARTNER_SEARCH_COLUMNS);
 
 const PARTNER_REGION_COUNTRY_ALIASES: Record<string, string[]> = {
-  ASEAN: ['ASEAN', 'Việt Nam', 'Vietnam', 'Thailand', 'Singapore', 'Malaysia', 'Indonesia', 'Philippines'],
+  ASEAN: [
+    'ASEAN',
+    'Việt Nam',
+    'Vietnam',
+    'Thailand',
+    'Singapore',
+    'Malaysia',
+    'Indonesia',
+    'Philippines',
+  ],
   APAC: ['APAC', 'China', 'Japan', 'Korea', 'Australia', 'Asia'],
   EU: ['EU', 'Europe', 'European', 'Germany', 'France', 'Netherlands'],
   MIDDLE_EAST: ['Middle East', 'UAE', 'Saudi', 'Qatar'],
@@ -65,6 +90,13 @@ const PARTNER_DB_SORT_COLUMNS = new Set([
 ]);
 
 const PARTNER_DYNAMIC_SORT_COLUMNS = new Set(['balance', 'debt']);
+
+const toBuyerRegion = (value?: string | null): BuyerRegion | null => {
+  if (!value) return null;
+  return Object.values(BuyerRegion).includes(value as BuyerRegion)
+    ? (value as BuyerRegion)
+    : null;
+};
 
 @Injectable()
 export class PartnersService {
@@ -94,8 +126,7 @@ export class PartnersService {
     private qualityCheckRepository: Repository<QualityCheck>,
 
     private currenciesService: CurrenciesService,
-  ) { }
-
+  ) {}
 
   /**
    * Chuyển đổi giá trị sang number an toàn
@@ -104,6 +135,24 @@ export class PartnersService {
     if (value === null || value === undefined || value === '') return 0;
     const num = Number(value);
     return isNaN(num) ? 0 : num;
+  }
+
+  private normalizeSubmittedCountryCode(
+    countryCode?: string | null,
+    country?: string | null,
+  ): string | null {
+    const rawCountryCode = countryCode?.trim();
+    if (rawCountryCode) {
+      const normalized = normalizeCountryCode(rawCountryCode);
+      if (!normalized) {
+        throw new BadRequestException(
+          'Ma quoc gia khong hop le. Vui long chon ma ISO 2 ky tu, vi du: VN.',
+        );
+      }
+      return normalized;
+    }
+
+    return normalizeCountryCode(country);
   }
 
   /**
@@ -129,25 +178,36 @@ export class PartnersService {
     return BuyerRiskLevel.LOW;
   }
 
-  private async calculateActualBalances(partnerId: string): Promise<{ arBalance: number, apBalance: number }> {
+  private async calculateActualBalances(
+    partnerId: string,
+  ): Promise<{ arBalance: number; apBalance: number }> {
     try {
       const arResult = await this.partnerRepository.manager.query(
         `SELECT SUM(debit) as debit, SUM(credit) as credit FROM ledger_entries WHERE "accountCode" = '131' AND "partnerId" = $1`,
-        [partnerId]
+        [partnerId],
       );
 
-      const arBalance = new Decimal(arResult[0]?.debit || 0).minus(new Decimal(arResult[0]?.credit || 0)).toNumber();
+      const arBalance = new Decimal(arResult[0]?.debit || 0)
+        .minus(new Decimal(arResult[0]?.credit || 0))
+        .toNumber();
 
       const apResult = await this.partnerRepository.manager.query(
         `SELECT SUM(debit) as debit, SUM(credit) as credit FROM ledger_entries WHERE "accountCode" = '331' AND "partnerId" = $1`,
-        [partnerId]
+        [partnerId],
       );
 
-      const apBalance = new Decimal(apResult[0]?.credit || 0).minus(new Decimal(apResult[0]?.debit || 0)).toNumber();
+      const apBalance = new Decimal(apResult[0]?.credit || 0)
+        .minus(new Decimal(apResult[0]?.debit || 0))
+        .toNumber();
 
       return { arBalance, apBalance };
     } catch (error) {
-      console.error('Error calculating actual balances for partner', partnerId, ':', error);
+      console.error(
+        'Error calculating actual balances for partner',
+        partnerId,
+        ':',
+        error,
+      );
       return { arBalance: 0, apBalance: 0 };
     }
   }
@@ -155,19 +215,28 @@ export class PartnersService {
   /**
    * Tính tổng dư nợ hiện tại quy đổi theo tiền tệ của đối tác
    */
-  private async getCurrentDebt(partner: Partner, actualDebtInVnd: number): Promise<number> {
+  private async getCurrentDebt(
+    partner: Partner,
+    actualDebtInVnd: number,
+  ): Promise<number> {
     const partnerCurrency = partner.defaultCurrency || 'USD';
     const debtInVnd = this.toNumber(actualDebtInVnd);
 
     if (partnerCurrency === 'VND' || debtInVnd === 0) return debtInVnd;
 
     try {
-      const rateObj = await this.currenciesService.getCrossRate('VND', partnerCurrency, ExchangeRateType.TRANSFER);
+      const rateObj = await this.currenciesService.getCrossRate(
+        'VND',
+        partnerCurrency,
+        ExchangeRateType.TRANSFER,
+      );
       return new Decimal(debtInVnd).times(new Decimal(rateObj.rate)).toNumber();
     } catch (error) {
       // Senior Fallback: Nếu DB chưa có tỷ giá, dùng tỷ giá mặc định thay vì trả về VND sai lệch
-      if (partnerCurrency === 'USD') return new Decimal(debtInVnd).div(26128).toNumber();
-      if (partnerCurrency === 'EUR') return new Decimal(debtInVnd).div(27500).toNumber();
+      if (partnerCurrency === 'USD')
+        return new Decimal(debtInVnd).div(26128).toNumber();
+      if (partnerCurrency === 'EUR')
+        return new Decimal(debtInVnd).div(27500).toNumber();
       return debtInVnd;
     }
   }
@@ -176,7 +245,9 @@ export class PartnersService {
    * Tạo Snapshot thông tin tài chính của Buyer
    */
   private async buildBuyerSnapshot(partner: Partner) {
-    const { arBalance, apBalance } = await this.calculateActualBalances(partner._id);
+    const { arBalance, apBalance } = await this.calculateActualBalances(
+      partner._id,
+    );
     const currentDebt = await this.getCurrentDebt(partner, arBalance);
 
     // Đối với AP Balance cũng cần quy đổi nếu khác VND
@@ -225,7 +296,9 @@ export class PartnersService {
       : null;
   }
 
-  private async buildPartnerRows(partners: Partner[]): Promise<PartnerWithSnapshot[]> {
+  private async buildPartnerRows(
+    partners: Partner[],
+  ): Promise<PartnerWithSnapshot[]> {
     return Promise.all(
       partners.map(async (item) => {
         const snapshot = await this.buildBuyerSnapshot(item);
@@ -234,7 +307,9 @@ export class PartnersService {
     );
   }
 
-  private getPrimarySort(sort?: PartnerSort): { field: string; order: 'ASC' | 'DESC' } | null {
+  private getPrimarySort(
+    sort?: PartnerSort,
+  ): { field: string; order: 'ASC' | 'DESC' } | null {
     if (!sort) return null;
 
     const [field] = Object.keys(sort);
@@ -366,8 +441,20 @@ export class PartnersService {
       }
     }
 
+    const countryCode = this.normalizeSubmittedCountryCode(
+      createPartnerDto.countryCode,
+      createPartnerDto.country,
+    );
+    const inferredRegion = toBuyerRegion(resolveRegionByCountry(countryCode));
     const partner = this.partnerRepository.create({
       ...createPartnerDto,
+      countryCode: countryCode,
+      country: createPartnerDto.country || undefined,
+      region:
+        createPartnerDto.region ||
+        (createPartnerDto.partnerType === PartnerType.CUSTOMER
+          ? inferredRegion
+          : null),
       // creditLimit đã được transformer xử lý, gán trực tiếp number
       creditLimit: createPartnerDto.creditLimit ?? 0,
       isActive: createPartnerDto.isActive ?? true,
@@ -445,96 +532,132 @@ export class PartnersService {
     const partner = await this.partnerRepository.findOneBy({ _id: id });
     if (!partner) throw new NotFoundException('Không tìm thấy đối tác');
 
-    const isVendorLike = partner.partnerType === 'SUPPLIER' || partner.partnerType === 'LOGISTICS';
+    const isVendorLike =
+      partner.partnerType === 'SUPPLIER' || partner.partnerType === 'LOGISTICS';
 
-    const [quotations, quotationTotal, piItems, piTotal, shipmentsRaw, shipmentTotal, purchaseOrders, poTotal, vendorInvoices, vendorInvoiceTotal, payables, payableTotal, qualityClaims, qualityClaimTotal, snapshot] =
-      await Promise.all([
-        // Chỉ lấy Quotations cho Customer
-        partner.partnerType === 'CUSTOMER' ? 
-          this.quotationRepository.find({
+    const [
+      quotations,
+      quotationTotal,
+      piItems,
+      piTotal,
+      shipmentsRaw,
+      shipmentTotal,
+      purchaseOrders,
+      poTotal,
+      vendorInvoices,
+      vendorInvoiceTotal,
+      payables,
+      payableTotal,
+      qualityClaims,
+      qualityClaimTotal,
+      snapshot,
+    ] = await Promise.all([
+      // Chỉ lấy Quotations cho Customer
+      partner.partnerType === 'CUSTOMER'
+        ? this.quotationRepository.find({
             where: { customerId: id },
             order: { updatedAt: 'DESC' },
             take: 5,
-          }) : Promise.resolve([]),
-        partner.partnerType === 'CUSTOMER' ? 
-          this.quotationRepository.count({ where: { customerId: id } }) : Promise.resolve(0),
-        
-        // Chỉ lấy PI cho Customer
-        partner.partnerType === 'CUSTOMER' ? 
-          this.proformaInvoiceRepository.find({
+          })
+        : Promise.resolve([]),
+      partner.partnerType === 'CUSTOMER'
+        ? this.quotationRepository.count({ where: { customerId: id } })
+        : Promise.resolve(0),
+
+      // Chỉ lấy PI cho Customer
+      partner.partnerType === 'CUSTOMER'
+        ? this.proformaInvoiceRepository.find({
             where: { customerId: id },
             order: { updatedAt: 'DESC' },
             take: 5,
-          }) : Promise.resolve([]),
-        partner.partnerType === 'CUSTOMER' ? 
-          this.proformaInvoiceRepository.count({ where: { customerId: id } }) : Promise.resolve(0),
+          })
+        : Promise.resolve([]),
+      partner.partnerType === 'CUSTOMER'
+        ? this.proformaInvoiceRepository.count({ where: { customerId: id } })
+        : Promise.resolve(0),
 
-        // Lấy Shipments cho Logistics
-        partner.partnerType === 'LOGISTICS' ? 
-          this.shipmentRepository.find({
+      // Lấy Shipments cho Logistics
+      partner.partnerType === 'LOGISTICS'
+        ? this.shipmentRepository.find({
             where: { logisticsPartnerId: id },
             order: { updatedAt: 'DESC' },
             take: 10,
-          }) : Promise.resolve([]),
-        partner.partnerType === 'LOGISTICS' ? 
-          this.shipmentRepository.count({ where: { logisticsPartnerId: id } }) : Promise.resolve(0),
+          })
+        : Promise.resolve([]),
+      partner.partnerType === 'LOGISTICS'
+        ? this.shipmentRepository.count({ where: { logisticsPartnerId: id } })
+        : Promise.resolve(0),
 
-        isVendorLike ?
-          this.purchaseOrderRepository.find({
+      isVendorLike
+        ? this.purchaseOrderRepository.find({
             where: { vendorId: id },
             relations: ['items', 'items.product'],
             order: { updatedAt: 'DESC' },
             take: 5,
-          }) : Promise.resolve([]),
-        isVendorLike ?
-          this.purchaseOrderRepository.count({ where: { vendorId: id } }) : Promise.resolve(0),
+          })
+        : Promise.resolve([]),
+      isVendorLike
+        ? this.purchaseOrderRepository.count({ where: { vendorId: id } })
+        : Promise.resolve(0),
 
-        isVendorLike ?
-          this.vendorInvoiceRepository.find({
+      isVendorLike
+        ? this.vendorInvoiceRepository.find({
             where: { vendorId: id },
             relations: ['purchaseOrder'],
             order: { updatedAt: 'DESC' },
             take: 5,
-          }) : Promise.resolve([]),
-        isVendorLike ?
-          this.vendorInvoiceRepository.count({ where: { vendorId: id } }) : Promise.resolve(0),
+          })
+        : Promise.resolve([]),
+      isVendorLike
+        ? this.vendorInvoiceRepository.count({ where: { vendorId: id } })
+        : Promise.resolve(0),
 
-        isVendorLike ?
-          this.accountPayableRepository.find({
+      isVendorLike
+        ? this.accountPayableRepository.find({
             where: { vendorId: id },
             order: { dueDate: 'ASC', updatedAt: 'DESC' },
             take: 10,
-          }) : Promise.resolve([]),
-        isVendorLike ?
-          this.accountPayableRepository.count({ where: { vendorId: id } }) : Promise.resolve(0),
+          })
+        : Promise.resolve([]),
+      isVendorLike
+        ? this.accountPayableRepository.count({ where: { vendorId: id } })
+        : Promise.resolve(0),
 
-        isVendorLike ?
-          this.qualityCheckRepository
+      isVendorLike
+        ? this.qualityCheckRepository
             .createQueryBuilder('qc')
             .leftJoinAndSelect('qc.product', 'product')
             .leftJoinAndSelect('qc.purchaseOrder', 'purchaseOrder')
             .leftJoinAndSelect('qc.purchaseReturn', 'purchaseReturn')
             .where('purchaseOrder.vendorId = :id', { id })
-            .andWhere('(qc.result != :passed OR qc.claimStatus != :none OR qc.claimNumber IS NOT NULL)', {
-              passed: QCResult.PASSED,
-              none: QCClaimStatus.NONE,
-            })
+            .andWhere(
+              '(qc.result != :passed OR qc.claimStatus != :none OR qc.claimNumber IS NOT NULL)',
+              {
+                passed: QCResult.PASSED,
+                none: QCClaimStatus.NONE,
+              },
+            )
             .orderBy('qc.updatedAt', 'DESC')
             .take(10)
-            .getMany() : Promise.resolve([]),
-        isVendorLike ?
-          this.qualityCheckRepository
+            .getMany()
+        : Promise.resolve([]),
+      isVendorLike
+        ? this.qualityCheckRepository
             .createQueryBuilder('qc')
             .leftJoin('qc.purchaseOrder', 'purchaseOrder')
             .where('purchaseOrder.vendorId = :id', { id })
-            .andWhere('(qc.result != :passed OR qc.claimStatus != :none OR qc.claimNumber IS NOT NULL)', {
-              passed: QCResult.PASSED,
-              none: QCClaimStatus.NONE,
-            })
-            .getCount() : Promise.resolve(0),
+            .andWhere(
+              '(qc.result != :passed OR qc.claimStatus != :none OR qc.claimNumber IS NOT NULL)',
+              {
+                passed: QCResult.PASSED,
+                none: QCClaimStatus.NONE,
+              },
+            )
+            .getCount()
+        : Promise.resolve(0),
 
-        this.buildBuyerSnapshot(partner),
-      ]);
+      this.buildBuyerSnapshot(partner),
+    ]);
 
     const getLatestDate = (...dates: (Date | undefined)[]) => {
       const validDates = dates.filter((d): d is Date => !!d);
@@ -555,6 +678,10 @@ export class PartnersService {
 
     const payableSummary = payables.reduce(
       (acc, item) => {
+        if (item.status === APStatus.VOID) {
+          return acc;
+        }
+
         const amount = this.toNumber(item.amount);
         const paid = this.toNumber(item.paidAmount);
         const remaining = Math.max(amount - paid, 0);
@@ -565,13 +692,23 @@ export class PartnersService {
         if (item.status !== APStatus.PAID) {
           acc.openCount += 1;
         }
-        if (item.dueDate && new Date(item.dueDate).getTime() < Date.now() && item.status !== APStatus.PAID) {
+        if (
+          item.dueDate &&
+          new Date(item.dueDate).getTime() < Date.now() &&
+          item.status !== APStatus.PAID
+        ) {
           acc.overdueCount += 1;
         }
 
         return acc;
       },
-      { totalAmount: 0, paidAmount: 0, remainingAmount: 0, openCount: 0, overdueCount: 0 },
+      {
+        totalAmount: 0,
+        paidAmount: 0,
+        remainingAmount: 0,
+        openCount: 0,
+        overdueCount: 0,
+      },
     );
 
     return {
@@ -581,15 +718,31 @@ export class PartnersService {
       shipments: { total: shipmentTotal, items: shipmentsRaw },
       purchaseOrders: { total: poTotal, items: purchaseOrders },
       vendorInvoices: { total: vendorInvoiceTotal, items: vendorInvoices },
-      payables: { total: payableTotal, items: payables, summary: payableSummary },
+      payables: {
+        total: payableTotal,
+        items: payables,
+        summary: payableSummary,
+      },
       qualityClaims: {
         total: qualityClaimTotal,
         items: qualityClaims,
         summary: {
-          openClaims: qualityClaims.filter((item) => item.claimStatus === QCClaimStatus.OPEN || item.claimStatus === QCClaimStatus.SENT).length,
-          failedChecks: qualityClaims.filter((item) => item.result !== QCResult.PASSED).length,
-          rejectedQuantity: qualityClaims.reduce((sum, item) => sum + this.toNumber(item.rejectedQuantity), 0),
-          quarantineQuantity: qualityClaims.reduce((sum, item) => sum + this.toNumber(item.quarantineQuantity), 0),
+          openClaims: qualityClaims.filter(
+            (item) =>
+              item.claimStatus === QCClaimStatus.OPEN ||
+              item.claimStatus === QCClaimStatus.SENT,
+          ).length,
+          failedChecks: qualityClaims.filter(
+            (item) => item.result !== QCResult.PASSED,
+          ).length,
+          rejectedQuantity: qualityClaims.reduce(
+            (sum, item) => sum + this.toNumber(item.rejectedQuantity),
+            0,
+          ),
+          quarantineQuantity: qualityClaims.reduce(
+            (sum, item) => sum + this.toNumber(item.quarantineQuantity),
+            0,
+          ),
         },
       },
       lastActivityAt,
@@ -628,7 +781,11 @@ export class PartnersService {
     let roleStr = '';
     if (typeof requestRole === 'string') {
       roleStr = requestRole.toUpperCase();
-    } else if (requestRole && typeof requestRole === 'object' && (requestRole as any).name) {
+    } else if (
+      requestRole &&
+      typeof requestRole === 'object' &&
+      (requestRole as any).name
+    ) {
       roleStr = (requestRole as any).name.toUpperCase();
     }
 
@@ -650,6 +807,30 @@ export class PartnersService {
         ([, value]) => value !== undefined,
       ),
     );
+    const nextCountryCode =
+      updatePartnerDto.countryCode !== undefined
+        ? this.normalizeSubmittedCountryCode(
+            updatePartnerDto.countryCode,
+            updatePartnerDto.country,
+          )
+        : updatePartnerDto.country !== undefined
+          ? normalizeCountryCode(updatePartnerDto.country)
+          : existingPartner.countryCode;
+
+    const nextPartnerType =
+      updatePartnerDto.partnerType || existingPartner.partnerType;
+    const nextRegion =
+      updatePartnerDto.region !== undefined
+        ? updatePartnerDto.region
+        : nextPartnerType === PartnerType.CUSTOMER
+          ? existingPartner.region ||
+            toBuyerRegion(resolveRegionByCountry(nextCountryCode))
+          : null;
+    payload.countryCode = nextCountryCode;
+    if (updatePartnerDto.country !== undefined) {
+      payload.country = updatePartnerDto.country || null;
+    }
+    payload.region = nextRegion;
 
     // Sử dụng merge + save để kích hoạt đầy đủ Transformer và Listener
     this.partnerRepository.merge(existingPartner, payload);
@@ -711,9 +892,14 @@ export class PartnersService {
 
     // Map dữ liệu sang format Excel
     const data = results.map((p) => ({
-      'ID': p._id,
+      ID: p._id,
       'Tên Đối Tác': p.name,
-      'Loại Đối Tác': p.partnerType === 'CUSTOMER' ? 'Khách hàng (Buyer)' : (p.partnerType === 'SUPPLIER' ? 'Nhà cung cấp (Vendor)' : 'Đơn vị vận chuyển (Logistics)'),
+      'Loại Đối Tác':
+        p.partnerType === 'CUSTOMER'
+          ? 'Khách hàng (Buyer)'
+          : p.partnerType === 'SUPPLIER'
+            ? 'Nhà cung cấp (Vendor)'
+            : 'Đơn vị vận chuyển (Logistics)',
       'Quốc Gia': p.country || 'Việt Nam',
       'Khu Vực': p.region || 'N/A',
       'Mã Số Thuế': p.taxCode || 'N/A',
@@ -721,7 +907,9 @@ export class PartnersService {
       'Hạn Mức Tín Dụng': p.creditLimit || 0,
       'Điều Khoản Thanh Toán': p.defaultPaymentTerm || 'N/A',
       'Trạng Thái': p.isActive ? 'Hoạt động' : 'Đang khóa',
-      'Ngày Cập Nhật': p.updatedAt ? new Date(p.updatedAt).toLocaleDateString('vi-VN') : 'N/A'
+      'Ngày Cập Nhật': p.updatedAt
+        ? new Date(p.updatedAt).toLocaleDateString('vi-VN')
+        : 'N/A',
     }));
 
     const worksheet = XLSX.utils.json_to_sheet(data);
@@ -730,8 +918,17 @@ export class PartnersService {
 
     // Thiết lập độ rộng cột cơ bản
     const wscols = [
-      { wch: 10 }, { wch: 30 }, { wch: 25 }, { wch: 15 }, { wch: 15 },
-      { wch: 20 }, { wch: 15 }, { wch: 20 }, { wch: 25 }, { wch: 15 }, { wch: 20 }
+      { wch: 10 },
+      { wch: 30 },
+      { wch: 25 },
+      { wch: 15 },
+      { wch: 15 },
+      { wch: 20 },
+      { wch: 15 },
+      { wch: 20 },
+      { wch: 25 },
+      { wch: 15 },
+      { wch: 20 },
     ];
     worksheet['!cols'] = wscols;
 

@@ -9,10 +9,16 @@ import {
   Query,
 } from '@nestjs/common';
 import { Roles, User } from '@/decorator/customize';
-import { AccountPayablesService } from './account-payables.service';
+import {
+  AccountPayablesService,
+  type AccountPayableListQuery,
+} from './account-payables.service';
 import { CreateAccountPayableDto } from './dto/create-account-payable.dto';
-import { UpdateAccountPayableDto } from './dto/update-account-payable.dto';
-import { APStatus } from './entities/account-payable.entity';
+import {
+  UpdateAccountPayableDto,
+  VoidAccountPayableDto,
+} from './dto/update-account-payable.dto';
+import type { AuthenticatedUser } from '@/common/types/authenticated-user.type';
 import {
   CreatePaymentBatchDto,
   MarkPaymentBatchPaidDto,
@@ -23,7 +29,9 @@ import {
 
 @Controller('account-payables')
 export class AccountPayablesController {
-  constructor(private readonly accountPayablesService: AccountPayablesService) {}
+  constructor(
+    private readonly accountPayablesService: AccountPayablesService,
+  ) {}
 
   @Post()
   @Roles('ADMIN', 'MANAGER', 'ACCOUNTANT', 'PURCHASING')
@@ -33,11 +41,8 @@ export class AccountPayablesController {
 
   @Get()
   @Roles('ADMIN', 'MANAGER', 'ACCOUNTANT', 'PURCHASING')
-  findAll(
-    @Query('vendorId') vendorId?: string,
-    @Query('status') status?: APStatus,
-  ) {
-    return this.accountPayablesService.findAll(vendorId, status);
+  findAll(@Query() query: AccountPayableListQuery) {
+    return this.accountPayablesService.findAll(query);
   }
 
   @Get('alerts/due-soon')
@@ -62,15 +67,22 @@ export class AccountPayablesController {
   @Roles('ADMIN', 'MANAGER', 'ACCOUNTANT')
   reverseSettlementAudit(
     @Param('_id') recordId: string,
-    @User() user: any,
+    @User() user: AuthenticatedUser,
     @Body() dto: ReverseSettlementAuditDto,
   ) {
-    return this.accountPayablesService.reverseSettlementAudit(recordId, dto, user);
+    return this.accountPayablesService.reverseSettlementAudit(
+      recordId,
+      dto,
+      user,
+    );
   }
 
   @Post('payment-batches')
   @Roles('ADMIN', 'MANAGER', 'ACCOUNTANT')
-  createPaymentBatch(@Body() dto: CreatePaymentBatchDto, @User() user: any) {
+  createPaymentBatch(
+    @Body() dto: CreatePaymentBatchDto,
+    @User() user: AuthenticatedUser,
+  ) {
     return this.accountPayablesService.createPaymentBatch(dto, user);
   }
 
@@ -82,13 +94,19 @@ export class AccountPayablesController {
 
   @Patch('payment-batches/:_id')
   @Roles('ADMIN', 'MANAGER', 'ACCOUNTANT')
-  updatePaymentBatch(@Param('_id') recordId: string, @Body() dto: UpdatePaymentBatchDto) {
+  updatePaymentBatch(
+    @Param('_id') recordId: string,
+    @Body() dto: UpdatePaymentBatchDto,
+  ) {
     return this.accountPayablesService.updatePaymentBatch(recordId, dto);
   }
 
   @Patch('payment-batches/:_id/submit')
   @Roles('ADMIN', 'MANAGER', 'ACCOUNTANT')
-  submitPaymentBatch(@Param('_id') recordId: string, @User() user: any) {
+  submitPaymentBatch(
+    @Param('_id') recordId: string,
+    @User() user: AuthenticatedUser,
+  ) {
     return this.accountPayablesService.submitPaymentBatch(recordId, user);
   }
 
@@ -96,7 +114,7 @@ export class AccountPayablesController {
   @Roles('ADMIN', 'MANAGER', 'ACCOUNTANT')
   approvePaymentBatch(
     @Param('_id') recordId: string,
-    @User() user: any,
+    @User() user: AuthenticatedUser,
     @Body() dto: ReviewPaymentBatchDto,
   ) {
     return this.accountPayablesService.approvePaymentBatch(recordId, user, dto);
@@ -106,7 +124,7 @@ export class AccountPayablesController {
   @Roles('ADMIN', 'MANAGER', 'ACCOUNTANT')
   rejectPaymentBatch(
     @Param('_id') recordId: string,
-    @User() user: any,
+    @User() user: AuthenticatedUser,
     @Body() dto: ReviewPaymentBatchDto,
   ) {
     return this.accountPayablesService.rejectPaymentBatch(recordId, user, dto);
@@ -116,10 +134,14 @@ export class AccountPayablesController {
   @Roles('ADMIN', 'MANAGER', 'ACCOUNTANT')
   markPaymentBatchPaid(
     @Param('_id') recordId: string,
-    @User() user: any,
+    @User() user: AuthenticatedUser,
     @Body() dto: MarkPaymentBatchPaidDto,
   ) {
-    return this.accountPayablesService.markPaymentBatchPaid(recordId, dto, user);
+    return this.accountPayablesService.markPaymentBatchPaid(
+      recordId,
+      dto,
+      user,
+    );
   }
 
   @Get(':_id')
@@ -138,7 +160,7 @@ export class AccountPayablesController {
   @Roles('ADMIN', 'MANAGER', 'ACCOUNTANT')
   approveForPayment(
     @Param('_id') recordId: string,
-    @User() user: any,
+    @User() user: AuthenticatedUser,
     @Body('note') note?: string,
   ) {
     return this.accountPayablesService.approveForPayment(recordId, user, note);
@@ -148,16 +170,35 @@ export class AccountPayablesController {
   @Roles('ADMIN', 'MANAGER', 'ACCOUNTANT')
   recordPayment(
     @Param('_id') recordId: string,
-    @User() user: any,
+    @User() user: AuthenticatedUser,
     @Body('amount') amount: number,
     @Body('note') note?: string,
   ) {
-    return this.accountPayablesService.recordPayment(recordId, amount, user, note);
+    return this.accountPayablesService.recordPayment(
+      recordId,
+      amount,
+      user,
+      note,
+    );
+  }
+
+  @Patch(':_id/void')
+  @Roles('ADMIN', 'MANAGER', 'ACCOUNTANT')
+  voidPayable(
+    @Param('_id') recordId: string,
+    @Body() dto: VoidAccountPayableDto,
+    @User() user: AuthenticatedUser,
+  ) {
+    return this.accountPayablesService.voidPayable(recordId, dto.reason, user);
   }
 
   @Delete(':_id')
   @Roles('ADMIN', 'MANAGER', 'ACCOUNTANT')
-  remove(@Param('_id') recordId: string) {
-    return this.accountPayablesService.remove(recordId);
+  remove(
+    @Param('_id') recordId: string,
+    @Body() dto: VoidAccountPayableDto,
+    @User() user: AuthenticatedUser,
+  ) {
+    return this.accountPayablesService.voidPayable(recordId, dto.reason, user);
   }
 }

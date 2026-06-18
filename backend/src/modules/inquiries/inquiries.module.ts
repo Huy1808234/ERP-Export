@@ -6,9 +6,7 @@ import { InquiriesController } from './inquiries.controller';
 import { Product } from '../products/entities/product.entity';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([Inquiry, Product]),
-  ],
+  imports: [TypeOrmModule.forFeature([Inquiry, Product])],
   controllers: [InquiriesController],
   providers: [InquiriesService],
   exports: [InquiriesService],

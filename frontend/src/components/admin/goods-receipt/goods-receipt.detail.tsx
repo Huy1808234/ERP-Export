@@ -29,17 +29,17 @@ interface IProps {
 type MetricTone = 'default' | 'success' | 'danger' | 'warning';
 
 const qualityBadgeClass: Record<string, string> = {
-  PASS: 'bg-emerald-50 text-emerald-700 ring-emerald-100',
-  DAMAGED: 'bg-red-50 text-red-700 ring-red-100',
-  WRONG_SPEC: 'bg-amber-50 text-amber-700 ring-amber-100',
-  QUARANTINE: 'bg-purple-50 text-purple-700 ring-purple-100',
+  PASS: 'bg-emerald-50 text-emerald-700 ring-emerald-100 dark:bg-emerald-500/15 dark:text-emerald-300 dark:ring-emerald-500/25',
+  DAMAGED: 'bg-red-50 text-red-700 ring-red-100 dark:bg-red-500/15 dark:text-red-300 dark:ring-red-500/25',
+  WRONG_SPEC: 'bg-amber-50 text-amber-700 ring-amber-100 dark:bg-amber-500/15 dark:text-amber-300 dark:ring-amber-500/25',
+  QUARANTINE: 'bg-purple-50 text-purple-700 ring-purple-100 dark:bg-purple-500/15 dark:text-purple-300 dark:ring-purple-500/25',
 };
 
 const metricToneClass: Record<MetricTone, string> = {
-  default: 'bg-white text-slate-900 ring-slate-200',
-  success: 'bg-emerald-50 text-emerald-700 ring-emerald-100',
-  danger: 'bg-red-50 text-red-700 ring-red-100',
-  warning: 'bg-amber-50 text-amber-700 ring-amber-100',
+  default: 'bg-white text-slate-900 ring-slate-200 dark:bg-slate-900/80 dark:text-slate-100 dark:ring-slate-800',
+  success: 'bg-emerald-50 text-emerald-700 ring-emerald-100 dark:bg-emerald-500/15 dark:text-emerald-300 dark:ring-emerald-500/25',
+  danger: 'bg-red-50 text-red-700 ring-red-100 dark:bg-red-500/15 dark:text-red-300 dark:ring-red-500/25',
+  warning: 'bg-amber-50 text-amber-700 ring-amber-100 dark:bg-amber-500/15 dark:text-amber-300 dark:ring-amber-500/25',
 };
 
 const InfoBlock = ({
@@ -53,12 +53,12 @@ const InfoBlock = ({
   icon: React.ReactNode;
   highlight?: boolean;
 }) => (
-  <div className="rounded-xl bg-white p-4 ring-1 ring-slate-100">
+  <div className="rounded-xl bg-white p-4 ring-1 ring-slate-100 dark:bg-slate-900/80 dark:ring-slate-800">
     <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-slate-400">
       {icon}
       <span>{label}</span>
     </div>
-    <div className={cn('truncate text-sm text-slate-700', highlight && 'text-base font-semibold text-slate-950')}>
+    <div className={cn('truncate text-sm text-slate-700 dark:text-slate-200', highlight && 'text-base font-semibold text-slate-950 dark:text-slate-50')}>
       {value || '-'}
     </div>
   </div>
@@ -113,26 +113,26 @@ const GoodsReceiptDetailModal = (props: IProps) => {
       styles={{ body: { padding: 0 } }}
     >
       {!data ? (
-        <div className="flex min-h-64 items-center justify-center bg-white text-sm text-slate-500">
+        <div className="flex min-h-64 items-center justify-center bg-white text-sm text-slate-500 dark:bg-slate-950 dark:text-slate-400">
           {tCommon('loading')}
         </div>
       ) : (
-        <div className="bg-white">
-          <div className="flex flex-col gap-4 border-b border-slate-100 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="bg-white dark:bg-slate-950">
+          <div className="flex flex-col gap-4 border-b border-slate-100 px-6 py-5 dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-teal-600 text-white shadow-sm">
                   <PackageCheck size={20} />
                 </div>
                 <div>
-                  <h2 className="text-lg font-semibold text-slate-950">{t('detail.cleanTitle')}</h2>
-                  <p className="mt-0.5 text-sm text-slate-500">{t('detail.subtitle')}</p>
+                  <h2 className="text-lg font-semibold text-slate-950 dark:text-slate-50">{t('detail.cleanTitle')}</h2>
+                  <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">{t('detail.subtitle')}</p>
                 </div>
               </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-2 pr-8">
-              <span className="inline-flex items-center rounded-lg bg-blue-50 px-3 py-1.5 text-sm font-semibold text-blue-700 ring-1 ring-blue-100">
+              <span className="inline-flex items-center rounded-lg bg-blue-50 px-3 py-1.5 text-sm font-semibold text-blue-700 ring-1 ring-blue-100 dark:bg-blue-500/15 dark:text-blue-300 dark:ring-blue-500/25">
                 {data.purchaseOrder?.poNumber || 'N/A'}
               </span>
               <span className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm">
@@ -142,7 +142,7 @@ const GoodsReceiptDetailModal = (props: IProps) => {
             </div>
           </div>
 
-          <div className="max-h-[78vh] overflow-y-auto bg-gray-50 px-6 py-6">
+          <div className="max-h-[78vh] overflow-y-auto bg-gray-50 px-6 py-6 dark:bg-slate-950/95">
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
               <InfoBlock
                 label={t('detail.poValue')}
@@ -185,40 +185,40 @@ const GoodsReceiptDetailModal = (props: IProps) => {
             </div>
 
             <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
-              <div className="rounded-xl bg-white p-4 ring-1 ring-slate-100">
-                <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-800">
+              <div className="rounded-xl bg-white p-4 ring-1 ring-slate-100 dark:bg-slate-900/80 dark:ring-slate-800">
+                <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
                   <Warehouse size={16} />
                   {t('detail.warehouseName')}
                 </div>
-                <div className="space-y-2 text-sm text-slate-600">
+                <div className="space-y-2 text-sm text-slate-600 dark:text-slate-300">
                   <div>{data.warehouseName || '-'}</div>
-                  <div className="rounded-lg bg-slate-50 px-3 py-2">{data.warehouseLocation || '-'}</div>
+                  <div className="rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-800/70">{data.warehouseLocation || '-'}</div>
                 </div>
               </div>
 
-              <div className="rounded-xl bg-white p-4 ring-1 ring-slate-100">
-                <div className="mb-3 text-sm font-semibold text-slate-800">{t('detail.deliveryNoteNumber')}</div>
-                <div className="flex items-center gap-2 text-sm text-slate-600">
+              <div className="rounded-xl bg-white p-4 ring-1 ring-slate-100 dark:bg-slate-900/80 dark:ring-slate-800">
+                <div className="mb-3 text-sm font-semibold text-slate-800 dark:text-slate-100">{t('detail.deliveryNoteNumber')}</div>
+                <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
                   <FileText size={16} className="text-slate-400" />
                   <span>{data.deliveryNoteNumber || '-'}</span>
                 </div>
-                <div className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                <div className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600 dark:bg-slate-800/70 dark:text-slate-300">
                   {data.note || '---'}
                 </div>
               </div>
 
-              <div className="rounded-xl bg-white p-4 ring-1 ring-slate-100">
+              <div className="rounded-xl bg-white p-4 ring-1 ring-slate-100 dark:bg-slate-900/80 dark:ring-slate-800">
                 <div className="mb-3 flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
                     <FileText size={16} />
                     {t('detail.attachmentsTitle')}
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-3">
+                <div className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-3 dark:bg-slate-800/70">
                   {data.attachmentUrl ? (
                     <>
-                      <div className="flex min-w-0 items-center gap-2 text-sm text-slate-600">
+                      <div className="flex min-w-0 items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
                         <FileText size={16} className="shrink-0 text-slate-400" />
                         <span className="truncate">{t('detail.attachmentAvailable')}</span>
                       </div>
@@ -226,7 +226,7 @@ const GoodsReceiptDetailModal = (props: IProps) => {
                         href={attachmentHref}
                         target="_blank"
                         rel="noreferrer"
-                        className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-white px-3 py-2 text-xs font-semibold text-blue-600 ring-1 ring-blue-100 transition hover:bg-blue-50"
+                        className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-white px-3 py-2 text-xs font-semibold text-blue-600 ring-1 ring-blue-100 transition hover:bg-blue-50 dark:bg-slate-900 dark:text-blue-300 dark:ring-blue-500/25 dark:hover:bg-slate-800"
                       >
                         <Download size={14} />
                         {t('detail.openAttachment')}
@@ -239,14 +239,14 @@ const GoodsReceiptDetailModal = (props: IProps) => {
               </div>
             </div>
 
-            <div className="mt-5 rounded-xl bg-white p-4 ring-1 ring-slate-100">
+            <div className="mt-5 rounded-xl bg-white p-4 ring-1 ring-slate-100 dark:bg-slate-900/80 dark:ring-slate-800">
               <div className="mb-4 flex items-center justify-between">
                 <div>
-                  <h3 className="text-base font-semibold text-slate-950">{t('detail.itemsDivider')}</h3>
-                  <p className="mt-1 text-sm text-slate-500">{grNumber}</p>
+                  <h3 className="text-base font-semibold text-slate-950 dark:text-slate-50">{t('detail.itemsDivider')}</h3>
+                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{grNumber}</p>
                 </div>
                 {(summary.rejectedQty > 0 || summary.variance > 0) && (
-                  <div className="hidden items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm font-medium text-amber-700 ring-1 ring-amber-100 sm:flex">
+                  <div className="hidden items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm font-medium text-amber-700 ring-1 ring-amber-100 dark:bg-amber-500/15 dark:text-amber-300 dark:ring-amber-500/25 sm:flex">
                     <AlertTriangle size={16} />
                     {t('detail.hasVariance')}
                   </div>
@@ -256,15 +256,15 @@ const GoodsReceiptDetailModal = (props: IProps) => {
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[980px] border-separate border-spacing-0 text-left text-sm">
                   <thead>
-                    <tr className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                      <th className="rounded-l-lg bg-slate-50 px-4 py-3">{t('detail.columns.product')}</th>
-                      <th className="bg-slate-50 px-4 py-3 text-right">{t('detail.columns.qtyOrdered')}</th>
-                      <th className="bg-slate-50 px-4 py-3 text-right">{t('detail.columns.qtyReceived')}</th>
-                      <th className="bg-slate-50 px-4 py-3 text-right">{t('detail.columns.qtyRejected')}</th>
-                      <th className="bg-slate-50 px-4 py-3 text-right">{t('detail.columns.qtyAccepted')}</th>
-                      <th className="bg-slate-50 px-4 py-3">{t('detail.columns.qualityStatus')}</th>
-                      <th className="bg-slate-50 px-4 py-3">{t('detail.columns.lotNumber')}</th>
-                      <th className="rounded-r-lg bg-slate-50 px-4 py-3">{t('detail.columns.reason')}</th>
+                    <tr className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                      <th className="rounded-l-lg bg-slate-50 px-4 py-3 dark:bg-slate-800/80">{t('detail.columns.product')}</th>
+                      <th className="bg-slate-50 px-4 py-3 text-right dark:bg-slate-800/80">{t('detail.columns.qtyOrdered')}</th>
+                      <th className="bg-slate-50 px-4 py-3 text-right dark:bg-slate-800/80">{t('detail.columns.qtyReceived')}</th>
+                      <th className="bg-slate-50 px-4 py-3 text-right dark:bg-slate-800/80">{t('detail.columns.qtyRejected')}</th>
+                      <th className="bg-slate-50 px-4 py-3 text-right dark:bg-slate-800/80">{t('detail.columns.qtyAccepted')}</th>
+                      <th className="bg-slate-50 px-4 py-3 dark:bg-slate-800/80">{t('detail.columns.qualityStatus')}</th>
+                      <th className="bg-slate-50 px-4 py-3 dark:bg-slate-800/80">{t('detail.columns.lotNumber')}</th>
+                      <th className="rounded-r-lg bg-slate-50 px-4 py-3 dark:bg-slate-800/80">{t('detail.columns.reason')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -274,34 +274,34 @@ const GoodsReceiptDetailModal = (props: IProps) => {
                       const qualityStatus = item.qualityStatus || 'PASS';
 
                       return (
-                        <tr key={item._id} className="group transition hover:bg-slate-50">
-                          <td className="border-b border-slate-100 px-4 py-4">
-                            <div className="font-semibold text-slate-900">{item.product?.vietnameseName || '-'}</div>
+                        <tr key={item._id} className="group transition hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                          <td className="border-b border-slate-100 px-4 py-4 dark:border-slate-800">
+                            <div className="font-semibold text-slate-900 dark:text-slate-100">{item.product?.vietnameseName || '-'}</div>
                             <div className="mt-1 text-xs text-slate-400">SKU: {item.product?.sku || '-'}</div>
                           </td>
-                          <td className="border-b border-slate-100 px-4 py-4 text-right font-medium text-slate-700">
+                          <td className="border-b border-slate-100 px-4 py-4 text-right font-medium text-slate-700 dark:border-slate-800 dark:text-slate-300">
                             {formatNumber(Number(item.quantityOrdered || 0))}
                           </td>
-                          <td className="border-b border-slate-100 px-4 py-4 text-right font-semibold text-slate-900">
+                          <td className="border-b border-slate-100 px-4 py-4 text-right font-semibold text-slate-900 dark:border-slate-800 dark:text-slate-100">
                             {formatNumber(Number(item.quantityReceived || 0))}
                           </td>
-                          <td className="border-b border-slate-100 px-4 py-4 text-right font-semibold text-red-600">
+                          <td className="border-b border-slate-100 px-4 py-4 text-right font-semibold text-red-600 dark:border-slate-800 dark:text-red-300">
                             {formatNumber(rejected)}
                           </td>
-                          <td className="border-b border-slate-100 px-4 py-4 text-right font-semibold text-slate-900">
+                          <td className="border-b border-slate-100 px-4 py-4 text-right font-semibold text-slate-900 dark:border-slate-800 dark:text-slate-100">
                             {formatNumber(accepted)}
                           </td>
-                          <td className="border-b border-slate-100 px-4 py-4">
-                            <span className={cn('inline-flex rounded-md px-2.5 py-1 text-xs font-semibold ring-1', qualityBadgeClass[qualityStatus] || 'bg-slate-50 text-slate-700 ring-slate-100')}>
+                          <td className="border-b border-slate-100 px-4 py-4 dark:border-slate-800">
+                            <span className={cn('inline-flex rounded-md px-2.5 py-1 text-xs font-semibold ring-1', qualityBadgeClass[qualityStatus] || 'bg-slate-50 text-slate-700 ring-slate-100 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700')}>
                               {t(`modal.quality.${qualityStatus}`)}
                             </span>
                           </td>
-                          <td className="border-b border-slate-100 px-4 py-4">
-                            <span className="rounded-md bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
+                          <td className="border-b border-slate-100 px-4 py-4 dark:border-slate-800">
+                            <span className="rounded-md bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">
                               {item.lotNumber || '-'}
                             </span>
                           </td>
-                          <td className="border-b border-slate-100 px-4 py-4 text-slate-600">
+                          <td className="border-b border-slate-100 px-4 py-4 text-slate-600 dark:border-slate-800 dark:text-slate-300">
                             <div className="max-w-[260px] truncate">{item.rejectionReason || '-'}</div>
                             {item.lineNote && <div className="mt-1 text-xs text-slate-400">{item.lineNote}</div>}
                           </td>

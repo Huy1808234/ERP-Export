@@ -1,9 +1,22 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Res, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
 import type { Response } from 'express';
 import { ResponseMessage, Roles, User } from '@/decorator/customize';
 import { JwtAuthGuard } from '@/auth/passport/jwt-auth.guard';
 import { User as UserEntity } from '@/modules/users/entities/user.entity';
-import type { AuthenticatedUser, QueryParams } from '@/common/types/authenticated-user.type';
+import type {
+  AuthenticatedUser,
+  QueryParams,
+} from '@/common/types/authenticated-user.type';
 import { ExportDocumentsService } from './export-documents.service';
 import { DocumentType } from './entities/export-document.entity';
 import { UpsertExportDocumentDto } from './dto/upsert-export-document.dto';
@@ -13,7 +26,9 @@ import { ReviewExportDocumentDto } from './dto/review-export-document.dto';
 @UseGuards(JwtAuthGuard)
 @Roles('ADMIN', 'MANAGER', 'LOGISTICS', 'SALES_EXPORT', 'ACCOUNTANT')
 export class ExportDocumentsController {
-  constructor(private readonly exportDocumentsService: ExportDocumentsService) {}
+  constructor(
+    private readonly exportDocumentsService: ExportDocumentsService,
+  ) {}
 
   @Get()
   @ResponseMessage('Fetch export documents')
@@ -29,7 +44,10 @@ export class ExportDocumentsController {
 
   @Post()
   @ResponseMessage('Register export document version')
-  upsertDocument(@Body() dto: UpsertExportDocumentDto, @User() user: UserEntity) {
+  upsertDocument(
+    @Body() dto: UpsertExportDocumentDto,
+    @User() user: UserEntity,
+  ) {
     return this.exportDocumentsService.upsertDocument(dto, user);
   }
 
@@ -41,7 +59,10 @@ export class ExportDocumentsController {
 
   @Post('shipment/:_id/generate/:type')
   @ResponseMessage('Generate export document snapshot')
-  generateSnapshot(@Param('_id') recordId: string, @Param('type') type: DocumentType) {
+  generateSnapshot(
+    @Param('_id') recordId: string,
+    @Param('type') type: DocumentType,
+  ) {
     return this.exportDocumentsService.generateSnapshotDocument(recordId, type);
   }
 
@@ -73,7 +94,10 @@ export class ExportDocumentsController {
     @Param('type') type: 'CI' | 'PL',
     @Res() res: Response,
   ) {
-    const buffer = await this.exportDocumentsService.generateDocumentPdf(recordId, type);
+    const buffer = await this.exportDocumentsService.generateDocumentPdf(
+      recordId,
+      type,
+    );
     const filename = `${type}_${recordId}.pdf`;
 
     res.set({
@@ -89,7 +113,9 @@ export class ExportDocumentsController {
 @Controller('export-documents/portal')
 @UseGuards(JwtAuthGuard)
 export class PortalExportDocumentsController {
-  constructor(private readonly exportDocumentsService: ExportDocumentsService) {}
+  constructor(
+    private readonly exportDocumentsService: ExportDocumentsService,
+  ) {}
 
   @Get()
   @ResponseMessage('Fetch buyer portal export documents')
@@ -103,7 +129,10 @@ export class PortalExportDocumentsController {
     @User() user: AuthenticatedUser,
     @Res() res: Response,
   ) {
-    const file = await this.exportDocumentsService.downloadSharedPortalDocument(recordId, user);
+    const file = await this.exportDocumentsService.downloadSharedPortalDocument(
+      recordId,
+      user,
+    );
 
     res.set({
       'Content-Type': file.mimeType,

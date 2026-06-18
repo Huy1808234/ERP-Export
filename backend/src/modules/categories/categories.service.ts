@@ -1,4 +1,9 @@
-import { Injectable, ConflictException, NotFoundException, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  ConflictException,
+  NotFoundException,
+  OnModuleInit,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Category } from './entities/category.entity';
@@ -20,7 +25,10 @@ export class CategoriesService implements OnModuleInit {
         { name: 'Nông sản', description: 'Các sản phẩm nông nghiệp sạch' },
         { name: 'Gia vị', description: 'Hương vị đậm đà cho món ăn' },
         { name: 'Thủy hải sản', description: 'Hải sản tươi sống xuất khẩu' },
-        { name: 'Sản phẩm đóng gói', description: 'Hàng tiêu dùng đóng gói sẵn' },
+        {
+          name: 'Sản phẩm đóng gói',
+          description: 'Hàng tiêu dùng đóng gói sẵn',
+        },
       ];
       for (const item of defaults) {
         await this.create(item);
@@ -41,11 +49,13 @@ export class CategoriesService implements OnModuleInit {
 
   async create(createCategoryDto: CreateCategoryDto): Promise<Category> {
     const { name, slug } = createCategoryDto;
-    
+
     // Tự động tạo slug nếu không có
     const finalSlug = slug || this.toSlug(name);
 
-    const existing = await this.categoryRepository.findOne({ where: { slug: finalSlug } });
+    const existing = await this.categoryRepository.findOne({
+      where: { slug: finalSlug },
+    });
     if (existing) {
       throw new ConflictException('Danh mục này đã tồn tại');
     }
@@ -66,16 +76,21 @@ export class CategoriesService implements OnModuleInit {
   }
 
   async findOne(id: string): Promise<Category> {
-    const category = await this.categoryRepository.findOne({ where: { _id: id } });
+    const category = await this.categoryRepository.findOne({
+      where: { _id: id },
+    });
     if (!category) {
       throw new NotFoundException('Không tìm thấy danh mục');
     }
     return category;
   }
 
-  async update(id: string, updateCategoryDto: UpdateCategoryDto): Promise<Category> {
+  async update(
+    id: string,
+    updateCategoryDto: UpdateCategoryDto,
+  ): Promise<Category> {
     const category = await this.findOne(id);
-    
+
     if (updateCategoryDto.name && !updateCategoryDto.slug) {
       updateCategoryDto.slug = this.toSlug(updateCategoryDto.name);
     }

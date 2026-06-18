@@ -14,6 +14,6 @@ import { PurchaseRequestApprovalListener } from './purchase-request-approval.lis
   ],
   controllers: [PurchaseRequestsController],
   providers: [PurchaseRequestsService, PurchaseRequestApprovalListener],
-  exports: [PurchaseRequestsService]
+  exports: [PurchaseRequestsService],
 })
 export class PurchaseRequestsModule {}

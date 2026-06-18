@@ -1,15 +1,37 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository } from 'typeorm';
 import Decimal from 'decimal.js';
 import { createOpaqueCode } from '@/common/ids/entity-id.util';
-import type { AuthenticatedUser, QueryParams } from '@/common/types/authenticated-user.type';
-import { AccountReceivable, ARStatus } from '@/modules/account-receivables/entities/account-receivable.entity';
+import type {
+  AuthenticatedUser,
+  QueryParams,
+} from '@/common/types/authenticated-user.type';
+import {
+  AccountReceivable,
+  ARStatus,
+} from '@/modules/account-receivables/entities/account-receivable.entity';
 import { PaymentAllocation } from '@/modules/account-receivables/entities/payment-allocation.entity';
 import { FilesService } from '@/modules/files/files.service';
+import {
+  Inquiry,
+  InquiryStatus,
+} from '@/modules/inquiries/entities/inquiry.entity';
+import { Partner } from '@/modules/partners/entities/partner.entity';
+import { PricingPoliciesService } from '@/modules/pricing-policies/pricing-policies.service';
+import { Product } from '@/modules/products/entities/product.entity';
+import { ProformaInvoice } from '@/modules/proforma-invoices/entities/proforma-invoice.entity';
 import { SalesContract } from '@/modules/sales-contracts/entities/sales-contract.entity';
-import { Shipment } from '@/modules/shipments/entities/shipment.entity';
+import {
+  Shipment,
+  ShipmentStatus,
+} from '@/modules/shipments/entities/shipment.entity';
 import { TradeFinanceService } from '@/modules/trade-finance/trade-finance.service';
+import { Incoterm } from '@/modules/quotations/entities/quotation.entity';
 import {
   TradeFinanceStatus,
   TradeFinanceType,
@@ -43,6 +65,7 @@ import {
   PortalMessageAuthorType,
   PortalSupportMessage,
 } from './entities/portal-support-message.entity';
+import { RedisCacheService } from '@/common/cache/redis-cache.service';
 
 type PortalBuyerUser = AuthenticatedUser & {
   username: string;
@@ -67,11 +90,48 @@ type PortalStatementLine = {
   allocations: PaymentAllocation[];
 };
 
+type CreatePortalInquiryInput = {
+  product_id: string;
+  quantity: number;
+  note?: string | null;
+  customerPhone?: string | null;
+};
+
+type PortalPricingQuery = QueryParams & {
+  incoterm?: string;
+  currency?: string;
+  quantity?: string;
+  search?: string;
+};
+
+const SHIPMENT_TIMELINE = [
+  { status: ShipmentStatus.BOOKED, label: 'Booking confirmed' },
+  { status: ShipmentStatus.LOADING, label: 'Cargo loading / stock issued' },
+  { status: ShipmentStatus.CUSTOMS_CLEARED, label: 'Export customs cleared' },
+  { status: ShipmentStatus.ON_BOARD, label: 'On board / departed' },
+  { status: ShipmentStatus.ARRIVED, label: 'Arrived at destination' },
+  { status: ShipmentStatus.CLOSED, label: 'Shipment closed' },
+] as const;
+
+const PORTAL_PROFILE_CACHE_TTL_SECONDS = 60;
+const PORTAL_ORDERS_CACHE_TTL_SECONDS = 90;
+const PORTAL_SHIPMENTS_CACHE_TTL_SECONDS = 45;
+const PORTAL_PRICING_CACHE_TTL_SECONDS = 180;
+const PORTAL_INQUIRIES_CACHE_TTL_SECONDS = 30;
+
 @Injectable()
 export class PortalService {
   constructor(
     @InjectRepository(AccountReceivable)
     private readonly arRepository: Repository<AccountReceivable>,
+    @InjectRepository(Inquiry)
+    private readonly inquiryRepository: Repository<Inquiry>,
+    @InjectRepository(Partner)
+    private readonly partnerRepository: Repository<Partner>,
+    @InjectRepository(Product)
+    private readonly productRepository: Repository<Product>,
+    @InjectRepository(ProformaInvoice)
+    private readonly proformaInvoiceRepository: Repository<ProformaInvoice>,
     @InjectRepository(PortalPaymentReceipt)
     private readonly receiptRepository: Repository<PortalPaymentReceipt>,
     @InjectRepository(PortalSupportTicket)
@@ -85,17 +145,79 @@ export class PortalService {
     @InjectRepository(Shipment)
     private readonly shipmentRepository: Repository<Shipment>,
     private readonly filesService: FilesService,
+    private readonly pricingPoliciesService: PricingPoliciesService,
     private readonly tradeFinanceService: TradeFinanceService,
+    private readonly cache: RedisCacheService,
   ) {}
+
+  private async invalidateBuyerPortalCache(partnerId: string): Promise<void> {
+    await this.cache.delByPattern(`mini-erp:portal:*:${partnerId}:*`);
+  }
 
   private assertBuyer(user?: AuthenticatedUser): PortalBuyerUser {
     const username = user?.username?.trim();
     const partnerId = user?.partnerId?.trim();
     if (!username || !partnerId) {
-      throw new BadRequestException('Portal user is not linked to a buyer account');
+      throw new BadRequestException(
+        'Portal user is not linked to a buyer account',
+      );
     }
 
     return { ...user, username, partnerId };
+  }
+
+  private async getBuyerPartner(buyer: PortalBuyerUser) {
+    const partner = await this.partnerRepository.findOne({
+      where: { _id: buyer.partnerId },
+    });
+    if (!partner)
+      throw new BadRequestException(
+        'Buyer account is not linked to a valid partner',
+      );
+    return partner;
+  }
+
+  private normalizeIncoterm(value?: string): Incoterm {
+    if (value && Object.values(Incoterm).includes(value as Incoterm)) {
+      return value as Incoterm;
+    }
+    return Incoterm.FOB;
+  }
+
+  private normalizePositiveNumber(value: unknown, fallback: number) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+  }
+
+  private buildShipmentTimeline(shipment: Shipment) {
+    const currentIndex = SHIPMENT_TIMELINE.findIndex(
+      (item) => item.status === shipment.status,
+    );
+    const safeCurrentIndex = currentIndex >= 0 ? currentIndex : 0;
+
+    return SHIPMENT_TIMELINE.map((item, index) => ({
+      status: item.status,
+      label: item.label,
+      state:
+        index < safeCurrentIndex
+          ? 'finish'
+          : index === safeCurrentIndex
+            ? 'process'
+            : 'wait',
+      date: this.resolveShipmentTimelineDate(shipment, item.status),
+    }));
+  }
+
+  private resolveShipmentTimelineDate(
+    shipment: Shipment,
+    status: ShipmentStatus,
+  ) {
+    if (status === ShipmentStatus.LOADING)
+      return shipment.stockIssuedAt || shipment.etd || null;
+    if (status === ShipmentStatus.ON_BOARD) return shipment.etd || null;
+    if ([ShipmentStatus.ARRIVED, ShipmentStatus.CLOSED].includes(status))
+      return shipment.eta || null;
+    return null;
   }
 
   private createReceiptNumber(date = new Date()) {
@@ -160,7 +282,10 @@ export class PortalService {
       dueDate: row.dueDate,
       amountForeign: amountForeign.toNumber(),
       paidAmountForeign: paidAmountForeign.toNumber(),
-      openAmountForeign: Decimal.max(amountForeign.minus(paidAmountForeign), 0).toNumber(),
+      openAmountForeign: Decimal.max(
+        amountForeign.minus(paidAmountForeign),
+        0,
+      ).toNumber(),
       currency: row.currency,
       amountVnd: amountVnd.toNumber(),
       paidAmountVnd: paidAmountVnd.toNumber(),
@@ -168,6 +293,294 @@ export class PortalService {
       status: row.status,
       allocations: row.allocations || [],
     };
+  }
+
+  async getProfile(user?: AuthenticatedUser) {
+    const buyer = this.assertBuyer(user);
+    const cacheKey = this.cache.makeKey(`portal:profile:${buyer.partnerId}`, {
+      username: buyer.username,
+    });
+
+    return this.cache.getOrSet(
+      cacheKey,
+      PORTAL_PROFILE_CACHE_TTL_SECONDS,
+      async () => {
+        const partner = await this.getBuyerPartner(buyer);
+        const openReceivables = await this.arRepository.find({
+          where: { buyerId: buyer.partnerId },
+        });
+        const openBalance = openReceivables.reduce((sum, row) => {
+          if ([ARStatus.PAID, ARStatus.CANCELLED].includes(row.status))
+            return sum;
+          return sum.plus(
+            new Decimal(row.amountForeign || 0).minus(
+              row.paidAmountForeign || 0,
+            ),
+          );
+        }, new Decimal(0));
+
+        return {
+          user: {
+            username: buyer.username,
+            partnerId: buyer.partnerId,
+            roleName: buyer.roleName || null,
+          },
+          partner,
+          finance: {
+            openBalanceForeign: Decimal.max(openBalance, 0).toNumber(),
+            openInvoiceCount: openReceivables.filter(
+              (row) =>
+                ![ARStatus.PAID, ARStatus.CANCELLED].includes(row.status),
+            ).length,
+            defaultCurrency: partner.defaultCurrency || 'USD',
+            creditLimit: partner.creditLimit || 0,
+            riskLevel: partner.riskLevel,
+          },
+        };
+      },
+    );
+  }
+
+  async findOrders(user?: AuthenticatedUser) {
+    const buyer = this.assertBuyer(user);
+    const cacheKey = this.cache.makeKey(`portal:orders:${buyer.partnerId}`, {
+      username: buyer.username,
+    });
+
+    return this.cache.getOrSet(
+      cacheKey,
+      PORTAL_ORDERS_CACHE_TTL_SECONDS,
+      async () => {
+        const [contracts, proformaInvoices] = await Promise.all([
+          this.salesContractRepository.find({
+            where: { buyerId: buyer.partnerId },
+            relations: ['items', 'items.product'],
+            order: { createdAt: 'DESC' },
+          }),
+          this.proformaInvoiceRepository.find({
+            where: { customerId: buyer.partnerId },
+            relations: ['items', 'items.product', 'salesContract'],
+            order: { createdAt: 'DESC' },
+          }),
+        ]);
+
+        return {
+          summary: {
+            contractCount: contracts.length,
+            proformaInvoiceCount: proformaInvoices.length,
+            pendingSignatureCount: contracts.filter(
+              (contract) =>
+                ['PENDING_BUYER_SIGNATURE', 'BUYER_SIGNED'].includes(
+                  contract.status,
+                ) ||
+                ['PENDING_BUYER', 'BUYER_SIGNED'].includes(
+                  contract.signatureStatus,
+                ),
+            ).length,
+            shippedCount: contracts.filter((contract) =>
+              ['SHIPPED', 'PAID'].includes(contract.status),
+            ).length,
+          },
+          contracts,
+          proformaInvoices,
+        };
+      },
+    );
+  }
+
+  async findShipments(user?: AuthenticatedUser) {
+    const buyer = this.assertBuyer(user);
+    const cacheKey = this.cache.makeKey(`portal:shipments:${buyer.partnerId}`, {
+      username: buyer.username,
+    });
+
+    return this.cache.getOrSet(
+      cacheKey,
+      PORTAL_SHIPMENTS_CACHE_TTL_SECONDS,
+      async () => {
+        const shipments = await this.shipmentRepository
+          .createQueryBuilder('shipment')
+          .leftJoinAndSelect('shipment.salesContract', 'salesContract')
+          .leftJoinAndSelect('shipment.containers', 'containers')
+          .where('salesContract."buyerId" = :buyerId', {
+            buyerId: buyer.partnerId,
+          })
+          .orderBy('shipment.updatedAt', 'DESC')
+          .getMany();
+
+        return shipments.map((shipment) => ({
+          ...shipment,
+          timeline: this.buildShipmentTimeline(shipment),
+        }));
+      },
+    );
+  }
+
+  async findInquiries(user?: AuthenticatedUser) {
+    const buyer = this.assertBuyer(user);
+    const cacheKey = this.cache.makeKey(`portal:inquiries:${buyer.partnerId}`, {
+      username: buyer.username,
+    });
+
+    return this.cache.getOrSet(
+      cacheKey,
+      PORTAL_INQUIRIES_CACHE_TTL_SECONDS,
+      async () => {
+        const partner = await this.getBuyerPartner(buyer);
+        const qb = this.inquiryRepository
+          .createQueryBuilder('inquiry')
+          .leftJoinAndSelect('inquiry.product', 'product')
+          .where('inquiry."deletedAt" IS NULL')
+          .orderBy('inquiry.createdAt', 'DESC');
+
+        if (partner.email) {
+          qb.andWhere(
+            '(inquiry."customerEmail" = :email OR inquiry."customerName" = :name)',
+            {
+              email: partner.email,
+              name: partner.name,
+            },
+          );
+        } else {
+          qb.andWhere('inquiry."customerName" = :name', { name: partner.name });
+        }
+
+        return qb.getMany();
+      },
+    );
+  }
+
+  async createInquiry(dto: CreatePortalInquiryInput, user?: AuthenticatedUser) {
+    const buyer = this.assertBuyer(user);
+    const partner = await this.getBuyerPartner(buyer);
+    const product = await this.productRepository.findOne({
+      where: { _id: dto.product_id, isActive: true },
+    });
+    if (!product)
+      throw new BadRequestException(
+        'Product is not available for portal inquiry',
+      );
+
+    const quantity = this.normalizePositiveNumber(dto.quantity, 1);
+    const inquiry = this.inquiryRepository.create({
+      customerName: partner.name,
+      customerEmail: partner.email || `${buyer.username}@portal.local`,
+      customerPhone: dto.customerPhone || partner.phone || undefined,
+      productId: product._id,
+      productSnapshotName: product.englishName || product.vietnameseName,
+      productSnapshotCode: product.sku,
+      quantity,
+      note: dto.note || undefined,
+      status: InquiryStatus.PENDING,
+      isRead: false,
+    });
+
+    const saved = await this.inquiryRepository.save(inquiry);
+    await this.createNotification({
+      buyerId: buyer.partnerId,
+      type: PortalNotificationType.SYSTEM,
+      severity: PortalNotificationSeverity.INFO,
+      title: 'Inquiry submitted',
+      description: `${product.sku} inquiry has been sent to sales.`,
+      referenceType: 'product_inquiries',
+      referenceId: saved._id,
+    });
+    await this.invalidateBuyerPortalCache(buyer.partnerId);
+
+    return this.inquiryRepository.findOne({
+      where: { _id: saved._id },
+      relations: ['product'],
+    });
+  }
+
+  async findPricing(user?: AuthenticatedUser, query: PortalPricingQuery = {}) {
+    const buyer = this.assertBuyer(user);
+    const quantity = this.normalizePositiveNumber(query.quantity, 1);
+    const search = typeof query.search === 'string' ? query.search.trim() : '';
+    const cacheKey = this.cache.makeKey(`portal:pricing:${buyer.partnerId}`, {
+      incoterm: query.incoterm,
+      currency: query.currency,
+      quantity,
+      search,
+    });
+
+    return this.cache.getOrSet(
+      cacheKey,
+      PORTAL_PRICING_CACHE_TTL_SECONDS,
+      async () => {
+        const partner = await this.getBuyerPartner(buyer);
+        const incoterm = this.normalizeIncoterm(query.incoterm);
+        const currency = String(
+          query.currency || partner.defaultCurrency || 'USD',
+        ).toUpperCase();
+
+        const qb = this.productRepository
+          .createQueryBuilder('product')
+          .where('product."isActive" = true')
+          .orderBy('product.isBestseller', 'DESC')
+          .addOrderBy('product.vietnameseName', 'ASC');
+
+        if (search) {
+          qb.andWhere(
+            '(product.sku ILIKE :search OR product."vietnameseName" ILIKE :search OR product."englishName" ILIKE :search OR product."hsCode" ILIKE :search)',
+            { search: `%${search}%` },
+          );
+        }
+
+        const products = await qb.getMany();
+        const rows = await Promise.all(
+          products.map(async (product) => {
+            try {
+              const resolved = await this.pricingPoliciesService.resolvePrice({
+                productId: product._id,
+                buyerId: buyer.partnerId,
+                quantity,
+                incoterm,
+                currency,
+                country: partner.country || undefined,
+                marketRegion: partner.region || undefined,
+              });
+
+              return {
+                product,
+                unitPrice: resolved.unitPrice,
+                currency: resolved.currency,
+                incoterm,
+                source: resolved.source,
+                pricingPolicy_id: resolved.pricingPolicyId,
+                quantity,
+              };
+            } catch {
+              return {
+                product,
+                unitPrice: product.defaultExportPrice
+                  ? Number(product.defaultExportPrice)
+                  : null,
+                currency: product.exportCurrency || currency,
+                incoterm,
+                source: product.defaultExportPrice
+                  ? 'PRODUCT_DEFAULT'
+                  : 'CONTACT_SALES',
+                pricingPolicy_id: null,
+                quantity,
+              };
+            }
+          }),
+        );
+
+        return {
+          buyer: {
+            _id: partner._id,
+            name: partner.name,
+            country: partner.country,
+            region: partner.region,
+            defaultCurrency: partner.defaultCurrency,
+          },
+          filters: { incoterm, currency, quantity, search },
+          results: rows,
+        };
+      },
+    );
   }
 
   async getStatement(user?: AuthenticatedUser) {
@@ -208,8 +621,11 @@ export class PortalService {
         totalVnd: summary.totalVnd.toNumber(),
         paidVnd: summary.paidVnd.toNumber(),
         openVnd: summary.openVnd.toNumber(),
-        openInvoiceCount: lines.filter((line) => line.openAmountForeign > 0).length,
-        pendingReceiptCount: receipts.filter((receipt) => receipt.status === PortalReceiptStatus.SUBMITTED).length,
+        openInvoiceCount: lines.filter((line) => line.openAmountForeign > 0)
+          .length,
+        pendingReceiptCount: receipts.filter(
+          (receipt) => receipt.status === PortalReceiptStatus.SUBMITTED,
+        ).length,
       },
       lines,
       receipts,
@@ -227,10 +643,21 @@ export class PortalService {
       ['summary', 'openForeign', statement.summary.openForeign],
       ['summary', 'openInvoiceCount', statement.summary.openInvoiceCount],
       [],
-      ['invoiceNumber', 'invoiceDate', 'dueDate', 'currency', 'amountForeign', 'paidAmountForeign', 'openAmountForeign', 'status'],
+      [
+        'invoiceNumber',
+        'invoiceDate',
+        'dueDate',
+        'currency',
+        'amountForeign',
+        'paidAmountForeign',
+        'openAmountForeign',
+        'status',
+      ],
       ...statement.lines.map((line) => [
         line.invoiceNumber,
-        line.invoiceDate ? new Date(line.invoiceDate).toISOString().slice(0, 10) : null,
+        line.invoiceDate
+          ? new Date(line.invoiceDate).toISOString().slice(0, 10)
+          : null,
         line.dueDate ? new Date(line.dueDate).toISOString().slice(0, 10) : null,
         line.currency,
         line.amountForeign,
@@ -239,7 +666,15 @@ export class PortalService {
         line.status,
       ]),
       [],
-      ['receiptNumber', 'receiptType', 'status', 'amount', 'currency', 'bankReference', 'submittedAt'],
+      [
+        'receiptNumber',
+        'receiptType',
+        'status',
+        'amount',
+        'currency',
+        'bankReference',
+        'submittedAt',
+      ],
       ...statement.receipts.map((receipt) => [
         receipt.receiptNumber,
         receipt.receiptType,
@@ -247,13 +682,24 @@ export class PortalService {
         receipt.amount,
         receipt.currency,
         receipt.bankReference,
-        receipt.submittedAt ? new Date(receipt.submittedAt).toISOString() : null,
+        receipt.submittedAt
+          ? new Date(receipt.submittedAt).toISOString()
+          : null,
       ]),
     ];
-    const csv = rows.map((row) => row.map((cell) => {
-      const value = cell === null || cell === undefined ? '' : String(cell);
-      return /[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
-    }).join(',')).join('\n');
+    const csv = rows
+      .map((row) =>
+        row
+          .map((cell) => {
+            const value =
+              cell === null || cell === undefined ? '' : String(cell);
+            return /[",\n]/.test(value)
+              ? `"${value.replace(/"/g, '""')}"`
+              : value;
+          })
+          .join(','),
+      )
+      .join('\n');
 
     return Buffer.from(`\uFEFF${csv}`, 'utf8');
   }
@@ -267,7 +713,10 @@ export class PortalService {
     });
   }
 
-  async createPaymentReceipt(dto: CreatePortalPaymentReceiptDto, user?: AuthenticatedUser) {
+  async createPaymentReceipt(
+    dto: CreatePortalPaymentReceiptDto,
+    user?: AuthenticatedUser,
+  ) {
     const buyer = this.assertBuyer(user);
     const fileAsset = await this.filesService.findOne(dto.fileAsset_id);
     let accountReceivable: AccountReceivable | null = null;
@@ -278,7 +727,9 @@ export class PortalService {
         where: { _id: dto.accountReceivableId, buyerId: buyer.partnerId },
       });
       if (!accountReceivable) {
-        throw new BadRequestException('Account receivable does not belong to this buyer account');
+        throw new BadRequestException(
+          'Account receivable does not belong to this buyer account',
+        );
       }
       salesContractId = accountReceivable.salesContractId || salesContractId;
     }
@@ -288,7 +739,9 @@ export class PortalService {
         where: { _id: salesContractId, buyerId: buyer.partnerId },
       });
       if (!contract) {
-        throw new BadRequestException('Sales contract does not belong to this buyer account');
+        throw new BadRequestException(
+          'Sales contract does not belong to this buyer account',
+        );
       }
     }
 
@@ -301,10 +754,14 @@ export class PortalService {
       receiptType: dto.receiptType,
       amount: Number(dto.amount || 0),
       currency: dto.currency || accountReceivable?.currency || 'USD',
-      exchangeRate: Number(dto.exchangeRate || accountReceivable?.exchangeRate || 1),
+      exchangeRate: Number(
+        dto.exchangeRate || accountReceivable?.exchangeRate || 1,
+      ),
       bankReference: dto.bankReference || null,
       remittingBank: dto.remittingBank || null,
-      transactionDate: dto.transactionDate ? new Date(dto.transactionDate) : now,
+      transactionDate: dto.transactionDate
+        ? new Date(dto.transactionDate)
+        : now,
       fileAsset_id: fileAsset._id,
       tradeFinanceTransactionId: null,
       status: PortalReceiptStatus.SUBMITTED,
@@ -339,6 +796,7 @@ export class PortalService {
       referenceType: 'portal_payment_receipts',
       referenceId: saved._id,
     });
+    await this.invalidateBuyerPortalCache(buyer.partnerId);
 
     return this.receiptRepository.findOne({
       where: { _id: saved._id },
@@ -346,13 +804,18 @@ export class PortalService {
     });
   }
 
-  async reviewPaymentReceipt(recordId: string, dto: ReviewPortalPaymentReceiptDto, user?: AuthenticatedUser) {
+  async reviewPaymentReceipt(
+    recordId: string,
+    dto: ReviewPortalPaymentReceiptDto,
+    user?: AuthenticatedUser,
+  ) {
     const username = user?.username || 'system';
     const receipt = await this.receiptRepository.findOne({
       where: { _id: recordId },
       relations: ['accountReceivable'],
     });
-    if (!receipt) throw new NotFoundException('Portal payment receipt not found');
+    if (!receipt)
+      throw new NotFoundException('Portal payment receipt not found');
     if (receipt.status !== PortalReceiptStatus.SUBMITTED) {
       throw new BadRequestException('Only submitted receipts can be reviewed');
     }
@@ -365,7 +828,9 @@ export class PortalService {
       receipt.rejectionReason = dto.note || 'Rejected by accounting';
       receipt.auditTrail = [
         ...(receipt.auditTrail || []),
-        this.receiptAudit('REJECTED', username, { note: receipt.rejectionReason }),
+        this.receiptAudit('REJECTED', username, {
+          note: receipt.rejectionReason,
+        }),
       ];
       const saved = await this.receiptRepository.save(receipt);
       await this.createNotification({
@@ -377,18 +842,22 @@ export class PortalService {
         referenceType: 'portal_payment_receipts',
         referenceId: saved._id,
       });
+      await this.invalidateBuyerPortalCache(saved.buyerId);
       return saved;
     }
 
     if (!receipt.salesContractId) {
-      throw new BadRequestException('A sales contract is required before confirming this receipt');
+      throw new BadRequestException(
+        'A sales contract is required before confirming this receipt',
+      );
     }
 
     const transaction = await this.tradeFinanceService.createTransaction(
       {
-        type: receipt.receiptType === PortalReceiptType.TT_ADVANCE
-          ? TradeFinanceType.TT_ADVANCE
-          : TradeFinanceType.TT_BALANCE,
+        type:
+          receipt.receiptType === PortalReceiptType.TT_ADVANCE
+            ? TradeFinanceType.TT_ADVANCE
+            : TradeFinanceType.TT_BALANCE,
         salesContractId: receipt.salesContractId,
         amount: receipt.amount,
         currency: receipt.currency,
@@ -400,11 +869,12 @@ export class PortalService {
       },
       { username } as UserEntity,
     );
-    const postedTransaction = await this.tradeFinanceService.updateTransactionStatus(
-      transaction._id,
-      TradeFinanceStatus.RECEIVED,
-      { username } as UserEntity,
-    );
+    const postedTransaction =
+      await this.tradeFinanceService.updateTransactionStatus(
+        transaction._id,
+        TradeFinanceStatus.RECEIVED,
+        { username } as UserEntity,
+      );
 
     receipt.status = PortalReceiptStatus.CONFIRMED;
     receipt.tradeFinanceTransactionId = postedTransaction._id;
@@ -425,6 +895,7 @@ export class PortalService {
       referenceType: 'portal_payment_receipts',
       referenceId: saved._id,
     });
+    await this.invalidateBuyerPortalCache(saved.buyerId);
 
     return saved;
   }
@@ -460,7 +931,9 @@ export class PortalService {
     if (!normalized.length) return null;
 
     const fileAssets = await Promise.all(
-      normalized.map(async (attachment) => this.filesService.findOne(attachment.fileAsset_id)),
+      normalized.map(async (attachment) =>
+        this.filesService.findOne(attachment.fileAsset_id),
+      ),
     );
 
     return fileAssets.map((asset) => ({
@@ -470,7 +943,10 @@ export class PortalService {
     }));
   }
 
-  async createSupportTicket(dto: CreatePortalSupportTicketDto, user?: AuthenticatedUser) {
+  async createSupportTicket(
+    dto: CreatePortalSupportTicketDto,
+    user?: AuthenticatedUser,
+  ) {
     const buyer = this.assertBuyer(user);
     if (dto.shipmentId) {
       const shipment = await this.shipmentRepository.findOne({
@@ -478,7 +954,9 @@ export class PortalService {
         relations: ['salesContract'],
       });
       if (!shipment || shipment.salesContract?.buyerId !== buyer.partnerId) {
-        throw new BadRequestException('Shipment does not belong to this buyer account');
+        throw new BadRequestException(
+          'Shipment does not belong to this buyer account',
+        );
       }
     }
 
@@ -496,17 +974,21 @@ export class PortalService {
       lastMessageAt: new Date(),
       closedAt: null,
       attachments,
-      auditTrail: [this.ticketAudit('CREATED', buyer.username, { note: dto.message })],
+      auditTrail: [
+        this.ticketAudit('CREATED', buyer.username, { note: dto.message }),
+      ],
     });
     const savedTicket = await this.ticketRepository.save(ticket);
 
-    await this.messageRepository.save(this.messageRepository.create({
-      ticket_id: savedTicket._id,
-      authorUsername: buyer.username,
-      authorType: PortalMessageAuthorType.BUYER,
-      message: dto.message.trim(),
-      attachments,
-    }));
+    await this.messageRepository.save(
+      this.messageRepository.create({
+        ticket_id: savedTicket._id,
+        authorUsername: buyer.username,
+        authorType: PortalMessageAuthorType.BUYER,
+        message: dto.message.trim(),
+        attachments,
+      }),
+    );
     await this.createNotification({
       buyerId: buyer.partnerId,
       type: PortalNotificationType.SUPPORT,
@@ -520,24 +1002,36 @@ export class PortalService {
     return this.findSupportTicket(savedTicket._id, buyer);
   }
 
-  async addSupportMessage(recordId: string, dto: CreatePortalSupportMessageDto, user?: AuthenticatedUser) {
+  async addSupportMessage(
+    recordId: string,
+    dto: CreatePortalSupportMessageDto,
+    user?: AuthenticatedUser,
+  ) {
     const buyer = this.assertBuyer(user);
     const ticket = await this.ticketRepository.findOne({
       where: { _id: recordId, buyerId: buyer.partnerId },
     });
     if (!ticket) throw new NotFoundException('Support ticket not found');
-    if ([PortalTicketStatus.RESOLVED, PortalTicketStatus.CLOSED].includes(ticket.status)) {
-      throw new BadRequestException('Cannot add messages to a resolved or closed ticket');
+    if (
+      [PortalTicketStatus.RESOLVED, PortalTicketStatus.CLOSED].includes(
+        ticket.status,
+      )
+    ) {
+      throw new BadRequestException(
+        'Cannot add messages to a resolved or closed ticket',
+      );
     }
 
     const attachments = await this.normalizeTicketAttachments(dto.attachments);
-    const message = await this.messageRepository.save(this.messageRepository.create({
-      ticket_id: ticket._id,
-      authorUsername: buyer.username,
-      authorType: PortalMessageAuthorType.BUYER,
-      message: dto.message.trim(),
-      attachments,
-    }));
+    const message = await this.messageRepository.save(
+      this.messageRepository.create({
+        ticket_id: ticket._id,
+        authorUsername: buyer.username,
+        authorType: PortalMessageAuthorType.BUYER,
+        message: dto.message.trim(),
+        attachments,
+      }),
+    );
 
     ticket.status = PortalTicketStatus.OPEN;
     ticket.lastMessageAt = new Date();
@@ -560,20 +1054,29 @@ export class PortalService {
       where: { _id: recordId, buyerId: buyer.partnerId },
     });
     if (!ticket) throw new NotFoundException('Support ticket not found');
-    if (![PortalTicketStatus.CLOSED, PortalTicketStatus.OPEN].includes(dto.status)) {
-      throw new BadRequestException('Buyer can only reopen or close a support ticket');
+    if (
+      ![PortalTicketStatus.CLOSED, PortalTicketStatus.OPEN].includes(dto.status)
+    ) {
+      throw new BadRequestException(
+        'Buyer can only reopen or close a support ticket',
+      );
     }
 
     const fromStatus = ticket.status;
     ticket.status = dto.status;
-    ticket.closedAt = dto.status === PortalTicketStatus.CLOSED ? new Date() : null;
+    ticket.closedAt =
+      dto.status === PortalTicketStatus.CLOSED ? new Date() : null;
     ticket.auditTrail = [
       ...(ticket.auditTrail || []),
-      this.ticketAudit(dto.status === PortalTicketStatus.CLOSED ? 'CLOSED' : 'STATUS_CHANGED', buyer.username, {
-        fromStatus,
-        toStatus: dto.status,
-        note: dto.note || null,
-      }),
+      this.ticketAudit(
+        dto.status === PortalTicketStatus.CLOSED ? 'CLOSED' : 'STATUS_CHANGED',
+        buyer.username,
+        {
+          fromStatus,
+          toStatus: dto.status,
+          note: dto.note || null,
+        },
+      ),
     ];
     await this.ticketRepository.save(ticket);
     return this.findSupportTicket(ticket._id, buyer);

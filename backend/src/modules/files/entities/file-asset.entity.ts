@@ -28,7 +28,11 @@ export type FileAssetAuditEvent = {
 
 @Entity('file_assets')
 @Index('idx_file_assets_folder_created', ['folder', 'createdAt'])
-@Index('idx_file_assets_linked_document', ['linkedModule', 'linkedDocumentType', 'linkedDocument_id'])
+@Index('idx_file_assets_linked_document', [
+  'linkedModule',
+  'linkedDocumentType',
+  'linkedDocument_id',
+])
 export class FileAsset {
   @PrimaryColumn({ type: 'varchar', length: 40, name: '_id' })
   _id: string;

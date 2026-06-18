@@ -1,4 +1,13 @@
-import { BeforeInsert, Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryColumn, UpdateDateColumn } from 'typeorm';
+import {
+  BeforeInsert,
+  Column,
+  CreateDateColumn,
+  Entity,
+  JoinColumn,
+  ManyToOne,
+  PrimaryColumn,
+  UpdateDateColumn,
+} from 'typeorm';
 import { Shipment } from './shipment.entity';
 import { createEntityId } from '@/common/ids/entity-id.util';
 
@@ -9,7 +18,7 @@ export enum DocumentType {
   CERTIFICATE_OF_ORIGIN = 'CERTIFICATE_OF_ORIGIN',
   PHYTOSANITARY = 'PHYTOSANITARY',
   CUSTOMS_DECLARATION = 'CUSTOMS_DECLARATION',
-  OTHER = 'OTHER'
+  OTHER = 'OTHER',
 }
 
 @Entity('shipment_documents')

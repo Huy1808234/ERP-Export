@@ -1,4 +1,16 @@
-import { BeforeInsert, Column, CreateDateColumn, Entity, OneToMany, PrimaryColumn, UpdateDateColumn, ManyToOne, JoinColumn, DeleteDateColumn, Index } from 'typeorm';
+import {
+  BeforeInsert,
+  Column,
+  CreateDateColumn,
+  Entity,
+  OneToMany,
+  PrimaryColumn,
+  UpdateDateColumn,
+  ManyToOne,
+  JoinColumn,
+  DeleteDateColumn,
+  Index,
+} from 'typeorm';
 import { PurchaseOrderItem } from './purchase-order-item.entity';
 import { Partner } from '@/modules/partners/entities/partner.entity';
 import { User } from '@/modules/users/entities/user.entity';
@@ -15,7 +27,7 @@ export enum PurchaseOrderStatus {
   PARTIAL_RECEIPT = 'PARTIAL_RECEIPT',
   RECEIVED = 'RECEIVED',
   COMPLETED = 'COMPLETED',
-  CANCELLED = 'CANCELLED'
+  CANCELLED = 'CANCELLED',
 }
 
 export type PurchaseOrderAuditEvent = {
@@ -39,7 +51,10 @@ export class PurchaseOrder {
     }
   }
 
-  @Index('UDX_po_number_active', ['poNumber'], { unique: true, where: '"deletedAt" IS NULL' })
+  @Index('UDX_po_number_active', ['poNumber'], {
+    unique: true,
+    where: '"deletedAt" IS NULL',
+  })
   @Column()
   poNumber: string;
 
@@ -63,7 +78,7 @@ export class PurchaseOrder {
   @Column({
     type: 'enum',
     enum: PurchaseOrderStatus,
-    default: PurchaseOrderStatus.DRAFT
+    default: PurchaseOrderStatus.DRAFT,
   })
   status: PurchaseOrderStatus;
 
@@ -76,13 +91,31 @@ export class PurchaseOrder {
   @Column({ type: 'varchar', default: 'VND' })
   currency: string;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   subTotal: number;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   taxAmount: number;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   totalAmount: number;
 
   @Column()
@@ -92,7 +125,9 @@ export class PurchaseOrder {
   @JoinColumn({ name: 'createdByUsername', referencedColumnName: 'username' })
   createdBy: User;
 
-  @OneToMany(() => PurchaseOrderItem, (item) => item.purchaseOrder, { cascade: true })
+  @OneToMany(() => PurchaseOrderItem, (item) => item.purchaseOrder, {
+    cascade: true,
+  })
   items: PurchaseOrderItem[];
 
   @Column({ type: 'text', nullable: true })

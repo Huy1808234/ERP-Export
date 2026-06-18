@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
 import {
+  ArrayMinSize,
   IsArray,
   IsDateString,
   IsNumber,
@@ -45,6 +46,14 @@ export class SubmitInventoryCountDto {
   @ValidateNested({ each: true })
   @Type(() => InventoryCountLineDto)
   items?: InventoryCountLineDto[];
+}
+
+export class UpdateInventoryCountItemsDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @ValidateNested({ each: true })
+  @Type(() => InventoryCountLineDto)
+  items: InventoryCountLineDto[];
 }
 
 export class ApproveInventoryCountDto {

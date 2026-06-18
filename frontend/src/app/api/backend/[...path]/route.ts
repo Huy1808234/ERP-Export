@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -9,10 +10,12 @@ type BackendProxyContext = {
   }>;
 };
 
-const HOP_BY_HOP_HEADERS = new Set([
+const BLOCKED_FORWARD_HEADERS = new Set([
+  "authorization",
   "connection",
   "content-encoding",
   "content-length",
+  "cookie",
   "host",
   "keep-alive",
   "proxy-authenticate",
@@ -38,12 +41,32 @@ function cloneForwardHeaders(request: NextRequest): Headers {
   const headers = new Headers();
 
   request.headers.forEach((value, key) => {
-    if (!HOP_BY_HOP_HEADERS.has(key.toLowerCase())) {
+    if (!BLOCKED_FORWARD_HEADERS.has(key.toLowerCase())) {
       headers.set(key, value);
     }
   });
 
   return headers;
+}
+
+async function applySessionAuthHeader(headers: Headers): Promise<void> {
+  const session = await auth();
+  if (session?.error || !session?.accessToken) return;
+
+  headers.set("authorization", `Bearer ${session.accessToken}`);
+}
+
+function getProxyErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    const cause = (error as Error & { cause?: unknown }).cause;
+    if (cause instanceof Error && cause.message) {
+      return `${error.message}: ${cause.message}`;
+    }
+
+    return error.message;
+  }
+
+  return "Backend proxy failed";
 }
 
 async function proxyBackendRequest(
@@ -54,9 +77,12 @@ async function proxyBackendRequest(
     const { path } = await context.params;
     const targetUrl = buildBackendUrl(path, request.nextUrl.search);
     const method = request.method.toUpperCase();
+    const headers = cloneForwardHeaders(request);
+    await applySessionAuthHeader(headers);
+
     const init: RequestInit = {
       method,
-      headers: cloneForwardHeaders(request),
+      headers,
       cache: "no-store",
     };
 
@@ -66,16 +92,17 @@ async function proxyBackendRequest(
 
     const response = await fetch(targetUrl, init);
     const responseHeaders = new Headers(response.headers);
+    const responseBody = method === "HEAD" ? null : await response.arrayBuffer();
 
-    HOP_BY_HOP_HEADERS.forEach((header) => responseHeaders.delete(header));
+    BLOCKED_FORWARD_HEADERS.forEach((header) => responseHeaders.delete(header));
 
-    return new NextResponse(response.body, {
+    return new NextResponse(responseBody, {
       status: response.status,
       statusText: response.statusText,
       headers: responseHeaders,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Backend proxy failed";
+    const message = getProxyErrorMessage(error);
 
     return NextResponse.json(
       {

@@ -1,8 +1,15 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, EntityManager, LessThanOrEqual, Not, Repository } from 'typeorm';
+import { DataSource, EntityManager, Repository } from 'typeorm';
 import Decimal from 'decimal.js';
-import { Partner, PartnerType } from '@/modules/partners/entities/partner.entity';
+import {
+  Partner,
+  PartnerType,
+} from '@/modules/partners/entities/partner.entity';
 import { CreateAccountPayableDto } from './dto/create-account-payable.dto';
 import { UpdateAccountPayableDto } from './dto/update-account-payable.dto';
 import { AccountPayable, APStatus } from './entities/account-payable.entity';
@@ -24,9 +31,28 @@ import {
 } from './dto/create-payment-batch.dto';
 import { createOpaqueCode } from '@/common/ids/entity-id.util';
 import { AccountingService } from '@/modules/accounting/accounting.service';
-import { VendorInvoice, VendorInvoiceStatus } from '@/modules/vendor-invoices/entities/vendor-invoice.entity';
+import {
+  VendorInvoice,
+  VendorInvoiceStatus,
+} from '@/modules/vendor-invoices/entities/vendor-invoice.entity';
 import { ApprovalMatrixService } from '@/modules/approval-matrix/approval-matrix.service';
 import { ApprovalDocumentType } from '@/modules/approval-matrix/entities/approval-rule.entity';
+
+export interface AccountPayableListQuery {
+  vendorId?: string;
+  status?: APStatus;
+  search?: string;
+  current?: string | number;
+  pageSize?: string | number;
+}
+
+export interface AccountPayableListResponse {
+  results: AccountPayable[];
+  totalItems: number;
+  totalPages: number;
+  current: number;
+  pageSize: number;
+}
 
 @Injectable()
 export class AccountPayablesService {
@@ -55,11 +81,16 @@ export class AccountPayablesService {
   }
 
   private normalizeStatus(ap: AccountPayable) {
+    if (ap.status === APStatus.VOID) {
+      return APStatus.VOID;
+    }
     if (Number(ap.paidAmount) < 0) {
       throw new BadRequestException('So tien da thanh toan khong duoc am');
     }
     if (Number(ap.paidAmount) > Number(ap.amount)) {
-      throw new BadRequestException('So tien da thanh toan khong duoc vuot qua cong no');
+      throw new BadRequestException(
+        'So tien da thanh toan khong duoc vuot qua cong no',
+      );
     }
     if (ap.paidAmount <= 0) return APStatus.UNPAID;
     if (ap.paidAmount >= ap.amount) return APStatus.PAID;
@@ -72,7 +103,10 @@ export class AccountPayablesService {
 
   private createBatchNumber() {
     const dateKey = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    const suffix = createOpaqueCode('ap_batch_no').split('_').pop()?.toUpperCase();
+    const suffix = createOpaqueCode('ap_batch_no')
+      .split('_')
+      .pop()
+      ?.toUpperCase();
     return `APB-${dateKey}-${suffix}`;
   }
 
@@ -84,7 +118,9 @@ export class AccountPayablesService {
     if (currency === 'VND') return 1;
     const rate = Number(exchangeRate || 0);
     if (!Number.isFinite(rate) || rate <= 0) {
-      throw new BadRequestException('Ty gia bat buoc khi tao/chi batch ngoai te');
+      throw new BadRequestException(
+        'Ty gia bat buoc khi tao/chi batch ngoai te',
+      );
     }
     return rate;
   }
@@ -92,7 +128,12 @@ export class AccountPayablesService {
   private async findSettlementAudit(recordId: string) {
     const audit = await this.settlementAuditRepository.findOne({
       where: { _id: recordId },
-      relations: ['accountPayable', 'paymentBatch', 'vendor', 'reversedSettlementAudit'],
+      relations: [
+        'accountPayable',
+        'paymentBatch',
+        'vendor',
+        'reversedSettlementAudit',
+      ],
     });
     if (!audit) throw new NotFoundException('Khong tim thay audit tat toan AP');
     return audit;
@@ -109,6 +150,11 @@ export class AccountPayablesService {
         'AP cho vendor invoice phai duoc tao tu flow 3-way matching, khong tao truc tiep',
       );
     }
+    if (dto.status === APStatus.VOID) {
+      throw new BadRequestException(
+        'Khong duoc tao cong no AP o trang thai void',
+      );
+    }
 
     const entity = this.accountPayableRepository.create({
       ...dto,
@@ -123,37 +169,72 @@ export class AccountPayablesService {
     return this.accountPayableRepository.save(entity);
   }
 
-  async findAll(vendorId?: string, status?: APStatus) {
+  async findAll(
+    query: AccountPayableListQuery = {},
+  ): Promise<AccountPayableListResponse> {
+    const rawCurrent = Number(query.current || 1);
+    const rawPageSize = Number(query.pageSize || 10);
+    const current = Number.isFinite(rawCurrent)
+      ? Math.max(Math.trunc(rawCurrent), 1)
+      : 1;
+    const pageSize = Number.isFinite(rawPageSize)
+      ? Math.min(Math.max(Math.trunc(rawPageSize), 1), 100)
+      : 10;
+    const search = query.search?.trim();
+    const status = query.status ? String(query.status) : undefined;
+    if (status && !Object.values(APStatus).includes(status as APStatus)) {
+      throw new BadRequestException('Trang thai cong no AP khong hop le');
+    }
+
     const qb = this.accountPayableRepository
       .createQueryBuilder('ap')
       .leftJoinAndSelect('ap.vendor', 'vendor');
 
-    if (vendorId) {
-      qb.andWhere('ap.vendorId = :vendorId', { vendorId });
+    if (query.vendorId) {
+      qb.andWhere('ap.vendorId = :vendorId', { vendorId: query.vendorId });
     }
 
     if (status) {
       qb.andWhere('ap.status = :status', { status });
     }
 
-    qb.orderBy('ap.updatedAt', 'DESC');
+    if (search) {
+      qb.andWhere(
+        '(ap.invoiceNumber ILIKE :search OR ap._id ILIKE :search OR vendor.name ILIKE :search)',
+        { search: `%${search}%` },
+      );
+    }
 
-    return qb.getMany();
+    qb.orderBy('ap.updatedAt', 'DESC')
+      .skip((current - 1) * pageSize)
+      .take(pageSize);
+
+    const [results, totalItems] = await qb.getManyAndCount();
+
+    return {
+      results,
+      totalItems,
+      totalPages: Math.ceil(totalItems / pageSize),
+      current,
+      pageSize,
+    };
   }
 
   async getDueSoon(days = 7) {
     const horizon = new Date();
     horizon.setDate(horizon.getDate() + days);
 
-    const payables = await this.accountPayableRepository.find({
-      where: {
-        status: Not(APStatus.PAID),
-        dueDate: LessThanOrEqual(horizon),
-      },
-      relations: ['vendor'],
-      order: { dueDate: 'ASC', updatedAt: 'DESC' },
-      take: 50,
-    });
+    const payables = await this.accountPayableRepository
+      .createQueryBuilder('ap')
+      .leftJoinAndSelect('ap.vendor', 'vendor')
+      .where('ap.status NOT IN (:...closedStatuses)', {
+        closedStatuses: [APStatus.PAID, APStatus.VOID],
+      })
+      .andWhere('ap.dueDate <= :horizon', { horizon })
+      .orderBy('ap.dueDate', 'ASC')
+      .addOrderBy('ap.updatedAt', 'DESC')
+      .take(50)
+      .getMany();
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -161,9 +242,16 @@ export class AccountPayablesService {
       const dueDate = item.dueDate ? new Date(item.dueDate) : null;
       return {
         ...item,
-        remainingAmount: Math.max(Number(item.amount || 0) - Number(item.paidAmount || 0), 0),
+        remainingAmount: Math.max(
+          Number(item.amount || 0) - Number(item.paidAmount || 0),
+          0,
+        ),
         isOverdue: !!dueDate && dueDate.getTime() < today.getTime(),
-        daysUntilDue: dueDate ? Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)) : null,
+        daysUntilDue: dueDate
+          ? Math.ceil(
+              (dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
+            )
+          : null,
       };
     });
   }
@@ -179,10 +267,16 @@ export class AccountPayablesService {
 
   async update(id: string, dto: UpdateAccountPayableDto) {
     const ap = await this.findOne(id);
+    if (ap.status === APStatus.VOID) {
+      throw new BadRequestException('Cong no da void, khong duoc cap nhat');
+    }
 
     const payload = Object.fromEntries(
       Object.entries(dto).filter(([, value]) => value !== undefined),
     );
+    if (payload.status === APStatus.VOID) {
+      throw new BadRequestException('Dung endpoint void de huy cong no AP');
+    }
 
     if (payload.vendorId) {
       await this.validateVendor(payload.vendorId);
@@ -200,63 +294,109 @@ export class AccountPayablesService {
     return this.findOne(id);
   }
 
-  async approveForPayment(id: string, user?: { username?: string }, note?: string) {
-    const ap = await this.findOne(id);
-    if (ap.status === APStatus.PAID) {
-      throw new BadRequestException('Cong no da thanh toan, khong can duyet lai');
-    }
-
-    await this.accountPayableRepository.update(
-      { _id: id },
-      {
-        isApprovedForPayment: true,
-        approvedByUsername: this.getActorUsername(user),
-        approvedAt: new Date(),
-        note: note ? `${ap.note ? `${ap.note}\n` : ''}Duyet thanh toan: ${note}` : ap.note,
-      },
+  approveForPayment(
+    _id: string,
+    _user?: { username?: string },
+    _note?: string,
+  ): never {
+    throw new BadRequestException(
+      'Direct AP approval is disabled. Create and approve an AP payment batch instead.',
     );
-
-    return this.findOne(id);
   }
 
-  async recordPayment(
-    id: string,
-    amount: number,
-    user?: { username?: string },
-    note?: string,
-  ) {
-    const ap = await this.findOne(id);
-    if (!ap.isApprovedForPayment) {
-      throw new BadRequestException('Cong no phai duoc duyet thanh toan truoc khi tat toan');
-    }
-
-    const paymentAmount = Number(amount);
-    if (!Number.isFinite(paymentAmount) || paymentAmount <= 0) {
-      throw new BadRequestException('So tien thanh toan phai lon hon 0');
-    }
-
-    const paidAmount = Number(ap.paidAmount || 0) + paymentAmount;
-    const merged = { ...ap, paidAmount } as AccountPayable;
-    const status = this.normalizeStatus(merged);
-
-    await this.accountPayableRepository.update(
-      { _id: id },
-      {
-        paidAmount,
-        status,
-        paidByUsername: this.getActorUsername(user),
-        paidAt: status === APStatus.PAID ? new Date() : ap.paidAt,
-        note: note ? `${ap.note ? `${ap.note}\n` : ''}Thanh toan: ${note}` : ap.note,
-      },
+  recordPayment(
+    _id: string,
+    _amount: number,
+    _user?: { username?: string },
+    _note?: string,
+  ): never {
+    throw new BadRequestException(
+      'Direct AP payment is disabled. Mark an approved AP payment batch as paid instead.',
     );
-
-    return this.findOne(id);
   }
 
-  async remove(id: string) {
-    const result = await this.accountPayableRepository.delete({ _id: id });
-    if (result.affected === 0) throw new NotFoundException('Không tìm thấy công nợ');
-    return { id, deletedCount: result.affected };
+  async voidPayable(id: string, reason: string, user?: { username?: string }) {
+    const reasonText = reason?.trim();
+    if (!reasonText || reasonText.length < 3) {
+      throw new BadRequestException('Void reason is required');
+    }
+
+    return this.dataSource.transaction(async (manager) => {
+      const payable = await manager.findOne(AccountPayable, {
+        where: { _id: id },
+        lock: { mode: 'pessimistic_write' },
+      });
+
+      if (!payable) throw new NotFoundException('Khong tim thay cong no');
+      if (payable.status === APStatus.VOID) {
+        return payable;
+      }
+      if (
+        Number(payable.paidAmount || 0) > 0 ||
+        payable.status === APStatus.PAID
+      ) {
+        throw new BadRequestException(
+          'Cong no da phat sinh thanh toan, phai dao thanh toan truoc khi void',
+        );
+      }
+
+      const openBatchCount = await manager
+        .createQueryBuilder(AccountPayablePaymentBatchItem, 'item')
+        .innerJoin(
+          AccountPayablePaymentBatch,
+          'batch',
+          'batch._id = item.batchId',
+        )
+        .where('item.accountPayableId = :id', { id })
+        .andWhere('batch.status IN (:...openStatuses)', {
+          openStatuses: [
+            APPaymentBatchStatus.DRAFT,
+            APPaymentBatchStatus.SUBMITTED,
+            APPaymentBatchStatus.APPROVED_LEVEL_1,
+            APPaymentBatchStatus.APPROVED,
+          ],
+        })
+        .getCount();
+
+      if (openBatchCount > 0) {
+        throw new BadRequestException(
+          'Cong no dang nam trong batch thanh toan, khong duoc void',
+        );
+      }
+
+      const username = this.getActorUsername(user);
+      const note = `${payable.note ? `${payable.note}\n` : ''}VOID AP by ${username}: ${reasonText}`;
+      await manager.update(
+        AccountPayable,
+        { _id: payable._id },
+        {
+          status: APStatus.VOID,
+          isApprovedForPayment: false,
+          approvedByUsername: null,
+          approvedAt: null,
+          voidedAt: new Date(),
+          voidedByUsername: username,
+          voidReason: reasonText,
+          note,
+        },
+      );
+
+      if (payable.vendorInvoiceId) {
+        await manager.update(
+          VendorInvoice,
+          { _id: payable.vendorInvoiceId },
+          { status: VendorInvoiceStatus.CANCELLED },
+        );
+      }
+
+      const voidedPayable = await manager.findOne(AccountPayable, {
+        where: { _id: payable._id },
+        relations: ['vendor'],
+      });
+      if (!voidedPayable)
+        throw new NotFoundException('Khong tim thay cong no sau khi void');
+      return voidedPayable;
+    });
   }
 
   async findAllPaymentBatches(query: any = {}) {
@@ -272,9 +412,12 @@ export class AccountPayablesService {
     }
 
     if (query.search) {
-      qb.andWhere('(batch.batchNumber ILIKE :search OR batch.bankReference ILIKE :search)', {
-        search: `%${query.search}%`,
-      });
+      qb.andWhere(
+        '(batch.batchNumber ILIKE :search OR batch.bankReference ILIKE :search)',
+        {
+          search: `%${query.search}%`,
+        },
+      );
     }
 
     return qb.getMany();
@@ -285,7 +428,8 @@ export class AccountPayablesService {
       where: { _id: recordId },
       relations: ['items', 'items.accountPayable', 'items.vendor'],
     });
-    if (!batch) throw new NotFoundException('Khong tim thay batch thanh toan AP');
+    if (!batch)
+      throw new NotFoundException('Khong tim thay batch thanh toan AP');
     return batch;
   }
 
@@ -296,20 +440,29 @@ export class AccountPayablesService {
       .leftJoinAndSelect('audit.accountPayable', 'accountPayable')
       .leftJoinAndSelect('audit.paymentBatch', 'paymentBatch')
       .leftJoinAndSelect('audit.vendor', 'vendor')
-      .leftJoinAndSelect('audit.reversedSettlementAudit', 'reversedSettlementAudit')
+      .leftJoinAndSelect(
+        'audit.reversedSettlementAudit',
+        'reversedSettlementAudit',
+      )
       .orderBy('audit.settlementDate', 'DESC')
       .addOrderBy('audit.createdAt', 'DESC');
 
     if (query.accountPayableId) {
-      qb.andWhere('audit.accountPayableId = :accountPayableId', { accountPayableId: query.accountPayableId });
+      qb.andWhere('audit.accountPayableId = :accountPayableId', {
+        accountPayableId: query.accountPayableId,
+      });
     }
 
     if (query.paymentBatchId) {
-      qb.andWhere('audit.paymentBatchId = :paymentBatchId', { paymentBatchId: query.paymentBatchId });
+      qb.andWhere('audit.paymentBatchId = :paymentBatchId', {
+        paymentBatchId: query.paymentBatchId,
+      });
     }
 
     if (query.auditType) {
-      qb.andWhere('audit.auditType = :auditType', { auditType: query.auditType });
+      qb.andWhere('audit.auditType = :auditType', {
+        auditType: query.auditType,
+      });
     }
 
     if (query.vendorId) {
@@ -338,21 +491,25 @@ export class AccountPayablesService {
     return this.dataSource.transaction(async (manager) => {
       const audit = await manager.findOne(AccountPayableSettlementAudit, {
         where: { _id: recordId },
-        relations: ['accountPayable', 'paymentBatch', 'vendor'],
         lock: { mode: 'pessimistic_write' },
       });
 
-      if (!audit) throw new NotFoundException('Khong tim thay audit tat toan AP');
+      if (!audit)
+        throw new NotFoundException('Khong tim thay audit tat toan AP');
       if (audit.auditType !== APSettlementAuditType.SETTLEMENT) {
         throw new BadRequestException('Chi duoc dao audit tat toan goc');
       }
       if (audit.reversedAt) {
-        throw new BadRequestException('Audit tat toan nay da duoc dao truoc do');
+        throw new BadRequestException(
+          'Audit tat toan nay da duoc dao truoc do',
+        );
       }
 
       const reversalAmount = new Decimal(audit.amount || 0).abs();
       if (reversalAmount.lessThanOrEqualTo(0)) {
-        throw new BadRequestException('So tien audit khong hop le de dao thanh toan');
+        throw new BadRequestException(
+          'So tien audit khong hop le de dao thanh toan',
+        );
       }
 
       const amountVnd = reversalAmount.mul(audit.exchangeRate || 1);
@@ -400,11 +557,20 @@ export class AccountPayablesService {
         { approvalWorkflowRequestId: approvalRequest?._id || null },
       );
 
-      const requestedAudit = await manager.findOne(AccountPayableSettlementAudit, {
-        where: { _id: audit._id },
-        relations: ['accountPayable', 'paymentBatch', 'vendor', 'reversedSettlementAudit'],
-      });
-      if (!requestedAudit) throw new NotFoundException('Khong tim thay audit tat toan AP');
+      const requestedAudit = await manager.findOne(
+        AccountPayableSettlementAudit,
+        {
+          where: { _id: audit._id },
+          relations: [
+            'accountPayable',
+            'paymentBatch',
+            'vendor',
+            'reversedSettlementAudit',
+          ],
+        },
+      );
+      if (!requestedAudit)
+        throw new NotFoundException('Khong tim thay audit tat toan AP');
 
       return {
         ...requestedAudit,
@@ -425,27 +591,37 @@ export class AccountPayablesService {
       where: { _id: audit.accountPayableId },
       lock: { mode: 'pessimistic_write' },
     });
-      if (!payable) throw new NotFoundException('Cong no AP cua audit khong con ton tai');
+    if (!payable)
+      throw new NotFoundException('Cong no AP cua audit khong con ton tai');
 
-      const reversalAmount = new Decimal(audit.amount || 0).abs();
-      if (reversalAmount.lessThanOrEqualTo(0)) {
-        throw new BadRequestException('So tien audit khong hop le de dao thanh toan');
-      }
+    const reversalAmount = new Decimal(audit.amount || 0).abs();
+    if (reversalAmount.lessThanOrEqualTo(0)) {
+      throw new BadRequestException(
+        'So tien audit khong hop le de dao thanh toan',
+      );
+    }
 
-      const nextPaidAmount = new Decimal(payable.paidAmount || 0).minus(reversalAmount);
-      if (nextPaidAmount.lessThan(0)) {
-        throw new BadRequestException('So tien dao vuot qua so da thanh toan cua cong no');
-      }
+    const nextPaidAmount = new Decimal(payable.paidAmount || 0).minus(
+      reversalAmount,
+    );
+    if (nextPaidAmount.lessThan(0)) {
+      throw new BadRequestException(
+        'So tien dao vuot qua so da thanh toan cua cong no',
+      );
+    }
 
-      const nextPayable = {
-        ...payable,
-        paidAmount: nextPaidAmount.toNumber(),
-      } as AccountPayable;
-      const nextStatus = this.normalizeStatus(nextPayable);
-      const reversalDate = dto.reversalDate ? new Date(dto.reversalDate) : new Date();
-      const amountVnd = reversalAmount.mul(audit.exchangeRate || 1);
+    const nextPayable = {
+      ...payable,
+      paidAmount: nextPaidAmount.toNumber(),
+    } as AccountPayable;
+    const nextStatus = this.normalizeStatus(nextPayable);
+    const reversalDate = dto.reversalDate
+      ? new Date(dto.reversalDate)
+      : new Date();
+    const amountVnd = reversalAmount.mul(audit.exchangeRate || 1);
 
-      const journal = await this.accountingService.createJournalEntry({
+    const journal = await this.accountingService.createJournalEntry(
+      {
         description: `Dao thanh toan AP ${audit.invoiceNumber || payable.invoiceNumber || payable._id}`,
         referenceType: 'AP_PAYMENT_REVERSAL',
         referenceId: audit._id,
@@ -464,28 +640,33 @@ export class AccountPayablesService {
             partnerId: audit.vendorId,
           },
         ],
-      }, manager);
+      },
+      manager,
+    );
 
+    await manager.update(
+      AccountPayable,
+      { _id: payable._id },
+      {
+        paidAmount: nextPaidAmount.toNumber(),
+        status: nextStatus,
+        paidAt: nextStatus === APStatus.PAID ? payable.paidAt : null,
+        paidByUsername: nextPaidAmount.greaterThan(0)
+          ? payable.paidByUsername
+          : null,
+      },
+    );
+
+    if (payable.vendorInvoiceId && nextStatus !== APStatus.PAID) {
       await manager.update(
-        AccountPayable,
-        { _id: payable._id },
-        {
-          paidAmount: nextPaidAmount.toNumber(),
-          status: nextStatus,
-          paidAt: nextStatus === APStatus.PAID ? payable.paidAt : null,
-          paidByUsername: nextPaidAmount.greaterThan(0) ? payable.paidByUsername : null,
-        },
+        VendorInvoice,
+        { _id: payable.vendorInvoiceId },
+        { status: VendorInvoiceStatus.PENDING },
       );
+    }
 
-      if (payable.vendorInvoiceId && nextStatus !== APStatus.PAID) {
-        await manager.update(
-          VendorInvoice,
-          { _id: payable.vendorInvoiceId },
-          { status: VendorInvoiceStatus.PENDING },
-        );
-      }
-
-      const reversalAudit = await manager.save(manager.create(AccountPayableSettlementAudit, {
+    const reversalAudit = await manager.save(
+      manager.create(AccountPayableSettlementAudit, {
         auditType: APSettlementAuditType.REVERSAL,
         reversedSettlementAudit_id: audit._id,
         accountPayableId: audit.accountPayableId,
@@ -506,24 +687,31 @@ export class AccountPayablesService {
         settledByUsername: username,
         reversalReason: dto.reason,
         reversalJournalEntry_id: journal._id,
-      }));
+      }),
+    );
 
-      await manager.update(
-        AccountPayableSettlementAudit,
-        { _id: audit._id },
-        {
-          reversedAt: reversalDate,
-          reversedByUsername: username,
-          reversalReason: dto.reason,
-          approvalWorkflowRequestId: approvalWorkflowRequestId || audit.approvalWorkflowRequestId || null,
-          reversalJournalEntry_id: journal._id,
-        },
-      );
+    await manager.update(
+      AccountPayableSettlementAudit,
+      { _id: audit._id },
+      {
+        reversedAt: reversalDate,
+        reversedByUsername: username,
+        reversalReason: dto.reason,
+        approvalWorkflowRequestId:
+          approvalWorkflowRequestId || audit.approvalWorkflowRequestId || null,
+        reversalJournalEntry_id: journal._id,
+      },
+    );
 
-      return manager.findOne(AccountPayableSettlementAudit, {
-        where: { _id: reversalAudit._id },
-        relations: ['accountPayable', 'paymentBatch', 'vendor', 'reversedSettlementAudit'],
-      });
+    return manager.findOne(AccountPayableSettlementAudit, {
+      where: { _id: reversalAudit._id },
+      relations: [
+        'accountPayable',
+        'paymentBatch',
+        'vendor',
+        'reversedSettlementAudit',
+      ],
+    });
   }
 
   async completeSettlementReversalWorkflow(
@@ -535,11 +723,11 @@ export class AccountPayablesService {
     return this.dataSource.transaction(async (manager) => {
       const audit = await manager.findOne(AccountPayableSettlementAudit, {
         where: { _id: recordId },
-        relations: ['accountPayable', 'paymentBatch', 'vendor'],
         lock: { mode: 'pessimistic_write' },
       });
 
-      if (!audit) throw new NotFoundException('Khong tim thay audit tat toan AP');
+      if (!audit)
+        throw new NotFoundException('Khong tim thay audit tat toan AP');
       if (audit.reversedAt) return audit;
 
       const reason =
@@ -547,7 +735,9 @@ export class AccountPayablesService {
           ? metadata.reason.trim()
           : 'Approved by approval matrix';
       const reversalDate =
-        typeof metadata?.reversalDate === 'string' ? metadata.reversalDate : undefined;
+        typeof metadata?.reversalDate === 'string'
+          ? metadata.reversalDate
+          : undefined;
 
       return this.applySettlementReversalInTransaction(
         manager,
@@ -559,10 +749,7 @@ export class AccountPayablesService {
     });
   }
 
-  async rejectSettlementReversalWorkflow(
-    recordId: string,
-    requestId: string,
-  ) {
+  async rejectSettlementReversalWorkflow(recordId: string, requestId: string) {
     await this.settlementAuditRepository.update(
       { _id: recordId },
       { approvalWorkflowRequestId: requestId },
@@ -570,7 +757,10 @@ export class AccountPayablesService {
     return this.findSettlementAudit(recordId);
   }
 
-  async createPaymentBatch(dto: CreatePaymentBatchDto, user?: { username?: string }) {
+  async createPaymentBatch(
+    dto: CreatePaymentBatchDto,
+    user?: { username?: string },
+  ) {
     const username = this.getActorUsername(user);
 
     return this.dataSource.transaction(async (manager) => {
@@ -581,30 +771,46 @@ export class AccountPayablesService {
 
       for (const item of dto.items) {
         if (seen.has(item.accountPayableId)) {
-          throw new BadRequestException('Mot cong no khong duoc lap lai trong cung batch');
+          throw new BadRequestException(
+            'Mot cong no khong duoc lap lai trong cung batch',
+          );
         }
         seen.add(item.accountPayableId);
 
         const payable = await manager.findOne(AccountPayable, {
           where: { _id: item.accountPayableId },
-          relations: ['vendor'],
           lock: { mode: 'pessimistic_write' },
         });
-        if (!payable) throw new NotFoundException('Khong tim thay cong no trong batch');
-        if (payable.status === APStatus.PAID) {
-          throw new BadRequestException(`Cong no ${payable.invoiceNumber || payable._id} da thanh toan`);
+        if (!payable)
+          throw new NotFoundException('Khong tim thay cong no trong batch');
+        if (
+          payable.status === APStatus.PAID ||
+          payable.status === APStatus.VOID
+        ) {
+          throw new BadRequestException(
+            `Cong no ${payable.invoiceNumber || payable._id} da dong/void`,
+          );
         }
 
         const payableCurrency = this.normalizeCurrency(payable.currency);
         if (!currency) currency = payableCurrency;
         if (currency !== payableCurrency) {
-          throw new BadRequestException('Mot batch chi duoc gom cac cong no cung loai tien');
+          throw new BadRequestException(
+            'Mot batch chi duoc gom cac cong no cung loai tien',
+          );
         }
 
-        const openAmount = new Decimal(payable.amount).minus(payable.paidAmount || 0);
+        const openAmount = new Decimal(payable.amount).minus(
+          payable.paidAmount || 0,
+        );
         const paymentAmount = new Decimal(item.amount);
-        if (paymentAmount.lessThanOrEqualTo(0) || paymentAmount.greaterThan(openAmount)) {
-          throw new BadRequestException(`So tien chi cho ${payable.invoiceNumber || payable._id} khong hop le`);
+        if (
+          paymentAmount.lessThanOrEqualTo(0) ||
+          paymentAmount.greaterThan(openAmount)
+        ) {
+          throw new BadRequestException(
+            `So tien chi cho ${payable.invoiceNumber || payable._id} khong hop le`,
+          );
         }
 
         totalAmount = totalAmount.plus(paymentAmount);
@@ -620,7 +826,10 @@ export class AccountPayablesService {
       }
 
       const batchCurrency = currency || 'VND';
-      const exchangeRate = this.getExchangeRate(batchCurrency, dto.exchangeRate);
+      const exchangeRate = this.getExchangeRate(
+        batchCurrency,
+        dto.exchangeRate,
+      );
       const batch = manager.create(AccountPayablePaymentBatch, {
         batchNumber: this.createBatchNumber(),
         status: APPaymentBatchStatus.DRAFT,
@@ -657,19 +866,33 @@ export class AccountPayablesService {
       throw new BadRequestException('Chi duoc sua batch o trang thai DRAFT');
     }
 
-    const exchangeRate = dto.exchangeRate !== undefined
-      ? this.getExchangeRate(this.normalizeCurrency(batch.currency), dto.exchangeRate)
-      : Number(batch.exchangeRate || 1);
+    const exchangeRate =
+      dto.exchangeRate !== undefined
+        ? this.getExchangeRate(
+            this.normalizeCurrency(batch.currency),
+            dto.exchangeRate,
+          )
+        : Number(batch.exchangeRate || 1);
 
     await this.paymentBatchRepository.update(
       { _id: recordId },
       {
-        paymentDate: dto.paymentDate ? new Date(dto.paymentDate) : batch.paymentDate,
-        paymentMethod: dto.paymentMethod !== undefined ? dto.paymentMethod || null : batch.paymentMethod,
-        bankReference: dto.bankReference !== undefined ? dto.bankReference || null : batch.bankReference,
+        paymentDate: dto.paymentDate
+          ? new Date(dto.paymentDate)
+          : batch.paymentDate,
+        paymentMethod:
+          dto.paymentMethod !== undefined
+            ? dto.paymentMethod || null
+            : batch.paymentMethod,
+        bankReference:
+          dto.bankReference !== undefined
+            ? dto.bankReference || null
+            : batch.bankReference,
         note: dto.note !== undefined ? dto.note || null : batch.note,
         exchangeRate,
-        totalAmountVnd: new Decimal(batch.totalAmount).mul(exchangeRate).toNumber(),
+        totalAmountVnd: new Decimal(batch.totalAmount)
+          .mul(exchangeRate)
+          .toNumber(),
       },
     );
 
@@ -729,7 +952,10 @@ export class AccountPayablesService {
     };
   }
 
-  private async approveBatchPayables(batch: AccountPayablePaymentBatch, username: string) {
+  private async approveBatchPayables(
+    batch: AccountPayablePaymentBatch,
+    username: string,
+  ) {
     for (const item of batch.items || []) {
       await this.accountPayableRepository.update(
         { _id: item.accountPayableId },
@@ -742,9 +968,18 @@ export class AccountPayablesService {
     }
   }
 
-  async completePaymentBatchWorkflowApproval(recordId: string, username: string, note?: string | null) {
+  async completePaymentBatchWorkflowApproval(
+    recordId: string,
+    username: string,
+    note?: string | null,
+  ) {
     const batch = await this.findPaymentBatch(recordId);
-    if (![APPaymentBatchStatus.SUBMITTED, APPaymentBatchStatus.APPROVED_LEVEL_1].includes(batch.status)) {
+    if (
+      ![
+        APPaymentBatchStatus.SUBMITTED,
+        APPaymentBatchStatus.APPROVED_LEVEL_1,
+      ].includes(batch.status)
+    ) {
       return batch;
     }
 
@@ -755,7 +990,9 @@ export class AccountPayablesService {
         finalApprovedByUsername: username,
         finalApprovedAt: new Date(),
         rejectionReason: null,
-        note: note ? `${batch.note ? `${batch.note}\n` : ''}Approval matrix: ${note}` : batch.note,
+        note: note
+          ? `${batch.note ? `${batch.note}\n` : ''}Approval matrix: ${note}`
+          : batch.note,
       },
     );
     await this.approveBatchPayables(batch, username);
@@ -763,9 +1000,18 @@ export class AccountPayablesService {
     return this.findPaymentBatch(recordId);
   }
 
-  async rejectPaymentBatchWorkflow(recordId: string, username: string, reason?: string | null) {
+  async rejectPaymentBatchWorkflow(
+    recordId: string,
+    username: string,
+    reason?: string | null,
+  ) {
     const batch = await this.findPaymentBatch(recordId);
-    if (![APPaymentBatchStatus.SUBMITTED, APPaymentBatchStatus.APPROVED_LEVEL_1].includes(batch.status)) {
+    if (
+      ![
+        APPaymentBatchStatus.SUBMITTED,
+        APPaymentBatchStatus.APPROVED_LEVEL_1,
+      ].includes(batch.status)
+    ) {
       return batch;
     }
 
@@ -782,7 +1028,11 @@ export class AccountPayablesService {
     return this.findPaymentBatch(recordId);
   }
 
-  async approvePaymentBatch(recordId: string, user?: { username?: string; role?: any }, dto?: ReviewPaymentBatchDto) {
+  async approvePaymentBatch(
+    recordId: string,
+    user?: { username?: string; role?: any },
+    dto?: ReviewPaymentBatchDto,
+  ) {
     void recordId;
     void user;
     void dto;
@@ -791,7 +1041,11 @@ export class AccountPayablesService {
     );
   }
 
-  async rejectPaymentBatch(recordId: string, user?: { username?: string }, dto?: ReviewPaymentBatchDto) {
+  async rejectPaymentBatch(
+    recordId: string,
+    user?: { username?: string },
+    dto?: ReviewPaymentBatchDto,
+  ) {
     void recordId;
     void user;
     void dto;
@@ -800,47 +1054,81 @@ export class AccountPayablesService {
     );
   }
 
-  async markPaymentBatchPaid(recordId: string, dto: MarkPaymentBatchPaidDto, user?: { username?: string }) {
+  async markPaymentBatchPaid(
+    recordId: string,
+    dto: MarkPaymentBatchPaidDto,
+    user?: { username?: string },
+  ) {
     const username = this.getActorUsername(user);
 
     return this.dataSource.transaction(async (manager) => {
       const batch = await manager.findOne(AccountPayablePaymentBatch, {
         where: { _id: recordId },
-        relations: ['items'],
         lock: { mode: 'pessimistic_write' },
       });
-      if (!batch) throw new NotFoundException('Khong tim thay batch thanh toan AP');
+      if (!batch)
+        throw new NotFoundException('Khong tim thay batch thanh toan AP');
       if (batch.status !== APPaymentBatchStatus.APPROVED) {
-        throw new BadRequestException('Batch phai duoc duyet truoc khi ghi chi');
+        throw new BadRequestException(
+          'Batch phai duoc duyet truoc khi ghi chi',
+        );
       }
 
-      const exchangeRate = dto.exchangeRate !== undefined
-        ? this.getExchangeRate(this.normalizeCurrency(batch.currency), dto.exchangeRate)
-        : Number(batch.exchangeRate || 1);
-      const paymentDate = dto.paymentDate ? new Date(dto.paymentDate) : new Date();
-      const bankTransferAt = dto.bankTransferAt ? new Date(dto.bankTransferAt) : paymentDate;
-      const paymentMethod = dto.paymentMethod || batch.paymentMethod || 'BANK_TRANSFER';
+      const exchangeRate =
+        dto.exchangeRate !== undefined
+          ? this.getExchangeRate(
+              this.normalizeCurrency(batch.currency),
+              dto.exchangeRate,
+            )
+          : Number(batch.exchangeRate || 1);
+      const paymentDate = dto.paymentDate
+        ? new Date(dto.paymentDate)
+        : new Date();
+      const bankTransferAt = dto.bankTransferAt
+        ? new Date(dto.bankTransferAt)
+        : paymentDate;
+      const paymentMethod =
+        dto.paymentMethod || batch.paymentMethod || 'BANK_TRANSFER';
       const bankReference = dto.bankReference || batch.bankReference || null;
-      const bankProofFileId = dto.bankProofFileId || batch.bankProofFileId || null;
+      const bankProofFileId =
+        dto.bankProofFileId || batch.bankProofFileId || null;
       const bankProofUrl = dto.bankProofUrl || batch.bankProofUrl || null;
       const settlementNote = dto.settlementNote || dto.note || null;
       let totalVnd = new Decimal(0);
-      const journalItems: Array<{ accountCode: string; debit: number; credit: number; partnerId?: string }> = [];
+      const journalItems: Array<{
+        accountCode: string;
+        debit: number;
+        credit: number;
+        partnerId?: string;
+      }> = [];
+      batch.items = await manager.find(AccountPayablePaymentBatchItem, {
+        where: { batchId: batch._id },
+      });
 
       for (const item of batch.items || []) {
         const payable = await manager.findOne(AccountPayable, {
           where: { _id: item.accountPayableId },
           lock: { mode: 'pessimistic_write' },
         });
-        if (!payable) throw new NotFoundException('Cong no trong batch khong con ton tai');
+        if (!payable)
+          throw new NotFoundException('Cong no trong batch khong con ton tai');
 
-        const openAmount = new Decimal(payable.amount).minus(payable.paidAmount || 0);
+        const openAmount = new Decimal(payable.amount).minus(
+          payable.paidAmount || 0,
+        );
         const paymentAmount = new Decimal(item.amount);
-        if (paymentAmount.lessThanOrEqualTo(0) || paymentAmount.greaterThan(openAmount)) {
-          throw new BadRequestException(`Cong no ${payable.invoiceNumber || payable._id} da thay doi so du`);
+        if (
+          paymentAmount.lessThanOrEqualTo(0) ||
+          paymentAmount.greaterThan(openAmount)
+        ) {
+          throw new BadRequestException(
+            `Cong no ${payable.invoiceNumber || payable._id} da thay doi so du`,
+          );
         }
 
-        const paidAmount = new Decimal(payable.paidAmount || 0).plus(paymentAmount).toNumber();
+        const paidAmount = new Decimal(payable.paidAmount || 0)
+          .plus(paymentAmount)
+          .toNumber();
         const merged = { ...payable, paidAmount } as AccountPayable;
         const status = this.normalizeStatus(merged);
 
@@ -851,8 +1139,12 @@ export class AccountPayablesService {
             paidAmount,
             status,
             isApprovedForPayment: true,
-            approvedByUsername: payable.approvedByUsername || batch.finalApprovedByUsername || username,
-            approvedAt: payable.approvedAt || batch.finalApprovedAt || new Date(),
+            approvedByUsername:
+              payable.approvedByUsername ||
+              batch.finalApprovedByUsername ||
+              username,
+            approvedAt:
+              payable.approvedAt || batch.finalApprovedAt || new Date(),
             paidByUsername: username,
             paidAt: status === APStatus.PAID ? paymentDate : payable.paidAt,
           },
@@ -870,25 +1162,27 @@ export class AccountPayablesService {
         totalVnd = totalVnd.plus(amountVnd);
 
         // Keep an immutable payment line so partial settlements remain traceable by invoice.
-        await manager.save(manager.create(AccountPayableSettlementAudit, {
-          auditType: APSettlementAuditType.SETTLEMENT,
-          accountPayableId: payable._id,
-          paymentBatchId: batch._id,
-          vendorId: item.vendorId,
-          vendorInvoiceId: item.vendorInvoiceId,
-          invoiceNumber: item.invoiceNumber,
-          settlementDate: bankTransferAt,
-          amount: paymentAmount.toNumber(),
-          exchangeRate,
-          amountVnd: amountVnd.toNumber(),
-          currency: item.currency,
-          paymentMethod,
-          bankReference,
-          bankProofFileId,
-          bankProofUrl,
-          settlementNote,
-          settledByUsername: username,
-        }));
+        await manager.save(
+          manager.create(AccountPayableSettlementAudit, {
+            auditType: APSettlementAuditType.SETTLEMENT,
+            accountPayableId: payable._id,
+            paymentBatchId: batch._id,
+            vendorId: item.vendorId,
+            vendorInvoiceId: item.vendorInvoiceId,
+            invoiceNumber: item.invoiceNumber,
+            settlementDate: bankTransferAt,
+            amount: paymentAmount.toNumber(),
+            exchangeRate,
+            amountVnd: amountVnd.toNumber(),
+            currency: item.currency,
+            paymentMethod,
+            bankReference,
+            bankProofFileId,
+            bankProofUrl,
+            settlementNote,
+            settledByUsername: username,
+          }),
+        );
 
         journalItems.push({
           accountCode: '331',
@@ -904,14 +1198,17 @@ export class AccountPayablesService {
         credit: totalVnd.toNumber(),
       });
 
-      const journal = await this.accountingService.createJournalEntry({
-        description: `Thanh toan AP batch ${batch.batchNumber}`,
-        referenceType: 'AP_PAYMENT_BATCH',
-        referenceId: batch._id,
-        entryDate: paymentDate,
-        createdByUsername: username,
-        items: journalItems,
-      }, manager);
+      const journal = await this.accountingService.createJournalEntry(
+        {
+          description: `Thanh toan AP batch ${batch.batchNumber}`,
+          referenceType: 'AP_PAYMENT_BATCH',
+          referenceId: batch._id,
+          entryDate: paymentDate,
+          createdByUsername: username,
+          items: journalItems,
+        },
+        manager,
+      );
 
       await manager.update(
         AccountPayablePaymentBatch,
@@ -930,7 +1227,9 @@ export class AccountPayablesService {
           paidByUsername: username,
           paidAt: new Date(),
           paymentJournalEntryId: journal._id,
-          note: dto.note ? `${batch.note ? `${batch.note}\n` : ''}Da chi: ${dto.note}` : batch.note,
+          note: dto.note
+            ? `${batch.note ? `${batch.note}\n` : ''}Da chi: ${dto.note}`
+            : batch.note,
         },
       );
 

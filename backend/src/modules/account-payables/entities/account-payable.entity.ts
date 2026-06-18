@@ -17,6 +17,7 @@ export enum APStatus {
   UNPAID = 'UNPAID',
   PARTIAL = 'PARTIAL',
   PAID = 'PAID',
+  VOID = 'VOID',
 }
 
 @Entity('account_payables')
@@ -48,10 +49,21 @@ export class AccountPayable {
   @Column({ type: 'varchar', nullable: true })
   invoiceSeries: string | null;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    transformer: new ColumnNumericTransformer(),
+  })
   amount: number;
 
-  @Column({ type: 'numeric', precision: 15, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  @Column({
+    type: 'numeric',
+    precision: 15,
+    scale: 2,
+    default: 0,
+    transformer: new ColumnNumericTransformer(),
+  })
   paidAmount: number;
 
   @Column({ type: 'varchar', default: 'VND' })
@@ -77,6 +89,15 @@ export class AccountPayable {
 
   @Column({ type: 'timestamp', nullable: true })
   paidAt: Date | null;
+
+  @Column({ type: 'timestamp', nullable: true })
+  voidedAt: Date | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  voidedByUsername: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  voidReason: string | null;
 
   @Column({ type: 'text', nullable: true })
   note: string | null;

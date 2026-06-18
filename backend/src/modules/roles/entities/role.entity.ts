@@ -13,6 +13,7 @@ import {
 import { Permission } from './permission.entity';
 import { User } from '../../users/entities/user.entity';
 import { createEntityId } from '@/common/ids/entity-id.util';
+import { RolePermissionAssignment } from './role-permission-assignment.entity';
 
 @Entity('roles')
 export class Role {
@@ -37,7 +38,10 @@ export class Role {
   })
   permissions: Permission[];
 
-  @OneToMany(() => User, user => user.role)
+  @OneToMany(() => RolePermissionAssignment, (assignment) => assignment.role)
+  permissionAssignments: RolePermissionAssignment[];
+
+  @OneToMany(() => User, (user) => user.role)
   users: User[];
 
   @CreateDateColumn()

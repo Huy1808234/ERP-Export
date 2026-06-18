@@ -1,4 +1,12 @@
-import { Controller, Get, Post, Body, Patch, Param, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Query,
+} from '@nestjs/common';
 import { VendorInvoicesService } from './vendor-invoices.service';
 import { CreateVendorInvoiceDto } from './dto/create-vendor-invoice.dto';
 import { ResponseMessage } from '@/decorator/customize';
@@ -29,7 +37,10 @@ export class VendorInvoicesController {
 
   @Patch(':_id/status')
   @ResponseMessage('Cập nhật trạng thái hóa đơn thành công')
-  updateStatus(@Param('_id') recordId: string, @Body('status') status: VendorInvoiceStatus) {
+  updateStatus(
+    @Param('_id') recordId: string,
+    @Body('status') status: VendorInvoiceStatus,
+  ) {
     return this.vendorInvoicesService.updateStatus(recordId, status);
   }
 
