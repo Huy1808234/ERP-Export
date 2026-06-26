@@ -35,16 +35,10 @@ function getSearchRoleName(user?: IAuthSessionUser | null): string | null {
     return user?.role?.name || user?.roleName || null;
 }
 
-function parseInternalHref(targetHref: string): string | { pathname: string; query: Record<string, string> } {
-    const queryStartIndex = targetHref.indexOf('?');
-    if (queryStartIndex === -1) return targetHref;
-
-    const pathname = targetHref.slice(0, queryStartIndex) || '/';
-    const queryString = targetHref.slice(queryStartIndex + 1);
-    return {
-        pathname,
-        query: Object.fromEntries(new URLSearchParams(queryString)),
-    };
+function parseInternalHref(targetHref: string): any {
+    // Next.js App Router (and next-intl wrapper) router.push() accepts a full string with query params.
+    // Returning an object { pathname, query } will crash or fail silently.
+    return targetHref;
 }
 
 const AdminHeader = () => {

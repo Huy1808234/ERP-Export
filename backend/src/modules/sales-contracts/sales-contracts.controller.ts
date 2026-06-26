@@ -128,6 +128,23 @@ export class SalesContractsController {
     );
   }
 
+  @Public()
+  @Post('signing/:token/request-otp')
+  @ResponseMessage('Request OTP for signing')
+  requestSigningOtp(@Param('token') token: string, @Req() req: RequestLike) {
+    return this.salesContractsService.requestSigningOtp(
+      token,
+      getRequestMeta(req),
+    );
+  }
+
+  @Public()
+  @Post('signing/:token/resend-otp')
+  @ResponseMessage('Resend OTP to signer email')
+  resendSigningOtp(@Param('token') token: string) {
+    return this.salesContractsService.resendSigningOtpByToken(token);
+  }
+
   @Get(':_id/signature-packet')
   @RequirePermissions('read:sales_contract')
   @ResponseMessage('Fetch sales contract signature audit packet')

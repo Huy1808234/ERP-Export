@@ -26,6 +26,7 @@ export interface AppNotification {
 type SystemNotificationApiItem = {
   _id: string;
   userId?: string;
+  username?: string | null;
   type: string;
   title: string;
   content: string;
@@ -283,10 +284,10 @@ export const useNotifications = () => {
 
   useEffect(() => {
     const socket = getSocket();
-    if (!socket || !session?.user?._id) return undefined;
+    if (!socket || !session?.user?.username) return undefined;
 
     const joinRoom = () => {
-      socket.emit("join", { userId: session.user._id });
+      socket.emit("join", { username: session.user.username });
     };
 
     if (socket.connected) {
@@ -297,7 +298,7 @@ export const useNotifications = () => {
     return () => {
       socket.off("connect", joinRoom);
     };
-  }, [session]);
+  }, [session?.user?.username]);
 
   return {
     notifications,

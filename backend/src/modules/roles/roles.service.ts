@@ -59,6 +59,63 @@ const LEGACY_WRITE_PERMISSION_MIGRATIONS: Readonly<
   'write:cost_fields': ['create:cost_fields', 'update:cost_fields'],
 };
 
+const DEFAULT_ROLE_PERMISSION_NAMES: Readonly<
+  Record<string, readonly string[]>
+> = {
+  ADMIN: ['manage:all'],
+  DIRECTOR: [
+    'read:all',
+    'read:accounting',
+    'read:export_document',
+    'read:sales_contract',
+    'read:payment_receipt',
+  ],
+  MANAGER: [
+    'read:all',
+    'write:accounting',
+    'write:export_document',
+    'write:sales_contract',
+    'read:payment_receipt',
+    'write:payment_receipt',
+    'approve:payment_receipt',
+  ],
+  SALES_EXPORT: [
+    'read:export_document',
+    'write:export_document',
+    'read:sales_contract',
+    'write:sales_contract',
+  ],
+  LOGISTICS: ['read:export_document', 'write:export_document'],
+  ACCOUNTANT: [
+    'read:accounting',
+    'write:accounting',
+    'read:export_document',
+    'read:sales_contract',
+    'read:payment_receipt',
+    'write:payment_receipt',
+    'approve:payment_receipt',
+    'read:bank_fields',
+    'read:payment_fields',
+    'read:trade_finance',
+    'read:lc_sensitive',
+  ],
+  CHIEF_ACCOUNTANT: [
+    'read:accounting',
+    'write:accounting',
+    'read:export_document',
+    'read:sales_contract',
+    'read:payment_receipt',
+    'write:payment_receipt',
+    'approve:payment_receipt',
+    'read:bank_fields',
+    'read:payment_fields',
+    'manage:bank_fields',
+    'read:trade_finance',
+    'manage:trade_finance',
+    'read:lc_sensitive',
+  ],
+};
+
 @Injectable()
 export class RolesService implements OnModuleInit {
   constructor(
@@ -76,6 +133,7 @@ export class RolesService implements OnModuleInit {
   async onModuleInit(): Promise<void> {
     await this.ensureSystemRoles();
     await this.ensureSystemPermissions();
+    await this.ensureDefaultRolePermissionAssignments();
   }
 
   private async ensureSystemRoles(): Promise<void> {
@@ -203,6 +261,55 @@ export class RolesService implements OnModuleInit {
         }
       }
     }
+  }
+
+  private async ensureDefaultRolePermissionAssignments(): Promise<void> {
+    const roleNames = Object.keys(DEFAULT_ROLE_PERMISSION_NAMES);
+    const roles = await this.roleRepository.find({
+      where: { name: In(roleNames), isActive: true },
+      relations: ['permissions', 'permissionAssignments'],
+    });
+
+    if (roles.length === 0) return;
+
+    const permissionNames = [
+      ...new Set(Object.values(DEFAULT_ROLE_PERMISSION_NAMES).flat()),
+    ];
+    const permissions = await this.permissionRepository.find({
+      where: { name: In(permissionNames) },
+    });
+    const permissionByName = new Map(
+      permissions.map((permission) => [permission.name, permission]),
+    );
+    const assignmentsToCreate: RolePermissionAssignment[] = [];
+
+    for (const role of roles) {
+      const hasExistingAssignments =
+        (role.permissions?.length ?? 0) > 0 ||
+        (role.permissionAssignments?.length ?? 0) > 0;
+      if (hasExistingAssignments) continue;
+
+      const defaultPermissionNames =
+        DEFAULT_ROLE_PERMISSION_NAMES[role.name] ?? [];
+
+      for (const permissionName of defaultPermissionNames) {
+        const permission = permissionByName.get(permissionName);
+        if (!permission) continue;
+
+        assignmentsToCreate.push(
+          this.rolePermissionAssignmentRepository.create({
+            roleRef: role._id,
+            permissionRef: permission._id,
+            scope: PermissionDataScope.ALL,
+          }),
+        );
+      }
+    }
+
+    if (assignmentsToCreate.length === 0) return;
+
+    await this.rolePermissionAssignmentRepository.save(assignmentsToCreate);
+    await this.clearRolePermissionCache();
   }
 
   private normalizeRoleAssignments(

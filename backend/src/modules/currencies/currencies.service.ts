@@ -410,7 +410,7 @@ export class CurrenciesService implements OnModuleInit {
     return result;
   }
 
-  private async getLatestVndRate(
+  async getLatestVndRate(
     code: string,
     rateType: ExchangeRateType,
   ): Promise<number> {

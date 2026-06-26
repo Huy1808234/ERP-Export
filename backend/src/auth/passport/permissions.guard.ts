@@ -32,12 +32,26 @@ function hasRequiredPermissions(
   userPermissions: Set<string>,
   requiredPermissions: string[],
 ): boolean {
-  return requiredPermissions.every(
-    (permission) =>
-      userPermissions.has(permission) ||
-      userPermissions.has('read:all') ||
-      userPermissions.has('manage:all'),
-  );
+  return requiredPermissions.every((permission) => {
+    if (userPermissions.has(permission) || userPermissions.has('manage:all')) {
+      return true;
+    }
+
+    if (permission.startsWith('read:') && userPermissions.has('read:all')) {
+      return true;
+    }
+
+    const [actionName, subjectName] = permission.split(':');
+    if (
+      subjectName &&
+      (actionName === 'create' || actionName === 'update') &&
+      userPermissions.has(`write:${subjectName}`)
+    ) {
+      return true;
+    }
+
+    return false;
+  });
 }
 
 @Injectable()

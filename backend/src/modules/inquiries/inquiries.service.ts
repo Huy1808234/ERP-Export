@@ -42,7 +42,7 @@ export class InquiriesService {
       ...data,
       productSnapshotName,
       productSnapshotCode,
-      status: InquiryStatus.PENDING,
+      status: InquiryStatus.SUBMITTED,
     });
 
     const savedInquiry = (await this.inquiryRepo.save(
@@ -54,7 +54,7 @@ export class InquiriesService {
 
     // Senior Approach: Decouple notification logic using Event Emitter
     this.eventEmitter.emit('notification.new_inquiry', {
-      id: savedInquiry._id,
+      _id: savedInquiry._id,
       customerName: savedInquiry.customerName,
       customerEmail: savedInquiry.customerEmail,
       quantity: savedInquiry.quantity,
@@ -98,14 +98,39 @@ export class InquiriesService {
     };
   }
 
-  async updateStatus(id: string, status: InquiryStatus) {
-    const inquiry = await this.inquiryRepo.findOne({ where: { _id: id } });
+  async updateStatus(
+    recordId: string,
+    status: InquiryStatus,
+    username = 'system',
+  ) {
+    const inquiry = await this.inquiryRepo.findOne({
+      where: { _id: recordId },
+    });
     if (!inquiry) {
       throw new NotFoundException('Inquiry not found');
     }
 
+    const previousStatus = inquiry.status;
     inquiry.status = status;
-    return this.inquiryRepo.save(inquiry);
+    inquiry.auditTrail = [
+      ...(inquiry.auditTrail || []),
+      {
+        action: 'STATUS_CHANGED',
+        username,
+        at: new Date().toISOString(),
+        fromStatus: previousStatus,
+        toStatus: status,
+      },
+    ];
+    const saved = await this.inquiryRepo.save(inquiry);
+    this.eventEmitter.emit('notification.inquiry_status_changed', {
+      id: saved._id,
+      inquiryNumber: saved.inquiryNumber,
+      status: saved.status,
+      customerName: saved.customerName,
+    });
+
+    return saved;
   }
 
   async remove(id: string) {

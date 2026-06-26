@@ -117,6 +117,7 @@ export class ApprovalMatrixController {
   }
 
   @Get('requests/pending')
+  @Get('pending')
   @Roles(
     'ADMIN',
     'DIRECTOR',

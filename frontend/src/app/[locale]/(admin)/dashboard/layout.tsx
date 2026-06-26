@@ -8,7 +8,7 @@ import { AdminContextProvider } from '@/context/admin.context';
 import { auth } from '@/auth';
 
 import { redirect } from 'next/navigation';
-import { isStaff } from '@/utils/auth-utils';
+import { isDashboardUser } from '@/utils/auth-utils';
 
 const AdminLayout = async ({
     children,
@@ -20,8 +20,8 @@ const AdminLayout = async ({
     const { locale } = await params;
     const session = await auth();
 
-    // SECURITY CHECK: Must be logged in AND must be a staff member
-    if (!session || session.error === 'RefreshAccessTokenError' || !isStaff(session.user)) {
+    // SECURITY CHECK: Must be logged in and have a dashboard-capable role.
+    if (!session || session.error === 'RefreshAccessTokenError' || !isDashboardUser(session.user)) {
         redirect(`/${locale}/auth/login`);
     }
 

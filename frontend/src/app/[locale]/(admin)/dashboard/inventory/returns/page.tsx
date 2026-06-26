@@ -38,6 +38,7 @@ import AdminPageScroll from '@/components/layout/admin.page-scroll';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { sendRequest } from '@/lib/api-client';
 import { getAccessToken } from '@/lib/auth-token';
+import { getAccessRoleName } from '@/lib/access-control';
 import { canReadCostFields, sanitizeCostPayload } from '@/lib/field-access';
 import { formatCurrency, formatVND } from '@/utils/format';
 
@@ -170,11 +171,7 @@ const InventoryReturnsPage = () => {
   const [returnSearch, setReturnSearch] = useState('');
   const [movementFilters, setMovementFilters] = useState<Record<string, string | undefined>>({});
 
-  const roleName = String(
-    typeof (session?.user as any)?.role === 'string'
-      ? (session?.user as any)?.role
-      : session?.user?.role?.name || '',
-  ).toUpperCase();
+  const roleName = getAccessRoleName(session?.user);
   const canCreate = ['ADMIN', 'WAREHOUSE', 'SALES_EXPORT'].includes(roleName);
   const canApprove = ['ADMIN', 'SUPER ADMIN', 'SUPER_ADMIN', 'MANAGER'].includes(roleName);
   const canReceive = ['ADMIN', 'WAREHOUSE'].includes(roleName);

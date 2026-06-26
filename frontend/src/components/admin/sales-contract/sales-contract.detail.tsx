@@ -87,6 +87,7 @@ interface SalesContractDetail {
   logisticsFee?: number | null;
   otherFee?: number | null;
   deliveryDate?: string | null;
+  validUntil?: string | null;
   paymentTerms?: string | null;
   notes?: string | null;
   submittedForApprovalByUsername?: string | null;
@@ -470,6 +471,9 @@ const SalesContractDetailModal: React.FC<SalesContractDetailProps> = ({ open, on
                     <Space orientation="vertical" className="w-full" size={14}>
                       <InfoTile label="Thời hạn giao hàng">
                         {formatDate(data.deliveryDate)}
+                      </InfoTile>
+                      <InfoTile label="Thời hạn hiệu lực">
+                        {formatDate(data.validUntil)}
                       </InfoTile>
                       <InfoTile label="Điều khoản thanh toán">
                         {data.paymentTerms || 'T/T 100%'}

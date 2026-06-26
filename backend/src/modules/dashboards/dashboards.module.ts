@@ -13,6 +13,7 @@ import { AccountReceivable } from '../account-receivables/entities/account-recei
 import { AccountPayable } from '../account-payables/entities/account-payable.entity';
 import { AccountingModule } from '../accounting/accounting.module';
 import { TradeFinanceModule } from '../trade-finance/trade-finance.module';
+import { Inquiry } from '../inquiries/entities/inquiry.entity';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { TradeFinanceModule } from '../trade-finance/trade-finance.module';
       LetterOfCredit,
       AccountReceivable,
       AccountPayable,
+      Inquiry,
     ]),
     AccountingModule,
     TradeFinanceModule,

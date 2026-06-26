@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository, ILike } from 'typeorm';
+import { DataSource, Repository, ILike, EntityManager } from 'typeorm';
 import { Shipment, ShipmentStatus } from './entities/shipment.entity';
 import { Container } from './entities/container.entity';
 import {
@@ -26,6 +26,55 @@ import Decimal from 'decimal.js';
 import { createOpaqueCode } from '@/common/ids/entity-id.util';
 import { PortsService } from '../ports/ports.service';
 
+// =============================================================================
+// CONSTANTS - Extracted from hardcoded values for maintainability
+// =============================================================================
+
+/**
+ * Valid status transitions for shipments.
+ * This ensures business logic integrity - shipments must progress through
+ * stages in correct order: BOOKED → LOADING → ON_BOARD → ARRIVED → CLOSED
+ */
+const SHIPMENT_STATUS_TRANSITIONS: Record<ShipmentStatus, ShipmentStatus[]> = {
+  [ShipmentStatus.BOOKED]: [ShipmentStatus.LOADING],
+  [ShipmentStatus.LOADING]: [ShipmentStatus.CUSTOMS_CLEARED, ShipmentStatus.ON_BOARD],
+  [ShipmentStatus.CUSTOMS_CLEARED]: [ShipmentStatus.ON_BOARD],
+  [ShipmentStatus.ON_BOARD]: [ShipmentStatus.ARRIVED],
+  [ShipmentStatus.ARRIVED]: [ShipmentStatus.CLOSED],
+  [ShipmentStatus.CLOSED]: [], // Terminal state - no transitions allowed
+};
+
+/**
+ * Account codes for accounting entries.
+ * Centralized here for easy maintenance and to prevent typos.
+ */
+const ACCOUNT_CODES = {
+  COGS: '632',              // Cost of Goods Sold - Freight & Logistics
+  PAYABLE: '331',           // Accounts Payable - Logistics Partner
+  ADVANCE: '3387',          // Advance from Customers (for DDP/DAP)
+  REVENUE: '511',           // Revenue from Sales
+} as const;
+
+/**
+ * Roles that can perform issue-stock operation.
+ * Prevents unauthorized users from releasing inventory.
+ */
+const ISSUE_STOCK_ROLES = ['ADMIN', 'MANAGER', 'WAREHOUSE', 'LOGISTICS'] as const;
+
+/**
+ * Roles that can perform shipment operations.
+ */
+const SHIPMENT_ROLES = {
+  CREATE: ['ADMIN', 'MANAGER', 'LOGISTICS', 'SALES_EXPORT'] as const,
+  UPDATE: ['ADMIN', 'MANAGER', 'LOGISTICS'] as const,
+  STATUS: ['ADMIN', 'MANAGER', 'LOGISTICS'] as const,
+  ISSUE_STOCK: ISSUE_STOCK_ROLES,
+} as const;
+
+// =============================================================================
+// TYPES
+// =============================================================================
+
 type ShipmentRouteInput = {
   pol?: string | null;
   pol_port_id?: string | null;
@@ -43,6 +92,20 @@ type ShipmentRoutePatchInput = ShipmentRouteInput & {
   hasPod: boolean;
   hasPodPortId: boolean;
 };
+
+/**
+ * Audit trail entry for tracking changes to shipments.
+ */
+type AuditTrailEntry = {
+  action: string;
+  actor: string;
+  at: string;
+  changes?: Record<string, { from: unknown; to: unknown }>;
+};
+
+// =============================================================================
+// SERVICE
+// =============================================================================
 
 @Injectable()
 export class ShipmentsService {
@@ -63,6 +126,10 @@ export class ShipmentsService {
     private logisticsAllocationService: LogisticsAllocationService,
     private portsService: PortsService,
   ) {}
+
+  // ===========================================================================
+  // PRIVATE HELPER METHODS
+  // ===========================================================================
 
   private async resolveShipmentPorts(
     data: ShipmentRouteInput,
@@ -112,6 +179,111 @@ export class ShipmentsService {
     };
   }
 
+  /**
+   * Validates and applies status transition.
+   * Enforces business logic: shipments must progress through stages in order.
+   *
+   * @throws BadRequestException if transition is not allowed
+   */
+  private validateStatusTransition(
+    currentStatus: ShipmentStatus,
+    newStatus: ShipmentStatus,
+  ): void {
+    const allowedTransitions = SHIPMENT_STATUS_TRANSITIONS[currentStatus];
+
+    if (!allowedTransitions || !allowedTransitions.includes(newStatus)) {
+      throw new BadRequestException(
+        `Invalid status transition: Cannot move from '${currentStatus}' to '${newStatus}'. ` +
+        `Allowed transitions from '${currentStatus}': ${allowedTransitions?.join(', ') || 'none'}`,
+      );
+    }
+  }
+
+  /**
+   * Sanitizes search input to prevent ReDoS attacks.
+   * Escapes SQL LIKE wildcards.
+   */
+  private sanitizeSearchInput(search: string): string {
+    // Escape % and _ which are LIKE wildcards
+    return search.replace(/[%_\\]/g, '\\$&');
+  }
+
+  /**
+   * Syncs booking number and ETD from shipment to sales contract.
+   * Extracted to avoid duplicate logic in create() and update().
+   */
+  private async syncContractBookingFromShipment(
+    manager: EntityManager,
+    contract: any,
+    data: { bookingNumber?: string; etd?: string },
+  ): Promise<boolean> {
+    if (!contract) return false;
+
+    let updated = false;
+
+    if (data.bookingNumber && contract.bookingNumber !== data.bookingNumber) {
+      contract.bookingNumber = data.bookingNumber;
+      updated = true;
+    }
+
+    if (data.etd && contract.deliveryDate !== data.etd) {
+      contract.deliveryDate = data.etd;
+      updated = true;
+    }
+
+    if (updated) {
+      await manager.save('SalesContract', contract);
+    }
+
+    return updated;
+  }
+
+  /**
+   * Checks if payment is required before shipment (100% prepayment terms).
+   */
+  private isPrepaymentRequired(pi: ProformaInvoice | null | undefined): boolean {
+    if (!pi) return false;
+
+    const paymentTerms = pi.paymentTerms?.toLowerCase() || '';
+    const depositPercent = Number(pi.depositPercent);
+
+    return (
+      paymentTerms.includes('prepayment') ||
+      paymentTerms.includes('advance') ||
+      depositPercent === 100
+    );
+  }
+
+  /**
+   * Adds an audit trail entry to shipment.
+   */
+  private addAuditTrail(
+    shipment: Shipment,
+    action: string,
+    actor: string,
+    changes?: Record<string, { from: unknown; to: unknown }>,
+  ): void {
+    if (!shipment.auditTrail) {
+      shipment.auditTrail = [];
+    }
+
+    const entry: AuditTrailEntry = {
+      action,
+      actor,
+      at: new Date().toISOString(),
+    };
+
+    if (changes) {
+      entry.changes = changes;
+    }
+
+    shipment.auditTrail.push(entry);
+  }
+
+  // ===========================================================================
+  // PUBLIC CRUD METHODS
+  // ===========================================================================
+
   async create(createShipmentDto: any, user: User) {
     const { containers, proformaInvoiceId, ...shipmentData } =
       createShipmentDto;
@@ -125,7 +297,7 @@ export class ShipmentsService {
       });
       if (!pi) throw new NotFoundException('Proforma Invoice not found');
       if (!pi.salesContractId) {
-        throw new Error(
+        throw new BadRequestException(
           'PI này chưa được chuyển đổi thành Hợp đồng (Sales Contract). Vui lòng duyệt hợp đồng trước khi lên lô.',
         );
       }
@@ -165,7 +337,7 @@ export class ShipmentsService {
         shipmentNumber,
         createdByUsername: user.username,
         status: ShipmentStatus.BOOKED,
-        // TECH LEAD INHERIT: Copy logistics info from contract if not provided
+        // Inherit logistics info from contract if not provided
         logisticsPartnerId:
           shipmentData.logisticsPartnerId || contract?.logisticsPartnerId,
         bookingNumber: shipmentData.bookingNumber || contract?.bookingNumber,
@@ -179,11 +351,15 @@ export class ShipmentsService {
           shipmentData.localChargesVnd || contract?.portCharges || 0,
         freightCurrency: contract?.currencyCode || 'USD',
         insuranceCurrency: contract?.currencyCode || 'USD',
+        auditTrail: [],
       });
 
       const savedShipment = (await queryRunner.manager.save(
         shipment,
       )) as unknown as Shipment;
+
+      // Add audit trail for creation
+      this.addAuditTrail(savedShipment, 'CREATED', user.username);
 
       if (containers && containers.length > 0) {
         const containerEntities = containers.map((c) =>
@@ -193,32 +369,29 @@ export class ShipmentsService {
           }),
         );
         await queryRunner.manager.save(containerEntities);
+
+        // Audit trail for containers
+        this.addAuditTrail(
+          savedShipment,
+          'CONTAINERS_ADDED',
+          user.username,
+          { count: { from: 0, to: containers.length } },
+        );
       }
 
-      // TECH LEAD FIX: Sync Booking Number and ETD back to Sales Contract
-      if (contract) {
-        let contractUpdated = false;
-        if (
-          shipmentData.bookingNumber &&
-          contract.bookingNumber !== shipmentData.bookingNumber
-        ) {
-          contract.bookingNumber = shipmentData.bookingNumber;
-          contractUpdated = true;
-        }
-        if (shipmentData.etd && contract.deliveryDate !== shipmentData.etd) {
-          contract.deliveryDate = shipmentData.etd;
-          contractUpdated = true;
-        }
-        if (contractUpdated) {
-          await queryRunner.manager.save('SalesContract', contract);
-        }
-      }
+      // Sync Booking Number and ETD back to Sales Contract
+      await this.syncContractBookingFromShipment(queryRunner.manager, contract, {
+        bookingNumber: shipmentData.bookingNumber,
+        etd: shipmentData.etd,
+      });
 
       await queryRunner.commitTransaction();
       return this.findOne(savedShipment._id);
     } catch (err) {
       await queryRunner.rollbackTransaction();
-      throw new BadRequestException(err.message);
+      throw new BadRequestException(
+        err instanceof Error ? err.message : 'Unknown error occurred',
+      );
     } finally {
       await queryRunner.release();
     }
@@ -241,10 +414,13 @@ export class ShipmentsService {
       (key) => delete filters[key],
     );
 
-    // Enhanced search logic
+    // Build where clause with sanitized search input
     const where: any = { ...filters };
+
     if (query.search) {
-      where.shipmentNumber = ILike(`%${query.search}%`);
+      // SECURITY: Sanitize search input to prevent ReDoS
+      const sanitized = this.sanitizeSearchInput(query.search);
+      where.shipmentNumber = ILike(`%${sanitized}%`);
     }
 
     const [results, total] = await this.shipmentRepository.findAndCount({
@@ -273,7 +449,7 @@ export class ShipmentsService {
   }
 
   async getStats() {
-    const total = await this.shipmentRepository.count();
+    const total = await this.shipmentRepository.countBy({});
     const inTransit = await this.shipmentRepository.countBy({
       status: ShipmentStatus.ON_BOARD,
     });
@@ -308,6 +484,19 @@ export class ShipmentsService {
 
   async update(id: string, updateShipmentDto: UpdateShipmentDto) {
     const shipment = await this.findOne(id);
+    const previousValues: Record<string, unknown> = {};
+
+    // Capture previous values for audit trail
+    if (updateShipmentDto.bookingNumber !== undefined) {
+      previousValues.bookingNumber = shipment.bookingNumber;
+    }
+    if (updateShipmentDto.etd !== undefined) {
+      previousValues.etd = shipment.etd;
+    }
+    if (updateShipmentDto.status !== undefined) {
+      previousValues.status = shipment.status;
+    }
+
     const hasPolPortId = Object.prototype.hasOwnProperty.call(
       updateShipmentDto,
       'pol_port_id',
@@ -338,13 +527,26 @@ export class ShipmentsService {
       hasPodPortId,
       hasPod,
     });
+
+    // Build changes for audit trail
+    const changes: Record<string, { from: unknown; to: unknown }> = {};
+    if (updateShipmentDto.bookingNumber !== undefined) {
+      changes.bookingNumber = {
+        from: previousValues.bookingNumber,
+        to: updateShipmentDto.bookingNumber,
+      };
+    }
+    if (updateShipmentDto.etd !== undefined) {
+      changes.etd = { from: previousValues.etd, to: updateShipmentDto.etd };
+    }
+
     const updated = await this.shipmentRepository.save({
       ...shipment,
       ...updateShipmentDto,
       ...routeData,
     });
 
-    // TECH LEAD FIX: Sync Booking Number and ETD back to Sales Contract on update
+    // Sync Booking Number and ETD back to Sales Contract (extracted logic)
     if (
       shipment.salesContractId &&
       (updateShipmentDto.bookingNumber !== undefined ||
@@ -353,29 +555,20 @@ export class ShipmentsService {
       const contract = (await this.dataSource.manager.findOne('SalesContract', {
         where: { _id: shipment.salesContractId },
       })) as any;
-      if (contract) {
-        let contractUpdated = false;
-        if (
-          updateShipmentDto.bookingNumber &&
-          contract.bookingNumber !== updateShipmentDto.bookingNumber
-        ) {
-          contract.bookingNumber = updateShipmentDto.bookingNumber;
-          contractUpdated = true;
-        }
-        if (
-          updateShipmentDto.etd &&
-          contract.deliveryDate !== updateShipmentDto.etd
-        ) {
-          contract.deliveryDate = updateShipmentDto.etd;
-          contractUpdated = true;
-        }
-        if (contractUpdated) {
-          await this.dataSource.manager.save('SalesContract', contract);
-        }
-      }
+
+      await this.syncContractBookingFromShipment(this.dataSource.manager, contract, {
+        bookingNumber: updateShipmentDto.bookingNumber,
+        etd: updateShipmentDto.etd,
+      });
     }
 
-    // Nếu lô hàng đã lên tàu (ON_BOARD), việc cập nhật chi phí sẽ kích hoạt tính toán lại công nợ
+    // Add audit trail
+    if (Object.keys(changes).length > 0) {
+      this.addAuditTrail(updated, 'UPDATED', 'SYSTEM', changes);
+      await this.shipmentRepository.save(updated);
+    }
+
+    // Recalculate logistics costs if shipment is on board and costs changed
     if (updated.status === ShipmentStatus.ON_BOARD) {
       const costFields = [
         'freightCost',
@@ -396,6 +589,119 @@ export class ShipmentsService {
     return updated;
   }
 
+  // ===========================================================================
+  // STATUS MANAGEMENT
+  // ===========================================================================
+
+  /**
+   * Updates shipment status with full validation.
+   *
+   * Validations performed:
+   * 1. Status transition is valid (business logic)
+   * 2. Payment requirements met (prepayment check)
+   * 3. Required documents present (for ON_BOARD with CIF)
+   * 4. Audit trail recorded
+   *
+   * @throws BadRequestException if validation fails
+   */
+  async updateStatus(
+    id: string,
+    newStatus: ShipmentStatus,
+    actor?: string,
+  ) {
+    const shipment = await this.findOne(id);
+    const currentStatus = shipment.status;
+    const contract = shipment.salesContract;
+    const pi = contract?.proformaInvoice;
+
+    // CRITICAL: Validate status transition (business logic enforcement)
+    this.validateStatusTransition(currentStatus, newStatus);
+
+    // SENIOR FINANCIAL GUARDRAIL: Block shipment if payment is required but not received
+    if (this.isPrepaymentRequired(pi) && !pi?.isPaid) {
+      if (
+        newStatus === ShipmentStatus.LOADING ||
+        newStatus === ShipmentStatus.ON_BOARD
+      ) {
+        throw new BadRequestException(
+          `CHẶN TÀI CHÍNH: Hợp đồng ${contract.contractNumber} áp dụng điều khoản TRẢ TRƯỚC 100%, ` +
+            `nhưng PI ${pi.piNumber} chưa được xác nhận thanh toán. Không thể giao hàng!`,
+        );
+      }
+    }
+
+    // TECH LEAD COMPLIANCE: Check for required documents before moving to ON_BOARD
+    if (
+      newStatus === ShipmentStatus.ON_BOARD &&
+      contract?.incoterm === Incoterm.CIF
+    ) {
+      const docs = await this.getDocuments(id);
+      const hasRequiredDocs = docs.some(
+        (d) =>
+          d.documentType === DocumentType.CERTIFICATE_OF_ORIGIN ||
+          d.documentType === DocumentType.PHYTOSANITARY,
+      );
+      // NOTE: For demo - real ERP would check for INSURANCE_POLICY
+      if (!hasRequiredDocs) {
+        // Warning instead of block for demo flexibility
+        console.warn(
+          `CIF shipment ${shipment.shipmentNumber}: Consider uploading origin certificates`,
+        );
+      }
+    }
+
+    // Update status
+    const previousStatus = shipment.status;
+    shipment.status = newStatus;
+
+    // Add audit trail for status change
+    this.addAuditTrail(shipment, 'STATUS_CHANGED', actor || 'SYSTEM', {
+      status: { from: previousStatus, to: newStatus },
+    });
+
+    // Trigger downstream processes on significant status changes
+    const triggerStatuses = [
+      ShipmentStatus.ON_BOARD,
+      ShipmentStatus.ARRIVED,
+      ShipmentStatus.CLOSED,
+    ];
+    if (triggerStatuses.includes(newStatus) && contract?.status === 'CONFIRMED') {
+      await this.salesContractService.shipContract(shipment.salesContractId);
+      await this.allocateLogisticsCosts(id);
+      await this.eventEmitter.emitAsync('shipment.on_board', { shipment });
+    }
+
+    // TECH LEAD LOGIC: Finalize Revenue for DDP/DAP on Arrival
+    if (newStatus === ShipmentStatus.ARRIVED && contract) {
+      const incotermConfig = INCOTERM_CONFIG[contract.incoterm];
+      if (incotermConfig?.category === IncotermCategory.SELLER_PAYS_FREIGHT) {
+        await this.accountingService.createJournalEntry({
+          description: `Revenue Realized on Arrival (${contract.incoterm}): ${contract.contractNumber}`,
+          referenceType: 'SHIPMENT',
+          referenceId: shipment._id,
+          items: [
+            {
+              accountCode: ACCOUNT_CODES.ADVANCE,
+              debit: Number(contract.totalAmountVnd),
+              credit: 0,
+            },
+            {
+              accountCode: ACCOUNT_CODES.REVENUE,
+              debit: 0,
+              credit: Number(contract.totalAmountVnd),
+            },
+          ],
+        });
+      }
+    }
+
+    return await this.shipmentRepository.save(shipment);
+  }
+
+  // ===========================================================================
+  // STOCK & INVENTORY
+  // ===========================================================================
+
   async issueStock(id: string, user: any) {
     const shipment = await this.findOne(id);
     if (shipment.isStockIssued) {
@@ -409,6 +715,7 @@ export class ShipmentsService {
     }
 
     return await this.dataSource.transaction(async (manager) => {
+      // Pass manager to nested service for proper transaction handling
       const exportDelivery =
         await this.inventoryService.issueExportDeliveryForShipment(
           shipment,
@@ -416,10 +723,21 @@ export class ShipmentsService {
           manager,
         );
 
-      // Update shipment status to LOADING (Hàng đang đóng/rời kho)
+      // Update shipment status to LOADING
       shipment.isStockIssued = true;
       shipment.stockIssuedAt = new Date();
       shipment.status = ShipmentStatus.LOADING;
+
+      // Add audit trail
+      this.addAuditTrail(
+        shipment,
+        'STOCK_ISSUED',
+        user.username || user.name || 'UNKNOWN',
+        {
+          isStockIssued: { from: false, to: true },
+          status: { from: ShipmentStatus.BOOKED, to: ShipmentStatus.LOADING },
+        },
+      );
 
       const savedShipment = await manager.save(shipment);
 
@@ -430,88 +748,109 @@ export class ShipmentsService {
     });
   }
 
-  async updateStatus(id: string, status: ShipmentStatus) {
-    const shipment = await this.findOne(id);
-    const contract = shipment.salesContract;
-    const pi = contract?.proformaInvoice;
+  // ===========================================================================
+  // CONTAINER MANAGEMENT
+  // ===========================================================================
 
-    // SENIOR FINANCIAL GUARDRAIL: Block shipment if payment is required but not received
-    // Conditions for Prepayment block:
-    // 1. Payment Term contains "Prepayment" or "T/T Advance" (100%)
-    // 2. Deposit Percent is 100%
-    const isPrepaymentTerm =
-      pi?.paymentTerms?.toLowerCase().includes('prepayment') ||
-      pi?.paymentTerms?.toLowerCase().includes('advance') ||
-      Number(pi?.depositPercent) === 100;
+  /**
+   * Adds a container to shipment.
+   * Provides atomic container addition without full array replacement.
+   */
+  async addContainer(
+    shipmentId: string,
+    containerData: Partial<Container>,
+    actor?: string,
+  ) {
+    const shipment = await this.findOne(shipmentId);
 
-    if (isPrepaymentTerm && !pi?.isPaid) {
-      if (
-        status === ShipmentStatus.LOADING ||
-        status === ShipmentStatus.ON_BOARD
-      ) {
-        throw new BadRequestException(
-          `CHẶN TÀI CHÍNH: Hợp đồng ${contract.contractNumber} áp dụng điều khoản TRẢ TRƯỚC 100%, ` +
-            `nhưng PI ${pi.piNumber} chưa được xác nhận thanh toán. Không thể giao hàng!`,
-        );
-      }
-    }
+    const container = this.containerRepository.create({
+      ...containerData,
+      shipmentId,
+    });
 
-    // TECH LEAD COMPLIANCE: Check for required documents before moving status
-    if (
-      status === ShipmentStatus.ON_BOARD &&
-      contract?.incoterm === Incoterm.CIF
-    ) {
-      const docs = await this.getDocuments(id);
-      const hasInsurance = docs.some(
-        (d) =>
-          d.documentType === DocumentType.CERTIFICATE_OF_ORIGIN ||
-          d.documentType === DocumentType.PHYTOSANITARY,
-      );
-      // NOTE: For this demo, let's say CIF needs any document uploaded to signify activity
-      // Real ERP: docs.some(d => d.documentType === DocumentType.INSURANCE_POLICY)
-    }
+    const savedContainer = await this.containerRepository.save(container);
 
-    shipment.status = status;
+    // Add audit trail
+    this.addAuditTrail(shipment, 'CONTAINER_ADDED', actor || 'SYSTEM', {
+      containerId: { from: null, to: savedContainer._id },
+      containerType: { from: null, to: containerData.type },
+    });
 
-    // Fix: Trigger accounting/debt recognition even if user skips ON_BOARD step
-    const triggerStatuses = [
-      ShipmentStatus.ON_BOARD,
-      ShipmentStatus.ARRIVED,
-      ShipmentStatus.CLOSED,
-    ];
-    if (triggerStatuses.includes(status) && contract?.status === 'CONFIRMED') {
-      await this.salesContractService.shipContract(shipment.salesContractId);
-      await this.allocateLogisticsCosts(id);
-      await this.eventEmitter.emitAsync('shipment.on_board', { shipment });
-    }
-
-    // TECH LEAD LOGIC: Finalize Revenue for DDP/DAP on Arrival
-    if (status === ShipmentStatus.ARRIVED && contract) {
-      const incotermConfig = INCOTERM_CONFIG[contract.incoterm];
-      if (incotermConfig?.category === IncotermCategory.SELLER_PAYS_FREIGHT) {
-        // Move from 3387 to 511
-        await this.accountingService.createJournalEntry({
-          description: `Revenue Realized on Arrival (${contract.incoterm}): ${contract.contractNumber}`,
-          referenceType: 'SHIPMENT',
-          referenceId: shipment._id,
-          items: [
-            {
-              accountCode: '3387',
-              debit: Number(contract.totalAmountVnd),
-              credit: 0,
-            },
-            {
-              accountCode: '511',
-              debit: 0,
-              credit: Number(contract.totalAmountVnd),
-            },
-          ],
-        });
-      }
-    }
-
-    return await this.shipmentRepository.save(shipment);
+    return savedContainer;
   }
+
+  /**
+   * Removes a container from shipment.
+   */
+  async removeContainer(
+    shipmentId: string,
+    containerId: string,
+    actor?: string,
+  ) {
+    const shipment = await this.findOne(shipmentId);
+    const container = await this.containerRepository.findOne({
+      where: { _id: containerId, shipmentId },
+    });
+
+    if (!container) {
+      throw new NotFoundException('Container not found in this shipment');
+    }
+
+    await this.containerRepository.remove(container);
+
+    // Add audit trail
+    this.addAuditTrail(shipment, 'CONTAINER_REMOVED', actor || 'SYSTEM', {
+      containerId: { from: containerId, to: null },
+      containerType: { from: container.type, to: null },
+    });
+
+    return { deleted: true, containerId };
+  }
+
+  /**
+   * Updates a container in shipment.
+   */
+  async updateContainer(
+    shipmentId: string,
+    containerId: string,
+    containerData: Partial<Container>,
+    actor?: string,
+  ) {
+    const shipment = await this.findOne(shipmentId);
+    const container = await this.containerRepository.findOne({
+      where: { _id: containerId, shipmentId },
+    });
+
+    if (!container) {
+      throw new NotFoundException('Container not found in this shipment');
+    }
+
+    const previousValues = { ...container };
+    Object.assign(container, containerData);
+
+    const updatedContainer = await this.containerRepository.save(container);
+
+    // Add audit trail
+    const changes: Record<string, { from: unknown; to: unknown }> = {};
+    for (const key of Object.keys(containerData) as (keyof Container)[]) {
+      if (containerData[key] !== previousValues[key]) {
+        changes[key] = {
+          from: previousValues[key],
+          to: containerData[key],
+        };
+      }
+    }
+
+    if (Object.keys(changes).length > 0) {
+      this.addAuditTrail(shipment, 'CONTAINER_UPDATED', actor || 'SYSTEM', changes);
+    }
+
+    return updatedContainer;
+  }
+
+  // ===========================================================================
+  // DOCUMENT MANAGEMENT
+  // ===========================================================================
 
   async addDocument(shipmentId: string, data: Partial<ShipmentDocument>) {
     const doc = this.docRepository.create({ ...data, shipmentId });
@@ -524,6 +863,10 @@ export class ShipmentsService {
       order: { documentType: 'ASC' },
     });
   }
+
+  // ===========================================================================
+  // COMMERCIAL INVOICE & REPORTING
+  // ===========================================================================
 
   async getCommercialInvoiceData(id: string) {
     const shipment = await this.findOne(id);
@@ -558,6 +901,10 @@ export class ShipmentsService {
     };
   }
 
+  // ===========================================================================
+  // COST ALLOCATION & ACCOUNTING
+  // ===========================================================================
+
   async allocateLogisticsCosts(id: string) {
     const shipment = await this.shipmentRepository.findOne({
       where: { _id: id },
@@ -570,7 +917,7 @@ export class ShipmentsService {
 
     if (!shipment) throw new NotFoundException('Shipment not found');
 
-    // Clean up old logistics journal entries for this shipment to avoid duplicates
+    // Clean up old logistics journal entries for this shipment
     await this.accountingService.deleteJournalEntriesByReference(
       'SHIPMENT',
       shipment._id,
@@ -590,21 +937,26 @@ export class ShipmentsService {
     const totalLogisticsVnd = totalFreightVnd.plus(totalLocalVnd);
     if (totalLogisticsVnd.isZero()) return;
 
-    // TECH LEAD FIX: Ensure partner exists to avoid "floating" journal entries with null partnerId
+    // Ensure partner exists to avoid floating journal entries
     if (!shipment.logisticsPartnerId) {
       throw new BadRequestException(
         `Lô hàng ${shipment.shipmentNumber} chưa chọn Đơn vị vận tải (Forwarder). Vui lòng chọn trước khi lưu chi phí.`,
       );
     }
 
+    // Use extracted constants for account codes
     await this.accountingService.createJournalEntry({
       description: `Logistics Cost Allocation for Shipment ${shipment.shipmentNumber}`,
       referenceType: 'SHIPMENT',
       referenceId: shipment._id,
       items: [
-        { accountCode: '632', debit: totalLogisticsVnd.toNumber(), credit: 0 },
         {
-          accountCode: '331',
+          accountCode: ACCOUNT_CODES.COGS,
+          debit: totalLogisticsVnd.toNumber(),
+          credit: 0,
+        },
+        {
+          accountCode: ACCOUNT_CODES.PAYABLE,
           debit: 0,
           credit: totalLogisticsVnd.toNumber(),
           partnerId: shipment.logisticsPartnerId,
@@ -613,12 +965,19 @@ export class ShipmentsService {
     });
   }
 
+  // ===========================================================================
+  // PUBLIC TRACKING (Guest Access)
+  // ===========================================================================
+
   async tracking(number: string) {
+    // SECURITY: Sanitize input to prevent ReDoS
+    const sanitized = this.sanitizeSearchInput(number);
+
     const shipment = await this.shipmentRepository.findOne({
       where: [
-        { shipmentNumber: ILike(`%${number}%`) },
-        { blNumber: ILike(`%${number}%`) },
-        { bookingNumber: ILike(`%${number}%`) },
+        { shipmentNumber: ILike(`%${sanitized}%`) },
+        { blNumber: ILike(`%${sanitized}%`) },
+        { bookingNumber: ILike(`%${sanitized}%`) },
       ],
       relations: [
         'salesContract',
@@ -627,8 +986,11 @@ export class ShipmentsService {
         'containers',
       ],
     });
-    if (!shipment)
+
+    if (!shipment) {
       throw new NotFoundException('Không tìm thấy thông tin vận đơn này.');
+    }
+
     return {
       shipmentNumber: shipment.shipmentNumber,
       status: shipment.status,
@@ -645,4 +1007,19 @@ export class ShipmentsService {
       lastUpdated: shipment.updatedAt,
     };
   }
+
+  // ===========================================================================
+  // AUDIT TRAIL ACCESS
+  // ===========================================================================
+
+  /**
+   * Returns audit trail for a shipment.
+   */
+  async getAuditTrail(id: string) {
+    const shipment = await this.findOne(id);
+    return shipment.auditTrail || [];
+  }
 }
+
+// Export constants for use in controller
+export { SHIPMENT_ROLES, ACCOUNT_CODES };

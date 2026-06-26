@@ -35,6 +35,16 @@ import PurchaseOrderDetailModal from './purchase-order.detail';
 
 const { Text } = Typography;
 
+const RECEIPT_ELIGIBLE_PO_STATUSES: POStatus[] = ['SENT', 'PARTIAL_RECEIPT'];
+
+const getRemainingReceiptQuantity = (purchaseOrder: IPurchaseOrder): number => {
+  return (purchaseOrder.items || []).reduce((sum, item) => {
+    const orderedQuantity = Number(item.quantity || 0);
+    const receivedQuantity = Number(item.receivedQuantity || 0);
+    return sum + Math.max(orderedQuantity - receivedQuantity, 0);
+  }, 0);
+};
+
 const PurchaseOrderTable: React.FC = () => {
   const { data, meta, loading, fetchPOs, deletePO, stats, fetchStats, sendPO } = usePurchaseOrders();
   const t = useTranslations('PurchaseOrder');
@@ -189,7 +199,7 @@ const PurchaseOrderTable: React.FC = () => {
       key: 'status',
       width: 130,
       render: (status: POStatus) => {
-        const config = (PO_STATUS_CONFIG as any)[status] || { color: 'default' };
+        const config = PO_STATUS_CONFIG[status] || { color: 'default' };
         const statusKey = `status.${status}`;
         return (
           <Tag color={config.color} style={{ borderRadius: 4 }}>
@@ -203,8 +213,10 @@ const PurchaseOrderTable: React.FC = () => {
       key: 'action',
       align: 'center' as const,
       width: 180,
-      render: (_: any, record: IPurchaseOrder) => {
-        const canCreateGoodsReceipt = ['SENT', 'PARTIAL_RECEIPT'].includes(record.status);
+      render: (_: unknown, record: IPurchaseOrder) => {
+        const canCreateGoodsReceipt =
+          RECEIPT_ELIGIBLE_PO_STATUSES.includes(record.status) &&
+          getRemainingReceiptQuantity(record) > 0;
         const canCreateInvoice = ['PARTIAL_RECEIPT', 'RECEIVED'].includes(record.status);
         const canOpenMatching = record.status === 'COMPLETED';
         const canSendOrSubmit = ['DRAFT', 'REJECTED', 'APPROVED'].includes(record.status);

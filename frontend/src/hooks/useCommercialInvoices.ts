@@ -10,6 +10,7 @@ type CreateCommercialInvoicePayload = {
   invoiceDate?: string;
   dueDate?: string;
   taxRatePercent?: number;
+  exchangeRate?: number;
   note?: string;
 };
 

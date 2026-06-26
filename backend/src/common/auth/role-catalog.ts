@@ -92,6 +92,24 @@ export const SYSTEM_PERMISSIONS: readonly SystemPermissionDefinition[] = [
     module: 'ACCOUNTING',
   },
   {
+    name: 'read:payment_receipt',
+    apiPath: '/api/v1/payment-receipts/**',
+    method: 'GET',
+    module: 'ACCOUNT_RECEIVABLES',
+  },
+  {
+    name: 'write:payment_receipt',
+    apiPath: '/api/v1/payment-receipts/**',
+    method: 'WRITE',
+    module: 'ACCOUNT_RECEIVABLES',
+  },
+  {
+    name: 'approve:payment_receipt',
+    apiPath: '/api/v1/payment-receipts/**/approve',
+    method: 'PATCH',
+    module: 'ACCOUNT_RECEIVABLES',
+  },
+  {
     name: 'read:export_document',
     apiPath: '/api/v1/commercial-invoices/**',
     method: 'GET',

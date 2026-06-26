@@ -72,12 +72,25 @@ export interface GlobalSearchResponse {
   results: GlobalSearchResult[];
 }
 
-interface RawSearchRow {
+/**
+ * Base type for raw SQL query results from search operations.
+ * Each search method should map to this with specific fields.
+ * Using a stricter approach - no index signature allowed.
+ */
+interface BaseSearchRow {
   _id: string;
   title: string | null;
   subtitle: string | null;
   status: string | null;
   updatedAt: Date | string | null;
+}
+
+/**
+ * Extended search row type for searches that return additional fields.
+ * E.g., searchExportDocuments returns shipmentId for navigation.
+ */
+interface ExportDocumentSearchRow extends BaseSearchRow {
+  shipmentId: string | null;
 }
 
 type SearchProducer = (
@@ -246,7 +259,7 @@ export class SearchService {
       )
       .orderBy('product.updatedAt', 'DESC')
       .limit(limit)
-      .getRawMany<RawSearchRow>();
+      .getRawMany<BaseSearchRow>();
 
     return rows.map((row) =>
       this.toResult(row, 'PRODUCT', '/dashboard/product', [
@@ -278,7 +291,7 @@ export class SearchService {
       )
       .orderBy('partner.updatedAt', 'DESC')
       .limit(limit)
-      .getRawMany<RawSearchRow>();
+      .getRawMany<BaseSearchRow>();
 
     return rows.map((row) =>
       this.toResult(row, 'PARTNER', '/dashboard/partners', [
@@ -314,7 +327,7 @@ export class SearchService {
       )
       .orderBy('inquiry.updatedAt', 'DESC')
       .limit(limit)
-      .getRawMany<RawSearchRow>();
+      .getRawMany<BaseSearchRow>();
 
     return rows.map((row) =>
       this.toResult(row, 'INQUIRY', '/dashboard/inquiry', [
@@ -347,7 +360,7 @@ export class SearchService {
       )
       .orderBy('quotation.updatedAt', 'DESC')
       .limit(limit)
-      .getRawMany<RawSearchRow>();
+      .getRawMany<BaseSearchRow>();
 
     return rows.map((row) =>
       this.toResult(row, 'QUOTATION', '/dashboard/quotation', [
@@ -385,7 +398,7 @@ export class SearchService {
       )
       .orderBy('policy.updatedAt', 'DESC')
       .limit(limit)
-      .getRawMany<RawSearchRow>();
+      .getRawMany<BaseSearchRow>();
 
     return rows.map((row) =>
       this.toResult(row, 'PRICING_POLICY', '/dashboard/pricing-policies', [
@@ -419,7 +432,7 @@ export class SearchService {
       )
       .orderBy('pi.updatedAt', 'DESC')
       .limit(limit)
-      .getRawMany<RawSearchRow>();
+      .getRawMany<BaseSearchRow>();
 
     return rows.map((row) =>
       this.toResult(row, 'PROFORMA_INVOICE', '/dashboard/proforma-invoice', [
@@ -450,10 +463,10 @@ export class SearchService {
       )
       .orderBy('contract.updatedAt', 'DESC')
       .limit(limit)
-      .getRawMany<RawSearchRow>();
+      .getRawMany<BaseSearchRow>();
 
     return rows.map((row) =>
-      this.toResult(row, 'SALES_CONTRACT', '/dashboard/sales-contract', [
+      this.toResult(row, 'SALES_CONTRACT', `/dashboard/sales-contract?id=${row._id}`, [
         'contractNumber',
         'buyer',
       ]),
@@ -481,7 +494,7 @@ export class SearchService {
       )
       .orderBy('pr.updatedAt', 'DESC')
       .limit(limit)
-      .getRawMany<RawSearchRow>();
+      .getRawMany<BaseSearchRow>();
 
     return rows.map((row) =>
       this.toResult(row, 'PURCHASE_REQUEST', '/dashboard/purchase-request', [
@@ -514,7 +527,7 @@ export class SearchService {
       )
       .orderBy('po.updatedAt', 'DESC')
       .limit(limit)
-      .getRawMany<RawSearchRow>();
+      .getRawMany<BaseSearchRow>();
 
     return rows.map((row) =>
       this.toResult(
@@ -548,10 +561,10 @@ export class SearchService {
       )
       .orderBy('gr.updatedAt', 'DESC')
       .limit(limit)
-      .getRawMany<RawSearchRow>();
+      .getRawMany<BaseSearchRow>();
 
     return rows.map((row) =>
-      this.toResult(row, 'GOODS_RECEIPT', '/dashboard/goods-receipt', [
+      this.toResult(row, 'GOODS_RECEIPT', `/dashboard/goods-receipt?id=${row._id}`, [
         'grNumber',
         'deliveryNote',
         'poNumber',
@@ -585,7 +598,7 @@ export class SearchService {
       )
       .orderBy('invoice.updatedAt', 'DESC')
       .limit(limit)
-      .getRawMany<RawSearchRow>();
+      .getRawMany<BaseSearchRow>();
 
     return rows.map((row) =>
       this.toResult(row, 'VENDOR_INVOICE', '/dashboard/vendor-invoice', [
@@ -619,7 +632,7 @@ export class SearchService {
       )
       .orderBy('return_doc.updatedAt', 'DESC')
       .limit(limit)
-      .getRawMany<RawSearchRow>();
+      .getRawMany<BaseSearchRow>();
 
     return rows.map((row) =>
       this.toResult(row, 'PURCHASE_RETURN', '/dashboard/purchase-return', [
@@ -654,7 +667,7 @@ export class SearchService {
       )
       .orderBy('shipment.updatedAt', 'DESC')
       .limit(limit)
-      .getRawMany<RawSearchRow>();
+      .getRawMany<BaseSearchRow>();
 
     return rows.map((row) =>
       this.toResult(row, 'SHIPMENT', '/dashboard/shipment', [
@@ -687,7 +700,7 @@ export class SearchService {
       )
       .orderBy('invoice.updatedAt', 'DESC')
       .limit(limit)
-      .getRawMany<RawSearchRow>();
+      .getRawMany<BaseSearchRow>();
 
     return rows.map((row) =>
       this.toResult(
@@ -707,6 +720,7 @@ export class SearchService {
       .createQueryBuilder('document')
       .leftJoin('document.shipment', 'shipment')
       .select('document._id', '_id')
+      .addSelect('shipment._id', 'shipmentId')
       .addSelect(
         'COALESCE("document"."documentNumber", "document"."documentType")',
         'title',
@@ -723,10 +737,10 @@ export class SearchService {
       )
       .orderBy('document.updatedAt', 'DESC')
       .limit(limit)
-      .getRawMany<RawSearchRow>();
+      .getRawMany<ExportDocumentSearchRow>();
 
     return rows.map((row) =>
-      this.toResult(row, 'EXPORT_DOCUMENT', '/dashboard/document', [
+      this.toResult(row, 'EXPORT_DOCUMENT', `/dashboard/document?id=${row.shipmentId ?? ''}`, [
         'documentNumber',
         'documentType',
         'shipment',
@@ -754,7 +768,7 @@ export class SearchService {
       )
       .orderBy('count.updatedAt', 'DESC')
       .limit(limit)
-      .getRawMany<RawSearchRow>();
+      .getRawMany<BaseSearchRow>();
 
     return rows.map((row) =>
       this.toResult(row, 'INVENTORY_COUNT', '/dashboard/inventory/counts', [
@@ -788,7 +802,7 @@ export class SearchService {
       )
       .orderBy('delivery.updatedAt', 'DESC')
       .limit(limit)
-      .getRawMany<RawSearchRow>();
+      .getRawMany<BaseSearchRow>();
 
     return rows.map((row) =>
       this.toResult(
@@ -823,7 +837,7 @@ export class SearchService {
       )
       .orderBy('return_doc.updatedAt', 'DESC')
       .limit(limit)
-      .getRawMany<RawSearchRow>();
+      .getRawMany<BaseSearchRow>();
 
     return rows.map((row) =>
       this.toResult(row, 'CUSTOMER_RETURN', '/dashboard/inventory/returns', [
@@ -858,7 +872,7 @@ export class SearchService {
       )
       .orderBy('lc.updatedAt', 'DESC')
       .limit(limit)
-      .getRawMany<RawSearchRow>();
+      .getRawMany<BaseSearchRow>();
 
     return rows.map((row) =>
       this.toResult(row, 'LETTER_OF_CREDIT', '/dashboard/finance/lc', [
@@ -892,7 +906,7 @@ export class SearchService {
       )
       .orderBy('collection.updatedAt', 'DESC')
       .limit(limit)
-      .getRawMany<RawSearchRow>();
+      .getRawMany<BaseSearchRow>();
 
     return rows.map((row) =>
       this.toResult(row, 'COLLECTION_ORDER', '/dashboard/finance/collections', [
@@ -930,7 +944,7 @@ export class SearchService {
       )
       .orderBy('tf.updatedAt', 'DESC')
       .limit(limit)
-      .getRawMany<RawSearchRow>();
+      .getRawMany<BaseSearchRow>();
 
     return rows.map((row) =>
       this.toResult(
@@ -963,7 +977,7 @@ export class SearchService {
       )
       .orderBy('ar.updatedAt', 'DESC')
       .limit(limit)
-      .getRawMany<RawSearchRow>();
+      .getRawMany<BaseSearchRow>();
 
     return rows.map((row) =>
       this.toResult(
@@ -999,7 +1013,7 @@ export class SearchService {
       )
       .orderBy('ap.updatedAt', 'DESC')
       .limit(limit)
-      .getRawMany<RawSearchRow>();
+      .getRawMany<BaseSearchRow>();
 
     return rows.map((row) =>
       this.toResult(row, 'ACCOUNT_PAYABLE', '/dashboard/account-payables', [
@@ -1030,7 +1044,7 @@ export class SearchService {
       )
       .orderBy('journal.updatedAt', 'DESC')
       .limit(limit)
-      .getRawMany<RawSearchRow>();
+      .getRawMany<BaseSearchRow>();
 
     return rows.map((row) =>
       this.toResult(row, 'JOURNAL_ENTRY', '/dashboard/accounting', [
@@ -1042,7 +1056,7 @@ export class SearchService {
   }
 
   private toResult(
-    row: RawSearchRow,
+    row: BaseSearchRow,
     type: GlobalSearchEntityType,
     targetHref: string,
     matchedFields: string[],

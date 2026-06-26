@@ -12,7 +12,7 @@ import { OnEvent } from '@nestjs/event-emitter';
 import type { ApprovalWorkflowRequestedEvent } from '@/modules/approval-matrix/approval-workflow.events';
 
 type NewInquiryNotificationEvent = {
-  id: string;
+  _id: string;
   customerName: string;
   customerEmail?: string | null;
   quantity?: number | string | null;
@@ -29,15 +29,15 @@ type NewInquiryNotificationEvent = {
 export class SocketGateway
   implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
 {
-  @WebSocketServer() server: Server;
+  @WebSocketServer() server!: Server;
   private logger: Logger = new Logger('SocketGateway');
 
-  afterInit(server: Server) {
-    this.logger.log('🚀 WebSocket Gateway Initialized');
+  afterInit() {
+    this.logger.log(' WebSocket Gateway Initialized');
   }
 
   handleConnection(client: Socket) {
-    this.logger.log(`⚡ Client connected: ${client.id}`);
+    this.logger.log(` Client connected: ${client.id}`);
   }
 
   handleDisconnect(client: Socket) {
@@ -50,40 +50,41 @@ export class SocketGateway
    */
   @OnEvent('notification.new_inquiry')
   handleNewInquiryEvent(payload: NewInquiryNotificationEvent) {
-    this.logger.log(`📢 Internal event received: notification.new_inquiry`);
-    this.logger.log(`📦 Payload: ${JSON.stringify(payload)}`);
+    this.logger.log(` Internal event received: notification.new_inquiry`);
+    this.logger.log(` Payload: ${JSON.stringify(payload)}`);
 
     if (this.server) {
-      this.server.emit('new_inquiry', {
+      void this.server.emit('new_inquiry', {
         ...payload,
         timestamp: new Date(),
       });
       this.logger.log(
-        '🚀 Successfully broadcasted "new_inquiry" to all connected clients',
+        ' Successfully broadcasted "new_inquiry" to all connected clients',
       );
     } else {
-      this.logger.error('❌ WebSocket Server instance is not available!');
+      this.logger.error(' WebSocket Server instance is not available!');
     }
   }
 
   @OnEvent('notification.new_system')
-  handleNewSystemNotification(payload: any) {
-    this.logger.log(`📢 Internal event received: notification.new_system`);
+  handleNewSystemNotification(payload: {
+    userId?: string | null;
+    [key: string]: unknown;
+  }) {
+    this.logger.log(` Internal event received: notification.new_system`);
     if (this.server) {
       if (payload.userId) {
-        this.server.to(payload.userId).emit('new_system_notification', {
+        void this.server.to(payload.userId).emit('new_system_notification', {
           ...payload,
           timestamp: new Date(),
         });
-        this.logger.log(
-          `🚀 Sent system notification to room: ${payload.userId}`,
-        );
+        this.logger.log(` Sent system notification to room: ${payload.userId}`);
       } else {
-        this.server.emit('new_system_notification', {
+        void this.server.emit('new_system_notification', {
           ...payload,
           timestamp: new Date(),
         });
-        this.logger.log('🚀 Broadcasted system notification to all clients');
+        this.logger.log('Broadcasted system notification to all clients');
       }
     }
   }
@@ -94,13 +95,13 @@ export class SocketGateway
   @OnEvent('notification.unread_count')
   handleUnreadCountUpdate(payload: { userId?: string; count: number }) {
     this.logger.log(
-      `📢 Unread count updated for user ${payload.userId || 'all'}: ${payload.count}`,
+      ` Unread count updated for user ${payload.userId || 'all'}: ${payload.count}`,
     );
     if (this.server) {
       if (payload.userId) {
-        this.server.to(payload.userId).emit('unread_count', payload);
+        void this.server.to(payload.userId).emit('unread_count', payload);
       } else {
-        this.server.emit('unread_count', payload);
+        void this.server.emit('unread_count', payload);
       }
     }
   }
@@ -109,7 +110,7 @@ export class SocketGateway
   handleTradeFinanceDeadlineEvent(payload: Record<string, unknown>) {
     this.logger.log('Trade Finance deadline notification received');
     if (this.server) {
-      this.server.emit('trade_finance_deadline', {
+      void this.server.emit('trade_finance_deadline', {
         ...payload,
         timestamp: new Date(),
       });
@@ -122,7 +123,7 @@ export class SocketGateway
     // Note: We keep this legacy broadcast event for backward compatibility,
     // but the actual system notification is pushed to specific approver rooms via 'notification.new_system'.
     if (this.server) {
-      this.server.emit('approval_required', {
+      void this.server.emit('approval_required', {
         ...payload,
         timestamp: new Date(),
       });
@@ -130,17 +131,17 @@ export class SocketGateway
   }
 
   @SubscribeMessage('join')
-  handleJoin(client: Socket, payload: { userId: string }) {
+  async handleJoin(client: Socket, payload: { userId: string }) {
     if (payload && payload.userId) {
-      client.join(payload.userId);
-      this.logger.log(`👤 Client ${client.id} joined room: ${payload.userId}`);
+      await client.join(payload.userId);
+      this.logger.log(` Client ${client.id} joined room: ${payload.userId}`);
       return { status: 'joined', room: payload.userId };
     }
     return { status: 'error', message: 'userId is required' };
   }
 
   @SubscribeMessage('ping')
-  handlePing(client: Socket, data: unknown) {
+  handlePing() {
     return { event: 'pong', data: 'Server is alive' };
   }
 }

@@ -11,10 +11,11 @@ import {
   MessageEvent,
 } from '@nestjs/common';
 import { InquiriesService } from './inquiries.service';
-import { Public, Roles } from '@/decorator/customize';
+import { Public, Roles, User } from '@/decorator/customize';
 import { InquiryStatus } from './entities/inquiry.entity';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Observable, fromEvent, map } from 'rxjs';
+import type { AuthenticatedUser } from '@/common/types/authenticated-user.type';
 
 @Controller('inquiries')
 export class InquiriesController {
@@ -71,9 +72,14 @@ export class InquiriesController {
   async updateStatus(
     @Param('_id') recordId: string,
     @Body('status') status: InquiryStatus,
+    @User() user?: AuthenticatedUser,
   ) {
     return {
-      data: await this.inquiriesService.updateStatus(recordId, status),
+      data: await this.inquiriesService.updateStatus(
+        recordId,
+        status,
+        user?.username || 'system',
+      ),
     };
   }
 

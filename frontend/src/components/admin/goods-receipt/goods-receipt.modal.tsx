@@ -22,6 +22,8 @@ import {
   Typography,
   Upload,
 } from 'antd';
+import type { FormListFieldData, UploadProps } from 'antd';
+import type { ColumnsType } from 'antd/es/table';
 import { notification } from '@/providers/antd-static';
 import {
   BarcodeOutlined,
@@ -40,6 +42,7 @@ import { useTranslations } from 'next-intl';
 import { useCurrency } from '@/hooks/useCurrency';
 import { getAccessToken } from '@/lib/auth-token';
 import { formatDate } from '@/utils/format';
+import type { IPOLine, IPurchaseOrder, POStatus } from '@/types/purchase-order';
 
 const { Text } = Typography;
 
@@ -72,6 +75,11 @@ type GoodsReceiptFormValues = {
   items: GoodsReceiptLine[];
 };
 
+type SessionUser = {
+  username?: string;
+  name?: string | null;
+};
+
 interface IProps {
   isOpen: boolean;
   setIsOpen: (v: boolean) => void;
@@ -81,6 +89,31 @@ interface IProps {
 
 const draftKeyFor = (poId: string | null) => `goods-receipt-draft-${poId ?? 'unknown'}`;
 
+const RECEIPT_ELIGIBLE_PO_STATUSES: POStatus[] = ['SENT', 'PARTIAL_RECEIPT'];
+
+const toGoodsReceiptLine = (po: IPurchaseOrder, item: IPOLine, index: number): GoodsReceiptLine => {
+  const orderedQuantity = Number(item.quantity || 0);
+  const previouslyReceived = Number(item.receivedQuantity || 0);
+  const remainingQuantity = Math.max(orderedQuantity - previouslyReceived, 0);
+
+  return {
+    purchaseOrderItem_id: item._id,
+    productId: item.productId,
+    sku: item.product?.sku,
+    vietnameseName: item.product?.vietnameseName,
+    orderedQuantity,
+    previouslyReceived,
+    remainingQuantity,
+    quantityReceived: remainingQuantity,
+    quantityRejected: 0,
+    unit: item.unit,
+    lotNumber: `${po.poNumber}-${String(index + 1).padStart(2, '0')}`,
+    qualityStatus: 'PASS',
+    rejectionReason: '',
+    lineNote: '',
+  };
+};
+
 const GoodsReceiptModal = (props: IProps) => {
   const t = useTranslations('GoodsReceipt');
   const { isOpen, setIsOpen, poId, fetchData } = props;
@@ -89,11 +122,11 @@ const GoodsReceiptModal = (props: IProps) => {
   const { formatNumber, formatMoney } = useCurrency();
   const [loading, setLoading] = useState(false);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
-  const [poData, setPoData] = useState<any>(null);
+  const [poData, setPoData] = useState<IPurchaseOrder | null>(null);
   const watchedFormItems = Form.useWatch('items', form);
   const watchedItems = useMemo(() => watchedFormItems ?? [], [watchedFormItems]);
 
-  const currentUser = session?.user as any;
+  const currentUser = session?.user as SessionUser | undefined;
   const receiverName = currentUser?.username || currentUser?.name || 'system';
 
   const qualityOptions = useMemo(() => ([
@@ -111,8 +144,8 @@ const GoodsReceiptModal = (props: IProps) => {
     const receivedNow = watchedItems.reduce((sum, item) => sum + Number(item?.quantityReceived || 0), 0);
     const rejectedQty = watchedItems.reduce((sum, item) => sum + Number(item?.quantityRejected || 0), 0);
     const acceptedQty = Math.max(receivedNow - rejectedQty, 0);
-    const finalReceived = previouslyReceived + receivedNow;
-    const variance = orderedQty - finalReceived;
+    const finalAcceptedQty = previouslyReceived + acceptedQty;
+    const variance = orderedQty - finalAcceptedQty;
     const hasOverReceipt = watchedItems.some(
       (item) => Number(item?.quantityReceived || 0) > Number(item?.remainingQuantity || 0),
     );
@@ -122,8 +155,8 @@ const GoodsReceiptModal = (props: IProps) => {
 
     let status: 'EMPTY' | 'FULL' | 'PARTIAL' | 'OVER' = 'EMPTY';
     if (hasOverReceipt) status = 'OVER';
-    else if (finalReceived >= orderedQty && orderedQty > 0) status = 'FULL';
-    else if (receivedNow > 0 || previouslyReceived > 0) status = 'PARTIAL';
+    else if (finalAcceptedQty >= orderedQty && orderedQty > 0) status = 'FULL';
+    else if (acceptedQty > 0 || previouslyReceived > 0) status = 'PARTIAL';
 
     return {
       totalLines,
@@ -146,45 +179,32 @@ const GoodsReceiptModal = (props: IProps) => {
     OVER: { color: 'red', label: t('modal.receiptStatus.OVER') },
   }[summary.status];
 
+  const poIsReceiptEligible = Boolean(
+    poData?.status && RECEIPT_ELIGIBLE_PO_STATUSES.includes(poData.status),
+  );
+  const hasReceivableQuantity = summary.remainingQty > 0;
+  const hasReceiptQuantity = summary.receivedNow > 0;
+  const canSubmitReceipt = Boolean(poId && poIsReceiptEligible && hasReceivableQuantity && hasReceiptQuantity);
+
   useEffect(() => {
     const fetchPODetail = async () => {
       if (!poId || !isOpen) return;
       setLoading(true);
       try {
-        const res = await sendRequest<IBackendRes<any>>({
+        const res = await sendRequest<IBackendRes<IPurchaseOrder>>({
           url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/purchase-orders/${poId}`,
           method: 'GET',
           headers: { Authorization: `Bearer ${getAccessToken(session)}` },
         });
 
         if (res?.data) {
-          setPoData(res.data);
-          const items = res.data.items?.map((item: any, index: number) => {
-            const orderedQuantity = Number(item.quantity || 0);
-            const previouslyReceived = Number(item.receivedQuantity || 0);
-            const remainingQuantity = Math.max(orderedQuantity - previouslyReceived, 0);
-
-            return {
-              purchaseOrderItem_id: item._id,
-              productId: item.productId,
-              sku: item.product?.sku,
-              vietnameseName: item.product?.vietnameseName,
-              orderedQuantity,
-              previouslyReceived,
-              remainingQuantity,
-              quantityReceived: remainingQuantity,
-              quantityRejected: 0,
-              unit: item.unit,
-              lotNumber: `${res.data.poNumber}-${String(index + 1).padStart(2, '0')}`,
-              qualityStatus: 'PASS' as QualityStatus,
-              rejectionReason: '',
-              lineNote: '',
-            };
-          }) || [];
+          const purchaseOrder = res.data;
+          setPoData(purchaseOrder);
+          const items = purchaseOrder.items?.map((item, index) => toGoodsReceiptLine(purchaseOrder, item, index)) || [];
 
           const draftRaw = localStorage.getItem(draftKeyFor(poId));
           if (draftRaw) {
-            const draft = JSON.parse(draftRaw);
+            const draft = JSON.parse(draftRaw) as Partial<GoodsReceiptFormValues> & { receivedDate?: string };
             form.setFieldsValue({
               ...draft,
               receivedDate: draft.receivedDate ? dayjs(draft.receivedDate) : dayjs(),
@@ -230,7 +250,22 @@ const GoodsReceiptModal = (props: IProps) => {
       ...item,
       quantityReceived: 0,
       quantityRejected: 0,
+      qualityStatus: 'PASS',
     }));
+  };
+
+  const handleQualityStatusChange = (lineIndex: number, qualityStatus: QualityStatus) => {
+    const quantityReceived = Number(form.getFieldValue(['items', lineIndex, 'quantityReceived']) || 0);
+    const quantityRejected = Number(form.getFieldValue(['items', lineIndex, 'quantityRejected']) || 0);
+
+    if (qualityStatus === 'PASS') {
+      form.setFieldValue(['items', lineIndex, 'quantityRejected'], 0);
+      return;
+    }
+
+    if (quantityRejected <= 0) {
+      form.setFieldValue(['items', lineIndex, 'quantityRejected'], quantityReceived);
+    }
   };
 
   const handleSaveDraft = () => {
@@ -243,7 +278,7 @@ const GoodsReceiptModal = (props: IProps) => {
     notification.success({ title: t('modal.actions.draftSaved') });
   };
 
-  const handleUploadAttachment = async (options: any) => {
+  const handleUploadAttachment: NonNullable<UploadProps<unknown>['customRequest']> = async (options) => {
     const { file, onSuccess, onError } = options;
     const accessToken = getAccessToken(session);
 
@@ -256,8 +291,12 @@ const GoodsReceiptModal = (props: IProps) => {
 
     setUploadingAttachment(true);
     try {
+      if (typeof file === 'string') {
+        throw new Error(t('modal.form.uploadFailed'));
+      }
+
       const formData = new FormData();
-      formData.append('file', file as File);
+      formData.append('file', file);
 
       const res = await sendRequestFile<IBackendRes<{
         fileName: string;
@@ -284,10 +323,13 @@ const GoodsReceiptModal = (props: IProps) => {
       });
       onSuccess?.(res.data);
     } catch (error) {
-      onError?.(error);
+      const uploadError = error instanceof Error
+        ? error
+        : new Error(t('notifications.systemErrorDesc'));
+      onError?.(uploadError);
       notification.error({
         title: t('modal.form.uploadFailed'),
-        description: error instanceof Error ? error.message : t('notifications.systemErrorDesc'),
+        description: uploadError.message,
       });
     } finally {
       setUploadingAttachment(false);
@@ -309,7 +351,9 @@ const GoodsReceiptModal = (props: IProps) => {
   const onFinish = async (values: GoodsReceiptFormValues) => {
     setLoading(true);
     try {
-      if (!values.items || values.items.length === 0) {
+      const receiptItems = values.items?.filter((item) => Number(item.quantityReceived || 0) > 0) || [];
+
+      if (receiptItems.length === 0) {
         notification.warning({
           title: t('notifications.noItemsWarning'),
           description: t('notifications.noItemsWarningDesc'),
@@ -325,7 +369,7 @@ const GoodsReceiptModal = (props: IProps) => {
         warehouseLocation: values.warehouseLocation,
         attachmentUrl: values.attachmentUrl,
         note: values.note,
-        items: values.items.map((item) => ({
+        items: receiptItems.map((item) => ({
           purchaseOrderItem_id: item.purchaseOrderItem_id,
           productId: item.productId,
           quantityReceived: Number(item.quantityReceived || 0),
@@ -339,7 +383,7 @@ const GoodsReceiptModal = (props: IProps) => {
         })),
       };
 
-      const res = await sendRequest<IBackendRes<any>>({
+      const res = await sendRequest<IBackendRes<{ grNumber?: string; grnNumber?: string }>>({
         url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/goods-receipts`,
         method: 'POST',
         body: payload,
@@ -347,9 +391,10 @@ const GoodsReceiptModal = (props: IProps) => {
       });
 
       if (res?.data) {
+        const receiptNumber = res.data.grNumber || res.data.grnNumber || 'N/A';
         notification.success({
           title: t('notifications.createSuccess'),
-          description: t('notifications.grNumber', { grNumber: res.data.grNumber || res.data.grnNumber }),
+          description: t('notifications.grNumber', { grNumber: receiptNumber }),
         });
         if (poId) localStorage.removeItem(draftKeyFor(poId));
         setIsOpen(false);
@@ -371,13 +416,13 @@ const GoodsReceiptModal = (props: IProps) => {
     }
   };
 
-  const columns = [
+  const columns: ColumnsType<FormListFieldData> = [
     {
       title: t('modal.form.product'),
       key: 'product',
       width: 220,
       fixed: 'left' as const,
-      render: (_: any, { name }: any) => {
+      render: (_, { name }) => {
         const item = form.getFieldValue(['items', name]);
         return (
           <div style={{ padding: '4px 0' }}>
@@ -397,7 +442,7 @@ const GoodsReceiptModal = (props: IProps) => {
       key: 'orderedQuantity',
       width: 105,
       align: 'right' as const,
-      render: (_: any, { name }: any) => {
+      render: (_, { name }) => {
         const item = form.getFieldValue(['items', name]);
         return <Text strong>{formatNumber(item?.orderedQuantity || 0)}</Text>;
       },
@@ -407,7 +452,7 @@ const GoodsReceiptModal = (props: IProps) => {
       key: 'previouslyReceived',
       width: 105,
       align: 'right' as const,
-      render: (_: any, { name }: any) => {
+      render: (_, { name }) => {
         const item = form.getFieldValue(['items', name]);
         return <Text type="secondary">{formatNumber(item?.previouslyReceived || 0)}</Text>;
       },
@@ -417,7 +462,7 @@ const GoodsReceiptModal = (props: IProps) => {
       key: 'remainingQuantity',
       width: 105,
       align: 'right' as const,
-      render: (_: any, { name }: any) => {
+      render: (_, { name }) => {
         const item = form.getFieldValue(['items', name]);
         return <Tag color={Number(item?.remainingQuantity || 0) > 0 ? 'blue' : 'green'}>{formatNumber(item?.remainingQuantity || 0)}</Tag>;
       },
@@ -426,7 +471,7 @@ const GoodsReceiptModal = (props: IProps) => {
       title: t('modal.form.receivedQty'),
       key: 'quantityReceived',
       width: 145,
-      render: (_: any, { name, key: fieldKey, ...restField }: any) => (
+      render: (_, { name, key: fieldKey, ...restField }) => (
         <Form.Item
           key={fieldKey}
           {...restField}
@@ -434,7 +479,7 @@ const GoodsReceiptModal = (props: IProps) => {
           rules={[
             { required: true, message: t('modal.form.qtyRequired') },
             {
-              validator: (_: any, value: any) => {
+              validator: (_, value: unknown) => {
                 const num = Number(value);
                 if (Number.isNaN(num)) return Promise.reject(new Error(t('modal.form.qtyNumberError')));
                 if (!Number.isInteger(num)) return Promise.reject(new Error(t('modal.form.qtyIntegerError')));
@@ -456,18 +501,29 @@ const GoodsReceiptModal = (props: IProps) => {
       title: t('modal.form.rejectedQty'),
       key: 'quantityRejected',
       width: 125,
-      render: (_: any, { name, key: fieldKey, ...restField }: any) => (
+      render: (_, { name, key: fieldKey, ...restField }) => (
         <Form.Item
           key={fieldKey}
           {...restField}
           name={[name, 'quantityRejected']}
           rules={[
             {
-              validator: (_: any, value: any) => {
+              validator: (_, value: unknown) => {
                 const rejected = Number(value || 0);
                 const received = Number(form.getFieldValue(['items', name, 'quantityReceived']) || 0);
                 if (rejected > received) {
                   return Promise.reject(new Error(t('modal.form.rejectedMaxError')));
+                }
+                const qualityStatus = form.getFieldValue(['items', name, 'qualityStatus']) as QualityStatus | undefined;
+                if (qualityStatus && qualityStatus !== 'PASS' && rejected <= 0) {
+                  return Promise.reject(new Error(t('modal.form.rejectedQualityRequired')));
+                }
+                if ((!qualityStatus || qualityStatus === 'PASS') && rejected > 0) {
+                  return Promise.reject(new Error(t('modal.form.rejectedPassMismatch')));
+                }
+                const rejectionReason = form.getFieldValue(['items', name, 'rejectionReason']);
+                if (rejected > 0 && typeof rejectionReason === 'string' && !rejectionReason.trim()) {
+                  return Promise.reject(new Error(t('modal.form.rejectionReasonRequired')));
                 }
                 return Promise.resolve();
               },
@@ -483,9 +539,9 @@ const GoodsReceiptModal = (props: IProps) => {
       title: t('modal.form.qualityStatus'),
       key: 'qualityStatus',
       width: 160,
-      render: (_: any, { name, key: fieldKey, ...restField }: any) => (
+      render: (_, { name, key: fieldKey, ...restField }) => (
         <Form.Item key={fieldKey} {...restField} name={[name, 'qualityStatus']} style={{ marginBottom: 0 }}>
-          <Select options={qualityOptions} />
+          <Select options={qualityOptions} onChange={(value: QualityStatus) => handleQualityStatusChange(name, value)} />
         </Form.Item>
       ),
     },
@@ -493,7 +549,7 @@ const GoodsReceiptModal = (props: IProps) => {
       title: t('modal.form.lotNumber'),
       key: 'lotNumber',
       width: 170,
-      render: (_: any, { name, key: fieldKey, ...restField }: any) => (
+      render: (_, { name, key: fieldKey, ...restField }) => (
         <Form.Item key={fieldKey} {...restField} name={[name, 'lotNumber']} style={{ marginBottom: 0 }}>
           <Input placeholder={t('modal.form.lotPlaceholder')} />
         </Form.Item>
@@ -503,9 +559,25 @@ const GoodsReceiptModal = (props: IProps) => {
       title: t('modal.form.lineNote'),
       key: 'lineNote',
       width: 190,
-      render: (_: any, { name, key: fieldKey, ...restField }: any) => (
+      render: (_, { name, key: fieldKey, ...restField }) => (
         <Space.Compact orientation="vertical" style={{ width: '100%' }}>
-          <Form.Item key={`${fieldKey}-rejection`} {...restField} name={[name, 'rejectionReason']} style={{ marginBottom: 4 }}>
+          <Form.Item
+            key={`${fieldKey}-rejection`}
+            {...restField}
+            name={[name, 'rejectionReason']}
+            rules={[
+              {
+                validator: (_, value: unknown) => {
+                  const rejected = Number(form.getFieldValue(['items', name, 'quantityRejected']) || 0);
+                  if (rejected > 0 && (typeof value !== 'string' || !value.trim())) {
+                    return Promise.reject(new Error(t('modal.form.rejectionReasonRequired')));
+                  }
+                  return Promise.resolve();
+                },
+              },
+            ]}
+            style={{ marginBottom: 4 }}
+          >
             <Input placeholder={t('modal.form.rejectionReasonPlaceholder')} />
           </Form.Item>
           <Form.Item key={`${fieldKey}-note`} {...restField} name={[name, 'lineNote']} style={{ marginBottom: 0 }}>
@@ -519,7 +591,7 @@ const GoodsReceiptModal = (props: IProps) => {
       key: 'unitDisplay',
       width: 80,
       align: 'center' as const,
-      render: (_: any, { name }: any) => {
+      render: (_, { name }) => {
         const item = form.getFieldValue(['items', name]);
         return <Tag>{item?.unit}</Tag>;
       },
@@ -568,7 +640,7 @@ const GoodsReceiptModal = (props: IProps) => {
         <Button key="cancel" onClick={handleClose}>
           {t('modal.cancelText')}
         </Button>,
-        <Button key="submit" type="primary" icon={<InboxOutlined />} loading={loading} onClick={() => form.submit()}>
+        <Button key="submit" type="primary" icon={<InboxOutlined />} loading={loading} disabled={!canSubmitReceipt} onClick={() => form.submit()}>
           {t('modal.okText')}
         </Button>,
       ]}
@@ -630,6 +702,26 @@ const GoodsReceiptModal = (props: IProps) => {
             showIcon
             style={{ marginBottom: 16 }}
             title={t('modal.qualityWarning')}
+          />
+        )}
+
+        {poData && !poIsReceiptEligible && (
+          <Alert
+            type="error"
+            showIcon
+            style={{ marginBottom: 16 }}
+            title={t('notifications.businessError')}
+            description={t('notifications.businessErrorDesc')}
+          />
+        )}
+
+        {poData && poIsReceiptEligible && !hasReceivableQuantity && (
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginBottom: 16 }}
+            title={t('notifications.noItemsWarning')}
+            description={t('notifications.noItemsWarningDesc')}
           />
         )}
 

@@ -61,6 +61,7 @@ import { Role } from './modules/roles/entities/role.entity';
 import { Permission } from './modules/roles/entities/permission.entity';
 import { RedisCacheModule } from './common/cache/redis-cache.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
+import { SepayModule } from './modules/sepay/sepay.module';
 
 @Module({
   imports: [
@@ -99,6 +100,11 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
             .get<string>('TYPEORM_SYNCHRONIZE', 'false')
             .toLowerCase() === 'true';
 
+        const migrationsRun =
+          configService
+            .get<string>('TYPEORM_MIGRATIONS_RUN', 'false')
+            .toLowerCase() === 'true';
+
         const logging: LoggerOptions =
           configService
             .get<string>('TYPEORM_LOGGING', 'false')
@@ -111,6 +117,8 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
           ...databaseOptions,
           autoLoadEntities: true,
           synchronize,
+          migrationsRun,
+          migrations: [__dirname + '/../database/migrations/*.{js,ts}'],
           logging,
         };
       },
@@ -184,6 +192,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
     PortsModule,
     CountriesModule,
     NotificationsModule,
+    SepayModule,
   ],
   controllers: [AppController],
   providers: [

@@ -27,6 +27,8 @@ import {
   TradeFinanceTransaction,
   TradeFinanceType,
 } from '../trade-finance/entities/trade-finance-transaction.entity';
+import { ProformaInvoice } from '../proforma-invoices/entities/proforma-invoice.entity';
+import { CommercialInvoice } from '../commercial-invoices/entities/commercial-invoice.entity';
 
 type TradeFinanceLike = {
   _id: string;
@@ -547,6 +549,17 @@ export class AccountReceivablesService {
       receivable.status = this.normalizeStatus(receivable);
       await manager.save(receivable);
 
+      if (
+        (tx as any).type === TradeFinanceType.TT_ADVANCE ||
+        receivable.paidAmountForeign > 0
+      ) {
+        await manager.update(
+          ProformaInvoice,
+          { salesContractId: tx.salesContractId },
+          { isPaid: true, paidAt: new Date() },
+        );
+      }
+
       remaining = remaining.minus(allocatedForeign);
     }
 
@@ -562,6 +575,12 @@ export class AccountReceivablesService {
         SalesContract,
         { _id: tx.salesContractId },
         { status: SalesContractStatus.PAID },
+      );
+
+      await manager.update(
+        ProformaInvoice,
+        { salesContractId: tx.salesContractId },
+        { isPaid: true, paidAt: new Date() },
       );
     }
 

@@ -6,6 +6,10 @@ export class CreateSystemNotificationDto {
   @IsOptional()
   userId?: string;
 
+  @IsString()
+  @IsOptional()
+  username?: string;
+
   @IsEnum(SystemNotificationType)
   @IsOptional()
   type?: SystemNotificationType;

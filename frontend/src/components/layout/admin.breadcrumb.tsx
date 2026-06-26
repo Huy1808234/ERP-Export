@@ -31,8 +31,8 @@ const AdminBreadcrumb = () => {
             const url = `/${pathSnippets.slice(0, index + 1).join('/')}`;
             const isLast = index === pathSnippets.length - 1;
 
-            // Skip 'dashboard' as it's often the root
-            if (snippet === 'dashboard') return null;
+            // Skip 'dashboard' if it's not the last item (avoid Home > Dashboard > Approvals, prefer Home > Approvals)
+            if (snippet === 'dashboard' && !isLast) return null;
             
             // TECH LEAD: Handle UUIDs or long IDs - show "Detail" instead of raw ID
             const isId = snippet.length > 20 || (!isNaN(Number(snippet[0])) && snippet.length > 8);

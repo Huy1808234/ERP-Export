@@ -1,6 +1,8 @@
 import {
   Injectable,
   BadRequestException,
+  ConflictException,
+  HttpException,
   NotFoundException,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
@@ -30,6 +32,7 @@ import {
   VendorInvoiceStatus,
 } from '../vendor-invoices/entities/vendor-invoice.entity';
 import { AccountingService } from '../accounting/accounting.service';
+import { QualityCheck } from '../quality-control/entities/quality-check.entity';
 
 type GoodsReceiptListQuery = {
   current?: string | number;
@@ -38,7 +41,15 @@ type GoodsReceiptListQuery = {
   grnNumber?: string;
   purchaseOrderId?: string;
   receivedByUsername?: string;
+  status?: string;
 };
+
+type ReceiptLineInput = CreateGoodsReceiptDto['items'][number];
+
+const RECEIPT_ELIGIBLE_PO_STATUSES = new Set<PurchaseOrderStatus>([
+  PurchaseOrderStatus.SENT,
+  PurchaseOrderStatus.PARTIAL_RECEIPT,
+]);
 
 @Injectable()
 export class GoodsReceiptsService {
@@ -110,6 +121,120 @@ export class GoodsReceiptsService {
       .getMany();
 
     return po;
+  }
+
+  private prepareReceiptItems(items: ReceiptLineInput[]): ReceiptLineInput[] {
+    const receiptItems = items.filter(
+      (item) => Number(item.quantityReceived || 0) > 0,
+    );
+
+    if (receiptItems.length === 0) {
+      throw new BadRequestException(
+        'Phai co it nhat mot dong hang co so luong thuc nhan > 0',
+      );
+    }
+
+    const seenLineKeys = new Set<string>();
+    return receiptItems.map((item) => {
+      const quantityReceived = Number(item.quantityReceived);
+      const quantityRejected = Number(item.quantityRejected || 0);
+      const qualityStatus = item.qualityStatus || 'PASS';
+
+      if (!Number.isFinite(quantityReceived) || quantityReceived <= 0) {
+        throw new BadRequestException(
+          `So luong thuc nhan khong hop le cho san pham ${item.productId}`,
+        );
+      }
+      if (!Number.isFinite(quantityRejected) || quantityRejected < 0) {
+        throw new BadRequestException(
+          `So luong khong dat khong hop le cho san pham ${item.productId}`,
+        );
+      }
+      if (quantityRejected > quantityReceived) {
+        throw new BadRequestException(
+          `Rejected quantity cannot exceed received quantity for product ${item.productId}`,
+        );
+      }
+      if (qualityStatus !== 'PASS' && quantityRejected <= 0) {
+        throw new BadRequestException(
+          `San pham ${item.productId} co tinh trang ${qualityStatus} thi phai co so luong khong dat`,
+        );
+      }
+      if (qualityStatus === 'PASS' && quantityRejected > 0) {
+        throw new BadRequestException(
+          `San pham ${item.productId} co hang khong dat thi tinh trang khong duoc la PASS`,
+        );
+      }
+      if (quantityRejected > 0 && !item.rejectionReason?.trim()) {
+        throw new BadRequestException(
+          `San pham ${item.productId} co hang khong dat thi phai nhap ly do`,
+        );
+      }
+
+      const lineKey = item.purchaseOrderItem_id
+        ? `po-item:${item.purchaseOrderItem_id}`
+        : `product:${item.productId}`;
+      if (seenLineKeys.has(lineKey)) {
+        throw new BadRequestException(
+          `Dong nhap kho bi trung cho san pham ${item.productId}`,
+        );
+      }
+      seenLineKeys.add(lineKey);
+
+      return {
+        ...item,
+        quantityReceived,
+        quantityRejected,
+        qualityStatus,
+        lotNumber: item.lotNumber?.trim() || undefined,
+        rejectionReason: item.rejectionReason?.trim() || undefined,
+        lineNote: item.lineNote?.trim() || undefined,
+      };
+    });
+  }
+
+  private validateReceiptDate(po: PurchaseOrder, receivedDate: string): void {
+    const receivedAt = new Date(receivedDate);
+    if (Number.isNaN(receivedAt.getTime())) {
+      throw new BadRequestException('Ngay nhan hang khong hop le');
+    }
+
+    const receivedDay = receivedAt.toISOString().slice(0, 10);
+    const today = new Date().toISOString().slice(0, 10);
+    if (receivedDay > today) {
+      throw new BadRequestException('Ngay nhan hang khong duoc o tuong lai');
+    }
+
+    const orderDate = po.orderDate ? new Date(po.orderDate) : null;
+    const orderDay = orderDate?.toISOString().slice(0, 10);
+    if (orderDay && receivedDay < orderDay) {
+      throw new BadRequestException(
+        'Ngay nhan hang khong duoc truoc ngay dat PO',
+      );
+    }
+  }
+
+  private async assertUniqueDeliveryNote(
+    manager: EntityManager,
+    purchaseOrderId: string,
+    deliveryNoteNumber?: string | null,
+  ): Promise<void> {
+    const cleanDeliveryNoteNumber = deliveryNoteNumber?.trim();
+    if (!cleanDeliveryNoteNumber) return;
+
+    const duplicateCount = await manager.count(GoodsReceipt, {
+      where: {
+        purchaseOrderId,
+        deliveryNoteNumber: cleanDeliveryNoteNumber,
+        status: 'COMPLETED',
+      },
+    });
+
+    if (duplicateCount > 0) {
+      throw new ConflictException(
+        'So phieu giao hang da duoc ghi nhan cho PO nay',
+      );
+    }
   }
 
   private applyPurchaseOrderReceiptStatus(po: PurchaseOrder): void {
@@ -192,6 +317,15 @@ export class GoodsReceiptsService {
 
   async create(createGoodsReceiptDto: CreateGoodsReceiptDto, user: IUser) {
     const { items, purchaseOrderId, ...grData } = createGoodsReceiptDto;
+    const receiptItems = this.prepareReceiptItems(items);
+    const normalizedReceiptData = {
+      ...grData,
+      deliveryNoteNumber: grData.deliveryNoteNumber?.trim() || undefined,
+      warehouseName: grData.warehouseName?.trim() || undefined,
+      warehouseLocation: grData.warehouseLocation?.trim() || undefined,
+      attachmentUrl: grData.attachmentUrl?.trim() || undefined,
+      note: grData.note?.trim() || undefined,
+    };
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -203,19 +337,23 @@ export class GoodsReceiptsService {
         purchaseOrderId,
       );
 
-      if (
-        ![
-          PurchaseOrderStatus.APPROVED,
-          PurchaseOrderStatus.SENT,
-          PurchaseOrderStatus.PARTIAL_RECEIPT,
-        ].includes(po.status)
-      ) {
+      if (!RECEIPT_ELIGIBLE_PO_STATUSES.has(po.status)) {
         throw new BadRequestException(
-          'Chi duoc nhap kho cho PO da duyet/gui NCC va chua hoan tat',
+          'Chi duoc nhap kho cho PO da gui NCC va chua hoan tat',
         );
       }
 
+      this.validateReceiptDate(po, normalizedReceiptData.receivedDate);
+      await this.assertUniqueDeliveryNote(
+        queryRunner.manager,
+        purchaseOrderId,
+        normalizedReceiptData.deliveryNoteNumber,
+      );
+
       // 1. Generate GR Number (GR-YYYYMMDD-XXXX)
+      await queryRunner.query(
+        'LOCK TABLE "goods_receipts" IN SHARE ROW EXCLUSIVE MODE',
+      );
       const date = new Date();
       const dateStr = date.toISOString().slice(0, 10).replace(/-/g, '');
       const count = await queryRunner.manager.count(GoodsReceipt);
@@ -223,7 +361,7 @@ export class GoodsReceiptsService {
 
       // 2. Create Goods Receipt
       const gr = queryRunner.manager.create(GoodsReceipt, {
-        ...grData,
+        ...normalizedReceiptData,
         grNumber,
         purchaseOrderId,
         receivedByUsername: user.username,
@@ -232,7 +370,7 @@ export class GoodsReceiptsService {
       const savedGr = await queryRunner.manager.save(gr);
 
       // 3. Process Items and update Stock / PO items
-      for (const item of items) {
+      for (const item of receiptItems) {
         const poItem = this.resolvePurchaseOrderItemForReceiptLine(
           po.items,
           item.productId,
@@ -274,10 +412,7 @@ export class GoodsReceiptsService {
         poItem.rejectedQuantity =
           Number(poItem.rejectedQuantity || 0) +
           Number(item.quantityRejected || 0);
-        poItem.backorderQuantity = Math.max(
-          Number(poItem.quantity) - totalAfter,
-          Number(poItem.rejectedQuantity || 0),
-        );
+        poItem.backorderQuantity = Math.max(Number(poItem.quantity) - totalAfter, 0);
         await queryRunner.manager.save(poItem);
 
         // Update Inventory Ledger and Product currentStock via InventoryService
@@ -308,8 +443,8 @@ export class GoodsReceiptsService {
               ? ` Quality: ${item.qualityStatus}.`
               : '';
           const lineNote = item.lineNote ? ` Note: ${item.lineNote}.` : '';
-          const locationNote = grData.warehouseLocation
-            ? ` Location: ${grData.warehouseLocation}.`
+          const locationNote = normalizedReceiptData.warehouseLocation
+            ? ` Location: ${normalizedReceiptData.warehouseLocation}.`
             : '';
 
           await this.inventoryService.executeInventoryTransaction(
@@ -350,6 +485,9 @@ export class GoodsReceiptsService {
       return savedGr;
     } catch (err) {
       await queryRunner.rollbackTransaction();
+      if (err instanceof HttpException) {
+        throw err;
+      }
       const message =
         err instanceof Error ? err.message : 'Failed to create goods receipt';
       throw new BadRequestException(message);
@@ -420,7 +558,7 @@ export class GoodsReceiptsService {
         );
         poItem.backorderQuantity = Math.max(
           Number(poItem.quantity || 0) - Number(poItem.receivedQuantity || 0),
-          Number(poItem.rejectedQuantity || 0),
+          0,
         );
         await manager.save(PurchaseOrderItem, poItem);
 
@@ -500,6 +638,9 @@ export class GoodsReceiptsService {
       cleanFilters.purchaseOrderId = filters.purchaseOrderId;
     if (filters.receivedByUsername)
       cleanFilters.receivedByUsername = filters.receivedByUsername;
+    if (filters.status && filters.status !== 'PENDING_QC') {
+      cleanFilters.status = filters.status;
+    }
 
     // Xử lý tìm kiếm mờ (Like) nếu giá trị là string và không phải UUID
     if (
@@ -510,20 +651,65 @@ export class GoodsReceiptsService {
       cleanFilters.grNumber = Like(`%${value}%`);
     }
 
-    const [results, total] = await this.grRepository.findAndCount({
-      where: cleanFilters,
-      relations: [
-        'purchaseOrder',
-        'purchaseOrder.vendor',
-        'receivedBy',
-        'items',
-        'items.product',
-        'items.purchaseOrderItem',
-      ],
-      skip: (Number(current) - 1) * Number(pageSize),
-      take: Number(pageSize),
-      order: { createdAt: 'DESC' },
-    });
+    const qb = this.grRepository
+      .createQueryBuilder('receipt')
+      .leftJoinAndSelect('receipt.purchaseOrder', 'purchaseOrder')
+      .leftJoinAndSelect('purchaseOrder.vendor', 'vendor')
+      .leftJoinAndSelect('receipt.receivedBy', 'receivedBy')
+      .leftJoinAndSelect('receipt.items', 'items')
+      .leftJoinAndSelect('items.product', 'product')
+      .leftJoinAndSelect('items.purchaseOrderItem', 'purchaseOrderItem')
+      .where(cleanFilters)
+      .orderBy('receipt.createdAt', 'DESC')
+      .skip((Number(current) - 1) * Number(pageSize))
+      .take(Number(pageSize));
+
+    if (filters.status === 'PENDING_QC') {
+      qb.andWhere(
+        '(COALESCE(items."quantityRejected", 0) > 0 OR items."qualityStatus" != :pass)',
+        { pass: 'PASS' },
+      ).andWhere(
+        `NOT EXISTS (
+          SELECT 1
+          FROM quality_checks active_qc
+          WHERE active_qc."goodsReceiptItemId" = items._id
+            AND active_qc."exceptionStatus" != 'CLOSED'
+            AND active_qc."claimStatus" NOT IN ('RESOLVED', 'CANCELLED')
+        )`,
+      );
+    }
+
+    const [results, total] = await qb.getManyAndCount();
+    const itemIds = results.flatMap((receipt) =>
+      (receipt.items || []).map((item) => item._id),
+    );
+
+    if (itemIds.length > 0) {
+      const activeQualityChecks = await this.dataSource
+        .getRepository(QualityCheck)
+        .createQueryBuilder('qc')
+        .where('qc."goodsReceiptItemId" IN (:...itemIds)', { itemIds })
+        .andWhere('qc."exceptionStatus" != :closed', { closed: 'CLOSED' })
+        .andWhere('qc."claimStatus" NOT IN (:...closedClaimStatuses)', {
+          closedClaimStatuses: ['RESOLVED', 'CANCELLED'],
+        })
+        .getMany();
+      const activeQualityCheckItemIds = new Set(
+        activeQualityChecks
+          .map((qualityCheck) => qualityCheck.goodsReceiptItemId)
+          .filter((goodsReceiptItemId): goodsReceiptItemId is string =>
+            Boolean(goodsReceiptItemId),
+          ),
+      );
+
+      results.forEach((receipt) => {
+        (receipt.items || []).forEach((item) => {
+          Object.assign(item, {
+            hasActiveQualityCheck: activeQualityCheckItemIds.has(item._id),
+          });
+        });
+      });
+    }
 
     return {
       results,

@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { App, Button, Card, Col, Empty, Form, Input, InputNumber, Modal, Row, Select, Space, Table, Tag, Typography } from 'antd';
+import { App, Button, Card, Col, DatePicker, Empty, Form, Input, InputNumber, Modal, Row, Select, Space, Table, Tag, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
+import type { Dayjs } from 'dayjs';
 import { MessageOutlined, PlusOutlined, QuestionCircleOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useSession } from 'next-auth/react';
 import PageBanner from '@/components/guest/PageBanner';
@@ -33,12 +34,23 @@ type PortalPricingResponse = {
 
 type PortalInquiry = {
   _id: string;
+  inquiryNumber?: string | null;
   customerName: string;
   productId: string;
   product?: PortalProduct | null;
   productSnapshotName?: string | null;
   productSnapshotCode?: string | null;
+  lineItems?: Array<{
+    product_id: string;
+    productSnapshotName?: string | null;
+    productSnapshotCode?: string | null;
+    unitOfMeasure?: string | null;
+    quantity: number;
+  }>;
   quantity: number;
+  incoterm?: string | null;
+  destinationPort?: string | null;
+  expectedShipmentDate?: string | null;
   note?: string | null;
   status: string;
   isRead: boolean;
@@ -48,14 +60,33 @@ type PortalInquiry = {
 type InquiryFormValues = {
   product_id: string;
   quantity: number;
+  incoterm: string;
+  destinationPort?: string;
+  expectedShipmentDate?: Dayjs;
   note?: string;
 };
 
 const statusColor: Record<string, string> = {
+  SUBMITTED: 'orange',
+  IN_REVIEW: 'blue',
+  QUOTED: 'green',
+  CLOSED: 'default',
   PENDING: 'orange',
   PROCESSED: 'green',
   REJECTED: 'red',
 };
+
+const getInquiryLines = (record: PortalInquiry) => (
+  record.lineItems?.length
+    ? record.lineItems
+    : [{
+        product_id: record.productId,
+        productSnapshotName: record.productSnapshotName || record.product?.englishName || record.product?.vietnameseName,
+        productSnapshotCode: record.productSnapshotCode || record.product?.sku,
+        unitOfMeasure: record.product?.unitOfMeasure,
+        quantity: record.quantity,
+      }]
+);
 
 export default function InquiryPortal() {
   const { message } = App.useApp();
@@ -119,12 +150,15 @@ export default function InquiryPortal() {
         body: {
           product_id: values.product_id,
           quantity: Number(values.quantity || 1),
+          incoterm: values.incoterm,
+          destinationPort: values.destinationPort || null,
+          expectedShipmentDate: values.expectedShipmentDate?.toISOString() || null,
           note: values.note || null,
         },
       });
 
       if (res?.data?._id) {
-        message.success('Đã gửi yêu cầu báo giá cho Sales');
+        message.success(`Đã gửi yêu cầu báo giá ${res.data.inquiryNumber || res.data._id}`);
         form.resetFields();
         setIsModalOpen(false);
         await fetchData();
@@ -140,7 +174,7 @@ export default function InquiryPortal() {
     {
       title: 'Mã yêu cầu',
       dataIndex: '_id',
-      render: (value: string) => <Text strong style={{ color: '#1677ff' }}>{value}</Text>,
+      render: (value: string, record) => <Text strong style={{ color: '#1677ff' }}>{record.inquiryNumber || value}</Text>,
     },
     {
       title: 'Ngày tạo',
@@ -151,8 +185,11 @@ export default function InquiryPortal() {
       title: 'Sản phẩm',
       render: (_, record) => (
         <Space orientation="vertical" size={0}>
-          <Text strong>{record.product?.englishName || record.productSnapshotName || record.product?.vietnameseName}</Text>
-          <Text type="secondary">{record.product?.sku || record.productSnapshotCode}</Text>
+          <Text strong>{getInquiryLines(record)[0]?.productSnapshotName || '-'}</Text>
+          <Text type="secondary">
+            {getInquiryLines(record)[0]?.productSnapshotCode || '-'}
+            {getInquiryLines(record).length > 1 ? ` +${getInquiryLines(record).length - 1} SKU` : ''}
+          </Text>
         </Space>
       ),
     },
@@ -160,7 +197,19 @@ export default function InquiryPortal() {
       title: 'Số lượng',
       dataIndex: 'quantity',
       align: 'right',
-      render: (value: number, record) => `${Number(value || 0).toLocaleString()} ${record.product?.unitOfMeasure || ''}`,
+      render: (_value: number, record) => {
+        const totalQuantity = getInquiryLines(record).reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+        return Number(totalQuantity || 0).toLocaleString();
+      },
+    },
+    {
+      title: 'Incoterms / Cảng đến',
+      render: (_, record) => (
+        <Space orientation="vertical" size={0}>
+          <Text>{record.incoterm || '-'}</Text>
+          <Text type="secondary">{record.destinationPort || '-'}</Text>
+        </Space>
+      ),
     },
     {
       title: 'Trạng thái',
@@ -252,17 +301,29 @@ export default function InquiryPortal() {
           </Form.Item>
 
           <Row gutter={16}>
-            <Col span={14}>
+            <Col span={8}>
               <Form.Item label={<Text strong>Số lượng</Text>} name="quantity" rules={[{ required: true }]}>
                 <InputNumber min={1} style={{ width: '100%' }} placeholder="Nhập số lượng" size="large" />
               </Form.Item>
             </Col>
-            <Col span={10}>
-              <Form.Item label={<Text strong>Đơn vị</Text>}>
-                <Input disabled value="Theo sản phẩm" size="large" />
+            <Col span={8}>
+              <Form.Item label={<Text strong>Incoterms</Text>} name="incoterm" initialValue="FOB" rules={[{ required: true }]}>
+                <Select
+                  size="large"
+                  options={['EXW', 'FOB', 'CFR', 'CIF', 'DAP', 'DDP'].map((value) => ({ value, label: value }))}
+                />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item label={<Text strong>Ngày cần giao</Text>} name="expectedShipmentDate">
+                <DatePicker style={{ width: '100%' }} size="large" />
               </Form.Item>
             </Col>
           </Row>
+
+          <Form.Item label={<Text strong>Cảng đến</Text>} name="destinationPort">
+            <Input size="large" placeholder="VD: Hamburg, Los Angeles, Jebel Ali..." />
+          </Form.Item>
 
           <Form.Item label={<Text strong>Ghi chú</Text>} name="note">
             <TextArea rows={4} placeholder="Ví dụ: Cần giá CIF Hamburg, giao hàng tháng 6..." style={{ borderRadius: 12 }} />

@@ -20,6 +20,7 @@ import {
     Tag,
     Typography,
     Upload,
+    theme,
 } from 'antd';
 import {
     CheckCircleOutlined,
@@ -160,20 +161,20 @@ interface IProps {
 }
 
 const DOCUMENT_OPTIONS: Array<{ value: DocumentTypeValue; label: string }> = [
-    { value: 'COMMERCIAL_INVOICE', label: 'Commercial Invoice' },
-    { value: 'PACKING_LIST', label: 'Packing List' },
-    { value: 'PROFORMA_INVOICE', label: 'Proforma Invoice' },
-    { value: 'BILL_OF_LADING', label: 'Bill of Lading' },
-    { value: 'AIRWAY_BILL', label: 'Airway Bill' },
-    { value: 'CERTIFICATE_OF_ORIGIN', label: 'Certificate of Origin' },
-    { value: 'CUSTOMS_DECLARATION', label: 'Customs Declaration' },
-    { value: 'PACKING_DECLARATION', label: 'Packing Declaration' },
-    { value: 'PHYTOSANITARY_CERTIFICATE', label: 'Phytosanitary Certificate' },
-    { value: 'HEALTH_CERTIFICATE', label: 'Health Certificate' },
-    { value: 'FUMIGATION_CERTIFICATE', label: 'Fumigation Certificate' },
-    { value: 'QUALITY_INSPECTION_CERTIFICATE', label: 'Quality Inspection Certificate' },
-    { value: 'VAT_REFUND_DOSSIER', label: 'VAT Refund Dossier' },
-    { value: 'OTHER', label: 'Other Document' },
+    { value: 'COMMERCIAL_INVOICE', label: 'Commercial Invoice (Hóa đơn thương mại)' },
+    { value: 'PACKING_LIST', label: 'Packing List (Phiếu đóng gói)' },
+    { value: 'PROFORMA_INVOICE', label: 'Proforma Invoice (Hóa đơn chiếu lệ)' },
+    { value: 'BILL_OF_LADING', label: 'Bill of Lading (Vận đơn đường biển)' },
+    { value: 'AIRWAY_BILL', label: 'Airway Bill (Vận đơn hàng không)' },
+    { value: 'CERTIFICATE_OF_ORIGIN', label: 'Certificate of Origin (Giấy chứng nhận xuất xứ)' },
+    { value: 'CUSTOMS_DECLARATION', label: 'Customs Declaration (Tờ khai hải quan)' },
+    { value: 'PACKING_DECLARATION', label: 'Packing Declaration (Khai báo đóng gói)' },
+    { value: 'PHYTOSANITARY_CERTIFICATE', label: 'Phytosanitary Certificate (Giấy chứng nhận kiểm dịch thực vật)' },
+    { value: 'HEALTH_CERTIFICATE', label: 'Health Certificate (Giấy chứng nhận y tế)' },
+    { value: 'FUMIGATION_CERTIFICATE', label: 'Fumigation Certificate (Giấy chứng nhận khử trùng)' },
+    { value: 'QUALITY_INSPECTION_CERTIFICATE', label: 'Quality Inspection Certificate (Giấy chứng nhận chất lượng)' },
+    { value: 'VAT_REFUND_DOSSIER', label: 'VAT Refund Dossier (Hồ sơ hoàn thuế)' },
+    { value: 'OTHER', label: 'Other Document (Chứng từ khác)' },
 ];
 
 const BUSINESS_DOCUMENT_TYPES: DocumentTypeValue[] = [
@@ -279,6 +280,7 @@ const ShipmentDocCenter = ({ open, onClose, shipmentId, session }: IProps) => {
     const [uploading, setUploading] = useState(false);
     const [uploadFiles, setUploadFiles] = useState<UploadFile[]>([]);
     const [form] = Form.useForm<RegisterDocumentValues>();
+    const { token } = theme.useToken();
 
     const accessToken = useMemo(() => getAccessToken(session), [session]);
     const selectedDocumentType = Form.useWatch('documentType', form) as DocumentTypeValue | undefined;
@@ -469,40 +471,40 @@ const ShipmentDocCenter = ({ open, onClose, shipmentId, session }: IProps) => {
         if (selectedDocumentType === 'BILL_OF_LADING') {
             return (
                 <>
-                    <Divider titlePlacement="start">Bill of Lading</Divider>
+                    <Divider titlePlacement="start">Bill of Lading (Vận đơn đường biển)</Divider>
                     <div className="grid grid-cols-1 gap-x-3 md:grid-cols-2">
-                        <Form.Item label="B/L number" name={['businessData', 'blNumber']} rules={[requiredRule]}>
+                        <Form.Item label="B/L number (Số vận đơn)" name={['businessData', 'blNumber']} rules={[requiredRule]}>
                             <Input placeholder="BL-HCM-0001" />
                         </Form.Item>
-                        <Form.Item label="B/L type" name={['businessData', 'blType']}>
+                        <Form.Item label="B/L type (Loại vận đơn)" name={['businessData', 'blType']}>
                             <Select options={[
                                 { value: 'ORIGINAL', label: 'Original B/L' },
                                 { value: 'SEAWAY', label: 'Seaway Bill' },
                                 { value: 'TELEX_RELEASE', label: 'Telex Release' },
                             ]} />
                         </Form.Item>
-                        <Form.Item label="Carrier" name={['businessData', 'carrierName']} rules={[requiredRule]}>
+                        <Form.Item label="Carrier (Hãng tàu/Hàng không)" name={['businessData', 'carrierName']} rules={[requiredRule]}>
                             <Input placeholder="Maersk, ONE, CMA CGM..." />
                         </Form.Item>
-                        <Form.Item label="Shipper" name={['businessData', 'shipperName']}>
+                        <Form.Item label="Shipper (Người gửi hàng)" name={['businessData', 'shipperName']}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Consignee" name={['businessData', 'consigneeName']}>
+                        <Form.Item label="Consignee (Người nhận hàng)" name={['businessData', 'consigneeName']}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Notify party" name={['businessData', 'notifyParty']}>
+                        <Form.Item label="Notify party (Bên nhận thông báo)" name={['businessData', 'notifyParty']}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Vessel" name={['businessData', 'vesselName']} rules={[requiredRule]}>
+                        <Form.Item label="Vessel (Tàu biển)" name={['businessData', 'vesselName']} rules={[requiredRule]}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Voyage" name={['businessData', 'voyageNumber']} rules={[requiredRule]}>
+                        <Form.Item label="Voyage (Chuyến tàu)" name={['businessData', 'voyageNumber']} rules={[requiredRule]}>
                             <Input />
                         </Form.Item>
                         <Form.Item name={['businessData', 'portOfLoading']} hidden>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Port of loading" name={['businessData', 'portOfLoading_port_id']} rules={[requiredRule]}>
+                        <Form.Item label="Port of loading (Cảng xếp)" name={['businessData', 'portOfLoading_port_id']} rules={[requiredRule]}>
                             <PortSelect
                                 legacyText={getRecordString(form.getFieldValue('businessData'), 'portOfLoading')}
                                 onPortChange={(port) => setBusinessPortSnapshot('portOfLoading', port)}
@@ -511,40 +513,40 @@ const ShipmentDocCenter = ({ open, onClose, shipmentId, session }: IProps) => {
                         <Form.Item name={['businessData', 'portOfDischarge']} hidden>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Port of discharge" name={['businessData', 'portOfDischarge_port_id']} rules={[requiredRule]}>
+                        <Form.Item label="Port of discharge (Cảng dỡ)" name={['businessData', 'portOfDischarge_port_id']} rules={[requiredRule]}>
                             <PortSelect
                                 legacyText={getRecordString(form.getFieldValue('businessData'), 'portOfDischarge')}
                                 onPortChange={(port) => setBusinessPortSnapshot('portOfDischarge', port)}
                             />
                         </Form.Item>
-                        <Form.Item label="On board date" name={['businessData', 'onBoardDate']} rules={[requiredRule]}>
+                        <Form.Item label="On board date (Ngày lên tàu)" name={['businessData', 'onBoardDate']} rules={[requiredRule]}>
                             <DatePicker className="w-full" />
                         </Form.Item>
-                        <Form.Item label="Freight terms" name={['businessData', 'freightTerms']} rules={[requiredRule]}>
+                        <Form.Item label="Freight terms (Điều kiện cước)" name={['businessData', 'freightTerms']} rules={[requiredRule]}>
                             <Select options={[
                                 { value: 'PREPAID', label: 'Prepaid' },
                                 { value: 'COLLECT', label: 'Collect' },
                             ]} />
                         </Form.Item>
-                        <Form.Item label="Place of receipt" name={['businessData', 'placeOfReceipt']}>
+                        <Form.Item label="Place of receipt (Nơi nhận hàng)" name={['businessData', 'placeOfReceipt']}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Place of delivery" name={['businessData', 'placeOfDelivery']}>
+                        <Form.Item label="Place of delivery (Nơi giao hàng)" name={['businessData', 'placeOfDelivery']}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Containers" name={['businessData', 'containerNumbers']}>
+                        <Form.Item label="Containers (Số container)" name={['businessData', 'containerNumbers']}>
                             <Input placeholder="MSCU1234567, TEMU7654321" />
                         </Form.Item>
-                        <Form.Item label="Seals" name={['businessData', 'sealNumbers']}>
+                        <Form.Item label="Seals (Số chì)" name={['businessData', 'sealNumbers']}>
                             <Input />
                         </Form.Item>
-                        <Form.Item className="md:col-span-2" label="Marks and numbers" name={['businessData', 'marksAndNumbers']}>
+                        <Form.Item className="md:col-span-2" label="Marks and numbers (Ký mã hiệu)" name={['businessData', 'marksAndNumbers']}>
                             <Input.TextArea rows={2} />
                         </Form.Item>
-                        <Form.Item label="Packages" name={['businessData', 'packageCount']}>
+                        <Form.Item label="Packages (Số kiện)" name={['businessData', 'packageCount']}>
                             <InputNumber min={0} className="w-full" />
                         </Form.Item>
-                        <Form.Item label="Package type" name={['businessData', 'packageType']}>
+                        <Form.Item label="Package type (Loại kiện)" name={['businessData', 'packageType']}>
                             <Input placeholder="Cartons, pallets, bags..." />
                         </Form.Item>
                     </div>
@@ -555,51 +557,51 @@ const ShipmentDocCenter = ({ open, onClose, shipmentId, session }: IProps) => {
         if (selectedDocumentType === 'AIRWAY_BILL') {
             return (
                 <>
-                    <Divider titlePlacement="start">Airway Bill</Divider>
+                    <Divider titlePlacement="start">Airway Bill (Vận đơn hàng không)</Divider>
                     <div className="grid grid-cols-1 gap-x-3 md:grid-cols-2">
-                        <Form.Item label="AWB number" name={['businessData', 'awbNumber']} rules={[requiredRule]}>
+                        <Form.Item label="AWB number (Số AWB)" name={['businessData', 'awbNumber']} rules={[requiredRule]}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="AWB type" name={['businessData', 'awbType']}>
+                        <Form.Item label="AWB type (Loại AWB)" name={['businessData', 'awbType']}>
                             <Select options={[
                                 { value: 'MASTER', label: 'Master AWB' },
                                 { value: 'HOUSE', label: 'House AWB' },
                             ]} />
                         </Form.Item>
-                        <Form.Item label="Airline" name={['businessData', 'airlineName']} rules={[requiredRule]}>
+                        <Form.Item label="Airline (Hãng hàng không)" name={['businessData', 'airlineName']} rules={[requiredRule]}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Shipper" name={['businessData', 'shipperName']}>
+                        <Form.Item label="Shipper (Người gửi hàng)" name={['businessData', 'shipperName']}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Consignee" name={['businessData', 'consigneeName']}>
+                        <Form.Item label="Consignee (Người nhận hàng)" name={['businessData', 'consigneeName']}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Flight" name={['businessData', 'flightNumber']} rules={[requiredRule]}>
+                        <Form.Item label="Flight (Chuyến bay)" name={['businessData', 'flightNumber']} rules={[requiredRule]}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Departure airport" name={['businessData', 'airportOfDeparture']} rules={[requiredRule]}>
+                        <Form.Item label="Departure airport (Sân bay đi)" name={['businessData', 'airportOfDeparture']} rules={[requiredRule]}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Destination airport" name={['businessData', 'airportOfDestination']} rules={[requiredRule]}>
+                        <Form.Item label="Destination airport (Sân bay đến)" name={['businessData', 'airportOfDestination']} rules={[requiredRule]}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Departure date" name={['businessData', 'departureDate']} rules={[requiredRule]}>
+                        <Form.Item label="Departure date (Ngày đi)" name={['businessData', 'departureDate']} rules={[requiredRule]}>
                             <DatePicker className="w-full" />
                         </Form.Item>
-                        <Form.Item label="Arrival date" name={['businessData', 'arrivalDate']}>
+                        <Form.Item label="Arrival date (Ngày đến)" name={['businessData', 'arrivalDate']}>
                             <DatePicker className="w-full" />
                         </Form.Item>
-                        <Form.Item label="Gross weight kg" name={['businessData', 'grossWeightKg']}>
+                        <Form.Item label="Gross weight kg (Trọng lượng cả bì)" name={['businessData', 'grossWeightKg']}>
                             <InputNumber min={0} precision={2} className="w-full" />
                         </Form.Item>
-                        <Form.Item label="Chargeable weight kg" name={['businessData', 'chargeableWeightKg']}>
+                        <Form.Item label="Chargeable weight kg (Trọng lượng tính cước)" name={['businessData', 'chargeableWeightKg']}>
                             <InputNumber min={0} precision={2} className="w-full" />
                         </Form.Item>
-                        <Form.Item label="Pieces" name={['businessData', 'pieces']}>
+                        <Form.Item label="Pieces (Số kiện)" name={['businessData', 'pieces']}>
                             <InputNumber min={0} className="w-full" />
                         </Form.Item>
-                        <Form.Item label="Commodity" name={['businessData', 'commodity']}>
+                        <Form.Item label="Commodity (Tên hàng)" name={['businessData', 'commodity']}>
                             <Input />
                         </Form.Item>
                     </div>
@@ -610,12 +612,12 @@ const ShipmentDocCenter = ({ open, onClose, shipmentId, session }: IProps) => {
         if (selectedDocumentType === 'CERTIFICATE_OF_ORIGIN') {
             return (
                 <>
-                    <Divider titlePlacement="start">Certificate of Origin</Divider>
+                    <Divider titlePlacement="start">Certificate of Origin (Giấy chứng nhận xuất xứ)</Divider>
                     <div className="grid grid-cols-1 gap-x-3 md:grid-cols-2">
-                        <Form.Item label="C/O number" name={['businessData', 'coNumber']} rules={[requiredRule]}>
+                        <Form.Item label="C/O number (Số C/O)" name={['businessData', 'coNumber']} rules={[requiredRule]}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Form" name={['businessData', 'coForm']} rules={[requiredRule]}>
+                        <Form.Item label="Form (Mẫu C/O)" name={['businessData', 'coForm']} rules={[requiredRule]}>
                             <Select options={[
                                 { value: 'B', label: 'Form B' },
                                 { value: 'D', label: 'Form D' },
@@ -626,31 +628,31 @@ const ShipmentDocCenter = ({ open, onClose, shipmentId, session }: IProps) => {
                                 { value: 'RCEP', label: 'RCEP' },
                             ]} />
                         </Form.Item>
-                        <Form.Item label="Issuing authority" name={['businessData', 'issuingAuthority']} rules={[requiredRule]}>
+                        <Form.Item label="Issuing authority (Cơ quan cấp)" name={['businessData', 'issuingAuthority']} rules={[requiredRule]}>
                             <Input placeholder="VCCI, MOIT..." />
                         </Form.Item>
-                        <Form.Item label="Issue date" name={['businessData', 'issueDate']} rules={[requiredRule]}>
+                        <Form.Item label="Issue date (Ngày cấp)" name={['businessData', 'issueDate']} rules={[requiredRule]}>
                             <DatePicker className="w-full" />
                         </Form.Item>
-                        <Form.Item label="Origin country" name={['businessData', 'originCountry']} rules={[requiredRule]}>
+                        <Form.Item label="Origin country (Nước xuất xứ)" name={['businessData', 'originCountry']} rules={[requiredRule]}>
                             <Input placeholder="Vietnam" />
                         </Form.Item>
-                        <Form.Item label="Destination country" name={['businessData', 'destinationCountry']}>
+                        <Form.Item label="Destination country (Nước nhập khẩu)" name={['businessData', 'destinationCountry']}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Invoice number" name={['businessData', 'invoiceNumber']}>
+                        <Form.Item label="Invoice number (Số hóa đơn)" name={['businessData', 'invoiceNumber']}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Invoice date" name={['businessData', 'invoiceDate']}>
+                        <Form.Item label="Invoice date (Ngày hóa đơn)" name={['businessData', 'invoiceDate']}>
                             <DatePicker className="w-full" />
                         </Form.Item>
-                        <Form.Item label="HS code summary" name={['businessData', 'hsCodeSummary']}>
+                        <Form.Item label="HS code summary (Mã HS)" name={['businessData', 'hsCodeSummary']}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Transport route" name={['businessData', 'transportRoute']}>
+                        <Form.Item label="Transport route (Tuyến đường vận chuyển)" name={['businessData', 'transportRoute']}>
                             <Input placeholder="Vietnam to destination country" />
                         </Form.Item>
-                        <Form.Item className="md:col-span-2" label="Origin criteria" name={['businessData', 'criteria']}>
+                        <Form.Item className="md:col-span-2" label="Origin criteria (Tiêu chí xuất xứ)" name={['businessData', 'criteria']}>
                             <Input.TextArea rows={2} />
                         </Form.Item>
                     </div>
@@ -661,43 +663,43 @@ const ShipmentDocCenter = ({ open, onClose, shipmentId, session }: IProps) => {
         if (selectedDocumentType === 'CUSTOMS_DECLARATION') {
             return (
                 <>
-                    <Divider titlePlacement="start">Customs Declaration</Divider>
+                    <Divider titlePlacement="start">Customs Declaration (Tờ khai hải quan)</Divider>
                     <div className="grid grid-cols-1 gap-x-3 md:grid-cols-2">
-                        <Form.Item label="Declaration number" name={['businessData', 'declarationNumber']} rules={[requiredRule]}>
+                        <Form.Item label="Declaration number (Số tờ khai)" name={['businessData', 'declarationNumber']} rules={[requiredRule]}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Customs office" name={['businessData', 'customsOffice']} rules={[requiredRule]}>
+                        <Form.Item label="Customs office (Chi cục hải quan)" name={['businessData', 'customsOffice']} rules={[requiredRule]}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Declaration date" name={['businessData', 'declarationDate']} rules={[requiredRule]}>
+                        <Form.Item label="Declaration date (Ngày khai báo)" name={['businessData', 'declarationDate']} rules={[requiredRule]}>
                             <DatePicker className="w-full" />
                         </Form.Item>
-                        <Form.Item label="Clearance date" name={['businessData', 'clearanceDate']} rules={[requiredRule]}>
+                        <Form.Item label="Clearance date (Ngày thông quan)" name={['businessData', 'clearanceDate']} rules={[requiredRule]}>
                             <DatePicker className="w-full" />
                         </Form.Item>
-                        <Form.Item label="Channel" name={['businessData', 'channel']} rules={[requiredRule]}>
+                        <Form.Item label="Channel (Luồng tờ khai)" name={['businessData', 'channel']} rules={[requiredRule]}>
                             <Select options={[
                                 { value: 'GREEN', label: 'Green' },
                                 { value: 'YELLOW', label: 'Yellow' },
                                 { value: 'RED', label: 'Red' },
                             ]} />
                         </Form.Item>
-                        <Form.Item label="Export type" name={['businessData', 'exportType']}>
+                        <Form.Item label="Export type (Loại hình xuất khẩu)" name={['businessData', 'exportType']}>
                             <Input placeholder="B11, E62..." />
                         </Form.Item>
-                        <Form.Item label="Exporter tax code" name={['businessData', 'exporterTaxCode']}>
+                        <Form.Item label="Exporter tax code (Mã số thuế xuất khẩu)" name={['businessData', 'exporterTaxCode']}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Invoice number" name={['businessData', 'invoiceNumber']}>
+                        <Form.Item label="Invoice number (Số hóa đơn)" name={['businessData', 'invoiceNumber']}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Total invoice value" name={['businessData', 'invoiceValue']}>
+                        <Form.Item label="Total invoice value (Tổng trị giá hóa đơn)" name={['businessData', 'invoiceValue']}>
                             <InputNumber min={0} precision={2} className="w-full" />
                         </Form.Item>
-                        <Form.Item label="Currency" name={['businessData', 'currency']}>
+                        <Form.Item label="Currency (Đơn vị tiền tệ)" name={['businessData', 'currency']}>
                             <Input placeholder="USD, VND..." />
                         </Form.Item>
-                        <Form.Item className="md:col-span-2" label="HS summary" name={['businessData', 'hsCodeSummary']}>
+                        <Form.Item className="md:col-span-2" label="HS summary (Tóm tắt mã HS)" name={['businessData', 'hsCodeSummary']}>
                             <Input.TextArea rows={2} />
                         </Form.Item>
                     </div>
@@ -708,35 +710,35 @@ const ShipmentDocCenter = ({ open, onClose, shipmentId, session }: IProps) => {
         if (selectedDocumentType === 'PACKING_DECLARATION') {
             return (
                 <>
-                    <Divider titlePlacement="start">Packing Declaration</Divider>
+                    <Divider titlePlacement="start">Packing Declaration (Khai báo đóng gói)</Divider>
                     <div className="grid grid-cols-1 gap-x-3 md:grid-cols-2">
-                        <Form.Item label="Declaration number" name={['businessData', 'declarationNumber']} rules={[requiredRule]}>
+                        <Form.Item label="Declaration number (Số khai báo)" name={['businessData', 'declarationNumber']} rules={[requiredRule]}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Issue date" name={['businessData', 'issueDate']} rules={[requiredRule]}>
+                        <Form.Item label="Issue date (Ngày cấp)" name={['businessData', 'issueDate']} rules={[requiredRule]}>
                             <DatePicker className="w-full" />
                         </Form.Item>
-                        <Form.Item label="Packing material" name={['businessData', 'packingMaterial']} rules={[requiredRule]}>
+                        <Form.Item label="Packing material (Vật liệu đóng gói)" name={['businessData', 'packingMaterial']} rules={[requiredRule]}>
                             <Select options={[
                                 { value: 'WOODEN', label: 'Wooden packing' },
                                 { value: 'NON_WOODEN', label: 'Non-wooden packing' },
                                 { value: 'MIXED', label: 'Mixed packing' },
                             ]} />
                         </Form.Item>
-                        <Form.Item label="ISPM 15 applied" name={['businessData', 'ispm15Applied']}>
+                        <Form.Item label="ISPM 15 applied (Áp dụng ISPM 15)" name={['businessData', 'ispm15Applied']}>
                             <Select options={[
                                 { value: 'YES', label: 'Yes' },
                                 { value: 'NO', label: 'No' },
                                 { value: 'NOT_APPLICABLE', label: 'Not applicable' },
                             ]} />
                         </Form.Item>
-                        <Form.Item label="Declarant" name={['businessData', 'declarantName']} rules={[requiredRule]}>
+                        <Form.Item label="Declarant (Người khai báo)" name={['businessData', 'declarantName']} rules={[requiredRule]}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Position" name={['businessData', 'declarantPosition']}>
+                        <Form.Item label="Position (Chức vụ)" name={['businessData', 'declarantPosition']}>
                             <Input />
                         </Form.Item>
-                        <Form.Item className="md:col-span-2" label="Treatment statement" name={['businessData', 'treatmentStatement']} rules={[requiredRule]}>
+                        <Form.Item className="md:col-span-2" label="Treatment statement (Khai báo xử lý)" name={['businessData', 'treatmentStatement']} rules={[requiredRule]}>
                             <Input.TextArea rows={2} placeholder="Describe fumigation / heat treatment / non-wood declaration." />
                         </Form.Item>
                     </div>
@@ -747,33 +749,33 @@ const ShipmentDocCenter = ({ open, onClose, shipmentId, session }: IProps) => {
         if (selectedDocumentType === 'PHYTOSANITARY_CERTIFICATE') {
             return (
                 <>
-                    <Divider titlePlacement="start">Phytosanitary Certificate</Divider>
+                    <Divider titlePlacement="start">Phytosanitary Certificate (Giấy chứng nhận kiểm dịch thực vật)</Divider>
                     <div className="grid grid-cols-1 gap-x-3 md:grid-cols-2">
-                        <Form.Item label="Certificate number" name={['businessData', 'certificateNumber']} rules={[requiredRule]}>
+                        <Form.Item label="Certificate number (Số chứng nhận)" name={['businessData', 'certificateNumber']} rules={[requiredRule]}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Issuing authority" name={['businessData', 'issuingAuthority']} rules={[requiredRule]}>
+                        <Form.Item label="Issuing authority (Cơ quan cấp)" name={['businessData', 'issuingAuthority']} rules={[requiredRule]}>
                             <Input placeholder="Plant Protection Department..." />
                         </Form.Item>
-                        <Form.Item label="Issue date" name={['businessData', 'issueDate']} rules={[requiredRule]}>
+                        <Form.Item label="Issue date (Ngày cấp)" name={['businessData', 'issueDate']} rules={[requiredRule]}>
                             <DatePicker className="w-full" />
                         </Form.Item>
-                        <Form.Item label="Inspection place" name={['businessData', 'inspectionPlace']} rules={[requiredRule]}>
+                        <Form.Item label="Inspection place (Nơi kiểm dịch)" name={['businessData', 'inspectionPlace']} rules={[requiredRule]}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Botanical name" name={['businessData', 'botanicalName']} rules={[requiredRule]}>
+                        <Form.Item label="Botanical name (Tên thực vật)" name={['businessData', 'botanicalName']} rules={[requiredRule]}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Treatment" name={['businessData', 'treatment']}>
+                        <Form.Item label="Treatment (Biện pháp xử lý)" name={['businessData', 'treatment']}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Quantity" name={['businessData', 'quantity']}>
+                        <Form.Item label="Quantity (Số lượng)" name={['businessData', 'quantity']}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Destination country" name={['businessData', 'destinationCountry']}>
+                        <Form.Item label="Destination country (Nước đến)" name={['businessData', 'destinationCountry']}>
                             <Input />
                         </Form.Item>
-                        <Form.Item className="md:col-span-2" label="Additional declaration" name={['businessData', 'additionalDeclaration']}>
+                        <Form.Item className="md:col-span-2" label="Additional declaration (Khai báo bổ sung)" name={['businessData', 'additionalDeclaration']}>
                             <Input.TextArea rows={2} />
                         </Form.Item>
                     </div>
@@ -784,33 +786,33 @@ const ShipmentDocCenter = ({ open, onClose, shipmentId, session }: IProps) => {
         if (selectedDocumentType === 'HEALTH_CERTIFICATE') {
             return (
                 <>
-                    <Divider titlePlacement="start">Health Certificate</Divider>
+                    <Divider titlePlacement="start">Health Certificate (Giấy chứng nhận y tế)</Divider>
                     <div className="grid grid-cols-1 gap-x-3 md:grid-cols-2">
-                        <Form.Item label="Certificate number" name={['businessData', 'certificateNumber']} rules={[requiredRule]}>
+                        <Form.Item label="Certificate number (Số chứng nhận)" name={['businessData', 'certificateNumber']} rules={[requiredRule]}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Issuing authority" name={['businessData', 'issuingAuthority']} rules={[requiredRule]}>
+                        <Form.Item label="Issuing authority (Cơ quan cấp)" name={['businessData', 'issuingAuthority']} rules={[requiredRule]}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Issue date" name={['businessData', 'issueDate']} rules={[requiredRule]}>
+                        <Form.Item label="Issue date (Ngày cấp)" name={['businessData', 'issueDate']} rules={[requiredRule]}>
                             <DatePicker className="w-full" />
                         </Form.Item>
-                        <Form.Item label="Product description" name={['businessData', 'productDescription']} rules={[requiredRule]}>
+                        <Form.Item label="Product description (Mô tả sản phẩm)" name={['businessData', 'productDescription']} rules={[requiredRule]}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Batch / lot" name={['businessData', 'batchOrLotNumber']}>
+                        <Form.Item label="Batch / lot (Số lô)" name={['businessData', 'batchOrLotNumber']}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Manufacturing date" name={['businessData', 'manufacturingDate']}>
+                        <Form.Item label="Manufacturing date (Ngày sản xuất)" name={['businessData', 'manufacturingDate']}>
                             <DatePicker className="w-full" />
                         </Form.Item>
-                        <Form.Item label="Expiry date" name={['businessData', 'expiryDate']}>
+                        <Form.Item label="Expiry date (Ngày hết hạn)" name={['businessData', 'expiryDate']}>
                             <DatePicker className="w-full" />
                         </Form.Item>
-                        <Form.Item label="Destination country" name={['businessData', 'destinationCountry']}>
+                        <Form.Item label="Destination country (Nước đến)" name={['businessData', 'destinationCountry']}>
                             <Input />
                         </Form.Item>
-                        <Form.Item className="md:col-span-2" label="Health statement" name={['businessData', 'healthStatement']} rules={[requiredRule]}>
+                        <Form.Item className="md:col-span-2" label="Health statement (Tuyên bố sức khỏe)" name={['businessData', 'healthStatement']} rules={[requiredRule]}>
                             <Input.TextArea rows={2} />
                         </Form.Item>
                     </div>
@@ -821,33 +823,33 @@ const ShipmentDocCenter = ({ open, onClose, shipmentId, session }: IProps) => {
         if (selectedDocumentType === 'FUMIGATION_CERTIFICATE') {
             return (
                 <>
-                    <Divider titlePlacement="start">Fumigation Certificate</Divider>
+                    <Divider titlePlacement="start">Fumigation Certificate (Giấy chứng nhận khử trùng)</Divider>
                     <div className="grid grid-cols-1 gap-x-3 md:grid-cols-2">
-                        <Form.Item label="Certificate number" name={['businessData', 'certificateNumber']} rules={[requiredRule]}>
+                        <Form.Item label="Certificate number (Số chứng nhận)" name={['businessData', 'certificateNumber']} rules={[requiredRule]}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Fumigation company" name={['businessData', 'fumigationCompany']} rules={[requiredRule]}>
+                        <Form.Item label="Fumigation company (Công ty khử trùng)" name={['businessData', 'fumigationCompany']} rules={[requiredRule]}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Fumigation date" name={['businessData', 'fumigationDate']} rules={[requiredRule]}>
+                        <Form.Item label="Fumigation date (Ngày khử trùng)" name={['businessData', 'fumigationDate']} rules={[requiredRule]}>
                             <DatePicker className="w-full" />
                         </Form.Item>
-                        <Form.Item label="Chemical used" name={['businessData', 'chemicalUsed']} rules={[requiredRule]}>
+                        <Form.Item label="Chemical used (Hóa chất sử dụng)" name={['businessData', 'chemicalUsed']} rules={[requiredRule]}>
                             <Input placeholder="Methyl Bromide, Phosphine..." />
                         </Form.Item>
-                        <Form.Item label="Dosage" name={['businessData', 'dosage']} rules={[requiredRule]}>
+                        <Form.Item label="Dosage (Liều lượng)" name={['businessData', 'dosage']} rules={[requiredRule]}>
                             <Input placeholder="g/m3" />
                         </Form.Item>
-                        <Form.Item label="Exposure duration" name={['businessData', 'exposureDuration']}>
+                        <Form.Item label="Exposure duration (Thời gian ủ thuốc)" name={['businessData', 'exposureDuration']}>
                             <Input placeholder="24 hours" />
                         </Form.Item>
-                        <Form.Item label="Temperature" name={['businessData', 'temperature']}>
+                        <Form.Item label="Temperature (Nhiệt độ)" name={['businessData', 'temperature']}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Treatment location" name={['businessData', 'treatmentLocation']}>
+                        <Form.Item label="Treatment location (Địa điểm xử lý)" name={['businessData', 'treatmentLocation']}>
                             <Input />
                         </Form.Item>
-                        <Form.Item className="md:col-span-2" label="Container / seal numbers" name={['businessData', 'containerSealNumbers']}>
+                        <Form.Item className="md:col-span-2" label="Container / seal numbers (Số container / seal)" name={['businessData', 'containerSealNumbers']}>
                             <Input.TextArea rows={2} />
                         </Form.Item>
                     </div>
@@ -858,37 +860,37 @@ const ShipmentDocCenter = ({ open, onClose, shipmentId, session }: IProps) => {
         if (selectedDocumentType === 'QUALITY_INSPECTION_CERTIFICATE') {
             return (
                 <>
-                    <Divider titlePlacement="start">Quality Inspection Certificate</Divider>
+                    <Divider titlePlacement="start">Quality Inspection Certificate (Giấy chứng nhận chất lượng)</Divider>
                     <div className="grid grid-cols-1 gap-x-3 md:grid-cols-2">
-                        <Form.Item label="Certificate number" name={['businessData', 'certificateNumber']} rules={[requiredRule]}>
+                        <Form.Item label="Certificate number (Số chứng nhận)" name={['businessData', 'certificateNumber']} rules={[requiredRule]}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Inspection agency" name={['businessData', 'inspectionAgency']} rules={[requiredRule]}>
+                        <Form.Item label="Inspection agency (Cơ quan giám định)" name={['businessData', 'inspectionAgency']} rules={[requiredRule]}>
                             <Input placeholder="SGS, Bureau Veritas, Vinacontrol..." />
                         </Form.Item>
-                        <Form.Item label="Issue date" name={['businessData', 'issueDate']} rules={[requiredRule]}>
+                        <Form.Item label="Issue date (Ngày cấp)" name={['businessData', 'issueDate']} rules={[requiredRule]}>
                             <DatePicker className="w-full" />
                         </Form.Item>
-                        <Form.Item label="Inspection date" name={['businessData', 'inspectionDate']}>
+                        <Form.Item label="Inspection date (Ngày giám định)" name={['businessData', 'inspectionDate']}>
                             <DatePicker className="w-full" />
                         </Form.Item>
-                        <Form.Item label="Inspection standard" name={['businessData', 'inspectionStandard']} rules={[requiredRule]}>
+                        <Form.Item label="Inspection standard (Tiêu chuẩn giám định)" name={['businessData', 'inspectionStandard']} rules={[requiredRule]}>
                             <Input placeholder="Contract spec, ISO, buyer spec..." />
                         </Form.Item>
-                        <Form.Item label="Inspection result" name={['businessData', 'inspectionResult']} rules={[requiredRule]}>
+                        <Form.Item label="Inspection result (Kết quả giám định)" name={['businessData', 'inspectionResult']} rules={[requiredRule]}>
                             <Select options={[
                                 { value: 'PASSED', label: 'Passed' },
                                 { value: 'CONDITIONALLY_PASSED', label: 'Conditionally passed' },
                                 { value: 'FAILED', label: 'Failed' },
                             ]} />
                         </Form.Item>
-                        <Form.Item label="Sample size" name={['businessData', 'sampleSize']}>
+                        <Form.Item label="Sample size (Cỡ mẫu)" name={['businessData', 'sampleSize']}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Defect rate" name={['businessData', 'defectRate']}>
+                        <Form.Item label="Defect rate (Tỷ lệ lỗi)" name={['businessData', 'defectRate']}>
                             <Input />
                         </Form.Item>
-                        <Form.Item className="md:col-span-2" label="Inspection remarks" name={['businessData', 'inspectionRemarks']}>
+                        <Form.Item className="md:col-span-2" label="Inspection remarks (Nhận xét giám định)" name={['businessData', 'inspectionRemarks']}>
                             <Input.TextArea rows={2} />
                         </Form.Item>
                     </div>
@@ -1105,7 +1107,7 @@ const ShipmentDocCenter = ({ open, onClose, shipmentId, session }: IProps) => {
             }
             placement="right"
             size={1080}
-            styles={{ body: { background: '#f8fafc', padding: 20 } }}
+            styles={{ body: { padding: 20 } }}
             onClose={onClose}
             open={open}
             extra={
@@ -1137,11 +1139,14 @@ const ShipmentDocCenter = ({ open, onClose, shipmentId, session }: IProps) => {
                             label: 'Checklist chứng từ',
                             children: (
                                 <Space className="w-full" orientation="vertical" size={16}>
-                                    <div className="rounded-lg border border-slate-200 bg-white p-4">
+                                    <div 
+                                        className="rounded-lg border p-4" 
+                                        style={{ background: token.colorBgContainer, borderColor: token.colorBorderSecondary }}
+                                    >
                                         <Space className="w-full justify-between" wrap>
                                             <div>
                                                 <Text strong>Hồ sơ hoàn thuế GTGT xuất khẩu</Text>
-                                                <div className="text-xs text-slate-500">Cần đủ CI, PL, B/L, C/O và tờ khai hải quan.</div>
+                                                <div style={{ fontSize: 12, color: token.colorTextSecondary }}>Cần đủ CI, PL, B/L, C/O và tờ khai hải quan.</div>
                                             </div>
                                             <Tag color={dossierReady ? 'green' : 'orange'}>
                                                 {dossierReady ? 'Sẵn sàng' : 'Chưa đủ chứng từ'}

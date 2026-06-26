@@ -20,6 +20,8 @@ import { TradeFinanceTransaction } from '@/modules/trade-finance/entities/trade-
 export enum PortalReceiptType {
   TT_ADVANCE = 'TT_ADVANCE',
   TT_BALANCE = 'TT_BALANCE',
+  SWIFT = 'SWIFT',
+  VIETQR = 'VIETQR',
 }
 
 export enum PortalReceiptStatus {
@@ -34,6 +36,7 @@ export type PortalReceiptAuditEvent = {
   at: string;
   note?: string | null;
   fileAsset_id?: string | null;
+  transferReference?: string | null;
   tradeFinanceTransactionId?: string | null;
 };
 
@@ -76,8 +79,8 @@ export class PortalPaymentReceipt {
   @JoinColumn({ name: 'salesContractId' })
   salesContract: SalesContract | null;
 
-  @Column({ type: 'enum', enum: PortalReceiptType })
-  receiptType: PortalReceiptType;
+  @Column({ type: 'enum', enum: PortalReceiptType, nullable: true })
+  receiptType: PortalReceiptType | null;
 
   @Column({
     type: 'numeric',
@@ -108,12 +111,12 @@ export class PortalPaymentReceipt {
   @Column({ type: 'timestamp', nullable: true })
   transactionDate: Date | null;
 
-  @Column({ type: 'varchar', length: 40 })
-  fileAsset_id: string;
+  @Column({ type: 'varchar', length: 40, nullable: true })
+  fileAsset_id: string | null;
 
-  @ManyToOne(() => FileAsset, { onDelete: 'RESTRICT' })
+  @ManyToOne(() => FileAsset, { nullable: true, onDelete: 'RESTRICT' })
   @JoinColumn({ name: 'fileAsset_id' })
-  fileAsset: FileAsset;
+  fileAsset: FileAsset | null;
 
   @Column({ type: 'varchar', length: 40, nullable: true })
   tradeFinanceTransactionId: string | null;

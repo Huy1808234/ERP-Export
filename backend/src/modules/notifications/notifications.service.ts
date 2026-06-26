@@ -8,6 +8,10 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { createEntityId } from '@/common/ids/entity-id.util';
 
+type NotificationJobData = Partial<SystemNotification> & {
+  username?: string;
+};
+
 @Injectable()
 export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
@@ -34,18 +38,22 @@ export class NotificationsService {
     return jobData;
   }
 
-  async processNotification(data: Partial<SystemNotification>) {
+  async processNotification(data: NotificationJobData) {
     const notification = this.notificationRepository.create(data);
     const saved = await this.notificationRepository.save(notification);
 
     // Emit event to Socket Gateway
-    this.eventEmitter.emit('notification.new_system', saved);
+    this.eventEmitter.emit('notification.new_system', {
+      ...saved,
+      username: data.username,
+    });
 
     // Calculate new unread count and emit
     if (saved.userId) {
       const count = await this.countUnread(saved.userId);
       this.eventEmitter.emit('notification.unread_count', {
         userId: saved.userId,
+        username: data.username,
         count,
       });
     }

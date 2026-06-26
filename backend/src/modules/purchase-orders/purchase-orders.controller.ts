@@ -43,6 +43,7 @@ export class PurchaseOrdersController {
 
   @Get()
   @ResponseMessage('Lấy danh sách đơn đặt hàng thành công')
+  @Roles('ADMIN', 'PURCHASING', 'ACCOUNTING', 'LOGISTICS', 'WAREHOUSE')
   findAll(
     @Query('current') currentPage: string,
     @Query('pageSize') limit: string,
@@ -59,6 +60,7 @@ export class PurchaseOrdersController {
 
   @Get(':_id')
   @ResponseMessage('Lấy chi tiết đơn đặt hàng thành công')
+  @Roles('ADMIN', 'PURCHASING', 'ACCOUNTING', 'LOGISTICS', 'WAREHOUSE')
   findOne(@Param('_id') recordId: string) {
     return this.purchaseOrdersService.findOne(recordId);
   }

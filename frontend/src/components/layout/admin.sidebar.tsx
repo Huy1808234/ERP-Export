@@ -24,6 +24,7 @@ import {
     UserOutlined,
     WalletOutlined,
     ExportOutlined,
+    CustomerServiceOutlined,
 } from '@ant-design/icons';
 import { Link, usePathname } from '@/i18n/routing';
 import { useTranslations } from 'next-intl';
@@ -52,6 +53,7 @@ interface IProps {
 }
 
 const groupKeys = [
+    'grp-customer',
     'grp-main',
     'grp-master',
     'grp-sales',
@@ -62,10 +64,16 @@ const groupKeys = [
 ];
 
 const menuRouteByKey: Record<string, string> = {
+    'portal-overview': '/dashboard/portal',
+    'portal-products': '/dashboard/portal/products',
+    'portal-orders': '/dashboard/portal/orders',
+    'portal-finance': '/dashboard/portal/finance',
+    'portal-shipments': '/dashboard/portal/shipments',
     dashboard: '/dashboard',
     approvals: '/dashboard/approvals',
     'approval-matrix': '/dashboard/approval-matrix',
     partners: '/dashboard/partners',
+    customers: '/dashboard/customers',
     products: '/dashboard/product',
     inventory: '/dashboard/inventory',
     'inventory-ledger': '/dashboard/inventory/ledger',
@@ -97,7 +105,10 @@ const menuRouteByKey: Record<string, string> = {
     accounting: '/dashboard/accounting',
     users: '/dashboard/user',
     'role-permissions': '/dashboard/user?tab=permissions',
+    'system-settings': '/dashboard/settings/system',
+    currencies: '/dashboard/settings/currencies',
     countries: '/dashboard/settings/countries',
+    support: '/dashboard/support',
 };
 
 const getMenuItemKey = (item: MenuItem): string | null => {
@@ -157,6 +168,16 @@ const AdminSideBar = ({ session }: IProps) => {
     const userName = session?.user?.name || userEmail.split('@')[0] || 'admin';
     const userInitial = (userName || userEmail || 'A').charAt(0).toUpperCase();
     const roleName = getAccessRoleName(session?.user);
+    const settingsHref = useMemo(() => {
+        if (roleName === 'CUSTOMER') return '/dashboard/portal';
+
+        const allowedSettingsRoutes = [
+            '/dashboard/settings/system',
+            '/dashboard/settings/currencies',
+            '/dashboard/settings/countries',
+        ];
+        return allowedSettingsRoutes.find((route) => canAccessDashboardPath(route, roleName)) || '/dashboard';
+    }, [roleName]);
     const purchaseExceptionsLabel = (() => {
         try {
             return t('items.purchaseExceptions');
@@ -182,7 +203,13 @@ const AdminSideBar = ({ session }: IProps) => {
     })();
 
     const getSelectedKey = () => {
+        if (pathname?.includes('/dashboard/portal/products')) return 'portal-products';
+        if (pathname?.includes('/dashboard/portal/orders')) return 'portal-orders';
+        if (pathname?.includes('/dashboard/portal/finance')) return 'portal-finance';
+        if (pathname?.includes('/dashboard/portal/shipments')) return 'portal-shipments';
+        if (pathname?.includes('/dashboard/portal')) return 'portal-overview';
         if (pathname?.includes('/dashboard/product')) return 'products';
+        if (pathname?.includes('/dashboard/customers')) return 'customers';
         if (pathname?.includes('/dashboard/partners')) return 'partners';
         if (pathname?.includes('/dashboard/user') && searchParams.get('tab') === 'permissions') return 'role-permissions';
         if (pathname?.includes('/dashboard/user')) return 'users';
@@ -213,14 +240,49 @@ const AdminSideBar = ({ session }: IProps) => {
         if (pathname?.includes('/dashboard/inventory/export-deliveries')) return 'inventory-export-deliveries';
         if (pathname?.includes('/dashboard/inventory/ledger')) return 'inventory-ledger';
         if (pathname?.includes('/dashboard/inventory')) return 'inventory';
+        if (pathname?.includes('/dashboard/settings/system')) return 'system-settings';
+        if (pathname?.includes('/dashboard/settings/currencies')) return 'currencies';
         if (pathname?.includes('/dashboard/settings/countries')) return 'countries';
         if (pathname?.includes('/dashboard/settings')) return 'settings';
         if (pathname?.includes('/dashboard/approval-matrix')) return 'approval-matrix';
         if (pathname?.includes('/dashboard/approvals')) return 'approvals';
+        if (pathname?.includes('/dashboard/support')) return 'support';
         return 'dashboard';
     };
 
     const items: MenuItem[] = useMemo(() => filterMenuItemsByAccess([
+        {
+            key: 'grp-customer',
+            label: t('groups.customerPortal'),
+            icon: <UserOutlined />,
+            children: [
+                {
+                    key: "portal-overview",
+                    label: <Link href={"/dashboard/portal"}>{t('items.portalOverview')}</Link>,
+                    icon: <AppstoreOutlined />,
+                },
+                {
+                    key: "portal-products",
+                    label: <Link href={"/dashboard/portal/products"}>{t('items.portalProducts')}</Link>,
+                    icon: <BarcodeOutlined />,
+                },
+                {
+                    key: "portal-orders",
+                    label: <Link href={"/dashboard/portal/orders"}>{t('items.portalOrders')}</Link>,
+                    icon: <ShoppingCartOutlined />,
+                },
+                {
+                    key: "portal-finance",
+                    label: <Link href={"/dashboard/portal/finance"}>{t('items.portalFinance')}</Link>,
+                    icon: <DollarOutlined />,
+                },
+                {
+                    key: "portal-shipments",
+                    label: <Link href={"/dashboard/portal/shipments"}>{t('items.portalShipments')}</Link>,
+                    icon: <GlobalOutlined />,
+                },
+            ]
+        },
         {
             key: 'grp-main',
             label: t('groups.main'),
@@ -252,6 +314,11 @@ const AdminSideBar = ({ session }: IProps) => {
                     key: "partners",
                     label: <Link href={"/dashboard/partners"}>{t('items.partners')}</Link>,
                     icon: <ApartmentOutlined />,
+                },
+                {
+                    key: "customers",
+                    label: <Link href={"/dashboard/customers"}>{t('items.customers')}</Link>,
+                    icon: <TeamOutlined />,
                 },
                 {
                     key: "products",
@@ -319,6 +386,11 @@ const AdminSideBar = ({ session }: IProps) => {
                     key: "commercial-invoices",
                     label: <Link href={"/dashboard/commercial-invoices"}>{commercialInvoicesLabel}</Link>,
                     icon: <FileTextOutlined />,
+                },
+                {
+                    key: "support",
+                    label: <Link href={"/dashboard/support"}>Support & Claims</Link>,
+                    icon: <CustomerServiceOutlined />,
                 },
             ],
         },
@@ -448,6 +520,16 @@ const AdminSideBar = ({ session }: IProps) => {
                     icon: <SafetyCertificateOutlined />,
                 },
                 {
+                    key: "system-settings",
+                    label: <Link href={"/dashboard/settings/system"}>{t('items.systemSettings')}</Link>,
+                    icon: <SettingOutlined />,
+                },
+                {
+                    key: "currencies",
+                    label: <Link href={"/dashboard/settings/currencies"}>{t('items.currencies')}</Link>,
+                    icon: <DollarOutlined />,
+                },
+                {
                     key: "countries",
                     label: <Link href={"/dashboard/settings/countries"}>{t('items.countries')}</Link>,
                     icon: <GlobalOutlined />,
@@ -472,7 +554,11 @@ const AdminSideBar = ({ session }: IProps) => {
         {
             key: 'settings',
             icon: <SettingOutlined />,
-            label: <Link href="/dashboard/settings/system">{tHeader('settings')}</Link>,
+            label: (
+                <Link href={settingsHref}>
+                    {tHeader('settings')}
+                </Link>
+            ),
         },
         { type: 'divider' },
         {

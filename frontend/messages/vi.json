@@ -67,6 +67,7 @@
   "Sidebar": {
     "groups": {
       "main": "Trung Tâm Điều Hành",
+      "customerPortal": "Customer Portal",
       "masterData": "Dữ Liệu Nền Tảng",
       "sales": "Kinh Doanh (O2C)",
       "purchase": "Mua Hàng (P2P)",
@@ -78,7 +79,13 @@
       "overview": "Tổng Quan Vận Hành",
       "approvals": "Phê Duyệt Thông Minh",
       "approvalMatrix": "Ma Trận Phê Duyệt",
+      "portalOverview": "Tổng Quan",
+      "portalProducts": "Sản Phẩm",
+      "portalOrders": "Đơn Hàng",
+      "portalFinance": "Tài Chính & Công Nợ",
+      "portalShipments": "Tra Cứu Lô Hàng",
       "partners": "Đối Tác Toàn Cầu",
+      "customers": "Khách Hàng",
       "products": "Danh Mục Sản Phẩm",
       "inventory": "Tồn Kho Real-time",
       "inventoryLedger": "Lịch Sử Kho",
@@ -121,7 +128,11 @@
   "Breadcrumb": {
     "home": "Trang chủ",
     "dashboard": "Bảng điều khiển",
+    "portal": "Customer Portal",
+    "orders": "Đơn hàng",
+    "shipments": "Lô hàng",
     "partners": "Đối tác",
+    "customers": "Khách hàng",
     "inventory": "Kho hàng",
     "product": "Danh mục sản phẩm",
     "products": "Sản phẩm",
@@ -1577,7 +1588,8 @@
     "description": "Ghi nhận hàng hóa nhập kho từ các đơn mua hàng",
     "createBtn": "Tạo Phiếu Nhập Kho",
     "filters": {
-      "searchPlaceholder": "Tìm theo mã GRN..."
+      "searchPlaceholder": "Tìm theo mã GRN...",
+      "statusPlaceholder": "Lọc trạng thái"
     },
     "modal": {
       "titleCreate": "Tạo Phiếu Nhập Kho (GRN) từ {poNumber}",
@@ -1656,6 +1668,9 @@
         "qtyMaxError": "Tối đa: {max}",
         "qtyRemainingError": "Không được vượt số lượng còn lại của PO",
         "rejectedMaxError": "SL không đạt không được vượt SL thực nhận",
+        "rejectedQualityRequired": "Hàng lỗi/cách ly phải có SL không đạt",
+        "rejectedPassMismatch": "Có SL không đạt thì tình trạng không thể là Đạt",
+        "rejectionReasonRequired": "Vui lòng nhập lý do cho hàng không đạt",
         "qtyPlaceholder": "Nhập SL"
       }
     },
@@ -1671,12 +1686,43 @@
     },
     "status": {
       "DRAFT": "Bản nháp",
+      "PENDING_QC": "Chờ QC",
       "COMPLETED": "Đã nhập kho",
       "CANCELLED": "Đã hủy"
     },
     "tooltips": {
       "viewDetail": "Xem chi tiết",
-      "reverse": "Đảo phiếu nhập kho"
+      "reverse": "Đảo phiếu nhập kho",
+      "inspectQc": "Nghiệm thu QC"
+    },
+    "qc": {
+      "title": "Nghiệm thu QC",
+      "submit": "Xác nhận QC",
+      "cancel": "Hủy",
+      "empty": "Phiếu nhập không có dòng cần QC.",
+      "warningTitle": "QC sẽ tạo phiếu kiểm tra chất lượng",
+      "warningDescription": "Dòng hàng không đạt đang nằm ngoài tồn kho được chấp nhận. Với dòng đã có SL lỗi, hãy chọn cách ly hoặc từ chối.",
+      "line": "Dòng hàng GRN",
+      "lineRequired": "Vui lòng chọn dòng hàng",
+      "received": "Thực nhận",
+      "rejected": "Không đạt",
+      "decision": "Kết quả QC",
+      "decisionRequired": "Vui lòng chọn kết quả QC",
+      "passDisabledHint": "Không thể chọn Đạt vì dòng này đã có SL không đạt bị loại khỏi tồn kho.",
+      "decisions": {
+        "PASS": "Đạt",
+        "QUARANTINE": "Cách ly",
+        "REJECT": "Từ chối"
+      },
+      "rejectedQuantity": "SL không đạt",
+      "rejectedRequired": "Vui lòng nhập SL không đạt",
+      "defectRate": "Tỷ lệ lỗi",
+      "inspectorNotes": "Ghi chú QC",
+      "notesRequired": "Vui lòng nhập ghi chú QC",
+      "correctiveAction": "Hành động xử lý",
+      "defaultCorrectiveAction": "Tạo claim hoặc phiếu trả NCC cho hàng không phù hợp.",
+      "success": "Đã tạo phiếu QC",
+      "failed": "Không thể tạo phiếu QC"
     },
     "reverseModal": {
       "title": "Đảo phiếu nhập {grnNumber}",
@@ -1842,6 +1888,19 @@
     "title": "Trả Hàng Mua",
     "description": "Quản lý việc trả hàng lỗi hoặc không đạt yêu cầu cho nhà cung cấp",
     "createBtn": "Tạo Phiếu Trả Hàng",
+    "stats": {
+      "total": "Tổng phiếu",
+      "totalRefundable": "Tổng giá trị hoàn",
+      "pendingValue": "Đang chờ NCC",
+      "inTransitValue": "Đang gửi trả",
+      "draft": "Bản nháp",
+      "pendingVendor": "Chờ NCC",
+      "sent": "Đã gửi NCC",
+      "credited": "Đã hoàn tiền",
+      "replaced": "Đã đổi hàng",
+      "closed": "Đã đóng",
+      "cancelled": "Đã hủy"
+    },
     "table": {
       "columns": {
         "returnNumber": "MÃ TRẢ HÀNG",
@@ -1849,7 +1908,23 @@
         "poNumber": "ĐƠN HÀNG LIÊN QUAN",
         "reason": "LÝ DO",
         "actions": "THAO TÁC",
-        "status": "TRẠNG THÁI"
+        "status": "TRẠNG THÁI",
+        "vendor": "NHÀ CUNG CẤP",
+        "itemsCount": "SỐ MẶT HÀNG",
+        "refundable": "GIÁ TRỊ HOÀN",
+        "claimNumber": "MÃ KHIẾU NẠI"
+      },
+      "filters": {
+        "searchPlaceholder": "Tìm theo mã trả, PO, NCC...",
+        "status": "Trạng thái",
+        "statusAll": "Tất cả",
+        "reasonCode": "Loại lý do",
+        "dateRange": "Khoảng ngày trả",
+        "sort": "Sắp xếp",
+        "sortNewest": "Mới tạo gần nhất",
+        "sortReturnDate": "Ngày trả hàng",
+        "sortAmount": "Giá trị hoàn",
+        "reset": "Đặt lại"
       },
       "tooltips": {
         "viewDetail": "Xem chi tiết",
@@ -1877,7 +1952,39 @@
         "quantity": "Số lượng",
         "unit": "Đơn vị",
         "receivedHint": "Đã nhận: {quantity}",
-        "addLineBtn": "Thêm mặt hàng trả"
+        "addLineBtn": "Thêm mặt hàng trả",
+        "reasonCode": "Loại lý do",
+        "claimNumber": "Mã khiếu nại NCC",
+        "claimNumberPlaceholder": "VD: CLM-2024-001",
+        "carrierTrackingRef": "Mã vận đơn trả hàng",
+        "carrierTrackingRefPlaceholder": "Mã tracking hãng tàu / chành xe",
+        "expectedPickupAt": "Ngày dự kiến lấy hàng",
+        "lineCondition": "Tình trạng",
+        "lineUnitPrice": "Đơn giá",
+        "lineRefund": "Thành tiền hoàn",
+        "lineBatch": "Số lô",
+        "lineBatchPlaceholder": "VD: LOT-2024-08-A",
+        "lineExpiry": "Hạn dùng",
+        "lineNote": "Ghi chú dòng",
+        "lineNotePlaceholder": "VD: Thùng bị móp, nhãn rách",
+        "totalRefundable": "Tổng giá trị hoàn dự kiến",
+        "qualityCheck": "Liên kết QC"
+      },
+      "reasonCode": {
+        "DEFECTIVE": "Lỗi kỹ thuật",
+        "EXPIRED": "Sắp/đã hết hạn",
+        "WRONG_SPEC": "Sai quy cách",
+        "DAMAGED_IN_TRANSIT": "Hư hỏng vận chuyển",
+        "OVERSUPPLY": "Dư nhu cầu",
+        "QUALITY_REJECT": "QC từ chối",
+        "OTHER": "Khác"
+      },
+      "condition": {
+        "GOOD": "Còn sử dụng được",
+        "DAMAGED": "Hư hỏng",
+        "DEFECTIVE": "Lỗi chức năng",
+        "EXPIRED": "Hết hạn",
+        "WRONG_SPEC": "Sai quy cách"
       },
       "rules": {
         "purchaseOrderRequired": "Vui lòng chọn PO",
@@ -1886,6 +1993,17 @@
         "qtyMax": "Không vượt quá số đã nhận: {max}",
         "unitRequired": "ĐVT"
       }
+    },
+    "resolveModal": {
+      "title": "Cập nhật kết quả xử lý",
+      "settlementType": "Phương án xử lý",
+      "settlementNote": "Ghi chú",
+      "settlementNotePlaceholder": "VD: NCC đồng ý hoàn 100% giá trị đơn hàng",
+      "creditNoteNumber": "Số Credit Note",
+      "creditNoteNumberPlaceholder": "Số chứng từ hoàn tiền từ NCC",
+      "replacementPoNumber": "Mã PO thay thế",
+      "replacementPoNumberPlaceholder": "PO-2024-XXXX thay thế hàng lỗi",
+      "submit": "Xác nhận"
     },
     "notifications": {
       "createSuccess": "Tạo phiếu trả hàng thành công",
@@ -1898,7 +2016,8 @@
       "cancelPrompt": "Hủy phiếu {id}",
       "cancelReason": "Lý do hủy",
       "cancelReasonRequired": "Bắt buộc nhập lý do hủy",
-      "cancelled": "Đã hủy phiếu trả hàng"
+      "cancelled": "Đã hủy phiếu trả hàng",
+      "loadDetailError": "Không thể tải chi tiết phiếu"
     },
     "detail": {
       "status": "Trạng thái",
@@ -1907,7 +2026,32 @@
       "product": "Sản phẩm",
       "sku": "Mã SKU",
       "qty": "SL",
-      "unit": "ĐVT"
+      "unit": "ĐVT",
+      "vendor": "Nhà cung cấp",
+      "returnDate": "Ngày trả",
+      "createdBy": "Người tạo",
+      "createdAt": "Ngày tạo",
+      "sentBy": "Người gửi NCC",
+      "sentAt": "Ngày gửi",
+      "resolvedBy": "Người xử lý",
+      "resolvedAt": "Ngày xử lý",
+      "claimNumber": "Mã khiếu nại",
+      "creditNoteNumber": "Số Credit Note",
+      "replacementPo": "PO thay thế",
+      "carrierTracking": "Mã vận đơn",
+      "expectedPickupAt": "Dự kiến lấy hàng",
+      "totalRefundable": "Tổng giá trị hoàn",
+      "currency": "Tiền tệ",
+      "attachments": "Hình ảnh / Chứng từ",
+      "itemsTitle": "Danh sách hàng trả",
+      "unitPrice": "Đơn giá",
+      "lineRefund": "Thành tiền",
+      "condition": "Tình trạng",
+      "batchNumber": "Số lô",
+      "expiryDate": "Hạn dùng",
+      "note": "Ghi chú",
+      "workflowTitle": "Lịch sử xử lý",
+      "reasonCode": "Loại lý do"
     },
     "status": {
       "DRAFT": "Bản nháp",
@@ -2102,10 +2246,13 @@
       "lowStock": "CẢNH BÁO HẾT HÀNG",
       "lowStockDescription": "Số lượng SKU dưới mức an toàn",
       "productCatalog": "DANH MỤC SẢN PHẨM",
-      "productCatalogDescription": "Tổng số mã hàng đang quản lý"
+      "productCatalogDescription": "Tổng số mã hàng đang quản lý",
+      "quarantineStock": "HÀNG CÁCH LY",
+      "quarantineStockDescription": "{count} SKU đang được cách ly"
     },
     "filters": {
-      "searchPlaceholder": "Tìm theo tên hoặc SKU..."
+      "searchPlaceholder": "Tìm theo tên hoặc SKU...",
+      "statusPlaceholder": "Trạng thái tồn"
     },
     "table": {
       "columns": {
@@ -2118,7 +2265,8 @@
     },
     "stockStatus": {
       "low": "Sắp hết",
-      "out": "Hết hàng"
+      "out": "Hết hàng",
+      "quarantine": "Cách ly"
     },
     "transactionTypes": {
       "GOODS_RECEIPT": "Nhập mua hàng (GRN)",
@@ -2544,6 +2692,8 @@
       "paymentTermsPlaceholder": "Chọn phương thức thanh toán",
       "deliveryDate": "Ngày giao hàng",
       "deliveryDatePlaceholder": "Chọn ngày giao hàng",
+      "validUntil": "Ngày hết hạn",
+      "validUntilPlaceholder": "Chọn ngày hết hạn",
       "logisticsDivider": "Chi Phí Logistics (Sẽ tự động tính vào HĐ tùy Incoterm)",
       "transport": "Vận tải nội địa",
       "port": "Phí cảng (THC...)",
@@ -4332,7 +4482,8 @@
       "cancel": "Hủy",
       "invoicePdf": "PDF hóa đơn",
       "createDraft": "Tạo nháp",
-      "cancelDocument": "Hủy chứng từ"
+      "cancelDocument": "Hủy chứng từ",
+      "continue": "Tiếp tục"
     },
     "stats": {
       "documents": "Chứng từ",
@@ -4392,7 +4543,16 @@
       "dueDate": "Ngày đến hạn",
       "taxRate": "Thuế suất (%)",
       "note": "Ghi chú",
-      "reason": "Lý do"
+      "reason": "Lý do",
+      "exchangeRate": "Tỷ giá",
+      "bankAccount": "Tài khoản ngân hàng thụ hưởng",
+      "selectBankAccount": "Chọn tài khoản ngân hàng",
+      "notePlaceholder": "Điều khoản thanh toán, hướng dẫn chuyển khoản...",
+      "shipmentSection": "Chọn Shipment",
+      "invoiceSection": "Chi tiết hóa đơn",
+      "selectShipmentToPreview": "Chọn shipment để xem trước hóa đơn",
+      "previewHint": "Xem trước sẽ tự động cập nhật khi bạn nhập thông tin",
+      "viewExisting": "Xem CI đã có"
     },
     "validation": {
       "selectShipment": "Vui lòng chọn shipment",
@@ -4411,6 +4571,48 @@
       "detailFailed": "Không thể tải chi tiết hóa đơn thương mại",
       "downloadFailed": "Không thể tải PDF hóa đơn thương mại",
       "issueBeforeDownload": "Cần phát hành hóa đơn thương mại trước khi tải PDF chính thức"
+    },
+    "warnings": {
+      "noItemsTitle": "Shipment không có hàng hóa",
+      "noItemsDesc": "Shipment này chưa có dòng hàng nào. Bạn vẫn có thể tạo CI trắng, nhưng cần nhập hàng thủ công sau.",
+      "shipmentNotShippedTitle": "Shipment chưa xuất hàng",
+      "shipmentNotShippedDesc": "Shipment này chưa ở trạng thái ON_BOARD. Nên đợi đến khi hàng đã lên tàu.",
+      "existingCiTitle": "Đã có Commercial Invoice",
+      "existingCiDesc": "CI {invoiceNumber} đã tồn tại cho shipment này. Bạn vẫn muốn tạo thêm?",
+      "confirmNoItemsTitle": "Tạo CI không có hàng?",
+      "confirmNoItemsDesc": "Shipment đã chọn không có dòng hàng. CI này sẽ cần nhập dòng hàng thủ công sau."
+    },
+    "preview": {
+      "title": "Xem trước",
+      "autoUpdate": "Xem trước tự động cập nhật",
+      "buyer": "Bên mua / Người nhận hàng",
+      "shipmentRoute": "Tuyến đường",
+      "shipment": "Shipment",
+      "description": "Mô tả",
+      "qty": "SL",
+      "unit": "ĐVT",
+      "unitPrice": "Đơn giá",
+      "total": "Tổng",
+      "subtotal": "Tạm tính",
+      "tax": "Thuế",
+      "grandTotal": "TỔNG CỘNG",
+      "bankInfo": "Thông tin ngân hàng",
+      "selectBankAccount": "Chọn tài khoản ngân hàng ở form bên trái"
+    },
+    "labels": {
+      "ar": "Công nợ phải thu",
+      "exportDoc": "Bộ chứng từ XK",
+      "status": "Trạng thái",
+      "buyer": "Buyer",
+      "shipment": "Shipment",
+      "contract": "Hợp đồng",
+      "invoiceDate": "Ngày hóa đơn",
+      "dueDate": "Ngày đến hạn",
+      "subtotal": "Tạm tính",
+      "tax": "Thuế",
+      "total": "Tổng",
+      "totalVnd": "Tổng VND",
+      "exchangeRate": "Tỷ giá"
     }
   },
   "AdjustmentModal": {
@@ -4446,5 +4648,57 @@
       "success": "Điều chỉnh tồn kho thành công",
       "error": "Lỗi"
     }
+  },
+  "Signing": {
+    "secureSigning": "Ký kết an toàn cho người mua",
+    "otpVerification": "Xác minh mã OTP",
+    "signerDetails": "Thông tin người ký",
+    "contractSnapshot": "Tóm tắt hợp đồng",
+    "signerName": "Tên người ký",
+    "title": "Chức vụ",
+    "email": "Email",
+    "consent": "Xác nhận đồng ý",
+    "signContract": "Ký hợp đồng",
+    "verify": "Xác minh",
+    "product": "Sản phẩm",
+    "quantity": "Số lượng",
+    "unitPrice": "Đơn giá",
+    "lineTotal": "Thành tiền",
+    "incoterm": "Incoterm",
+    "currency": "Tiền tệ",
+    "totalValue": "Tổng giá trị",
+    "deliveryDate": "Ngày giao hàng",
+    "paymentTerms": "Điều khoản thanh toán",
+    "documentHash": "Mã băm tài liệu",
+    "otpSentTo": "Mã OTP 6 số đã được gửi đến",
+    "otpSentToMasked": "Mã OTP 6 số đã được gửi đến email đã đăng ký",
+    "checkEmail": "Vui lòng kiểm tra hộp thư email và nhập mã OTP bên dưới.",
+    "checkEmailNow": "Kiểm tra email ngay",
+    "otpExpiryNote": "Mã OTP có hiệu lực trong 15 phút",
+    "linkExpiryNote": "Link ký có hiệu lực trong {days} ngày",
+    "resendOtp": "Không nhận được mã OTP?",
+    "resendOtpAction": "Gửi lại mã OTP",
+    "resendSuccess": "Mã OTP mới đã được gửi đến email của bạn",
+    "resendError": "Gửi lại OTP thất bại. Vui lòng thử lại.",
+    "resendCooldown": "Vui lòng đợi {seconds}s trước khi yêu cầu OTP mới",
+    "otpMustBe6Digits": "Mã OTP phải gồm 6 chữ số",
+    "otpVerified": "Đã xác minh OTP",
+    "signature": "Chữ ký",
+    "certificate": "Chứng chỉ",
+    "signedSuccess": "Hợp đồng đã được ký",
+    "signedSuccessSubtitle": "Chứng chỉ {certNo}",
+    "sessionUnavailable": "Phiên ký không khả dụng",
+    "sessionUnavailableDesc": "Link ký không hợp lệ, đã hết hạn hoặc đã bị thu hồi.",
+    "consentPlaceholder": "Tôi xác nhận rằng tôi được ủy quyền ký hợp đồng bán hàng này và đồng ý với các điều khoản thương mại.",
+    "consentRequired": "Bạn phải đồng ý với văn bản xác nhận trước khi ký.",
+    "signerNameRequired": "Tên người ký là bắt buộc.",
+    "emailInvalid": "Email không hợp lệ.",
+    "auditInfo": "Thông tin kiểm toán",
+    "certificateNumber": "Số chứng chỉ",
+    "certificateHash": "Mã băm chứng chỉ",
+    "packetHash": "Mã băm gói kiểm toán",
+    "signerInfo": "Thông tin người ký",
+    "ipAddress": "Địa chỉ IP",
+    "signedAt": "Thời gian ký"
   }
 }

@@ -27,9 +27,12 @@ import ShipmentFromPIModal from '../shipment/shipment.from-pi';
 import { useTranslations } from 'next-intl';
 import { useSearchParams } from 'next/navigation';
 import { getAccessToken } from '@/lib/auth-token';
+import { getAccessRoleName } from '@/lib/access-control';
 
 
 const { Text } = Typography;
+
+const SALES_CONTRACT_WRITE_ROLES = new Set(['ADMIN', 'MANAGER', 'SALES_EXPORT']);
 
 type SalesContractActionResponse = {
   invitation?: {
@@ -184,8 +187,7 @@ const SalesContractTable = () => {
   const { token } = theme.useToken();
   const isDark = (session?.user as any)?.theme === 'dark';
 
-  const canWrite = (session?.user?.role as any)?.name === 'ADMIN' ||
-    (session?.user?.role as any)?.permissions?.some((p: any) => p.name === 'write:sales_contract' || p.name === 'read:all');
+  const canWrite = SALES_CONTRACT_WRITE_ROLES.has(getAccessRoleName(session?.user));
 
 
   const fetchData = useCallback(async (
@@ -900,10 +902,10 @@ const SalesContractTable = () => {
               <span className="font-bold text-sm">Contract Preview</span>
             </div>
             <div className="bg-white p-3 rounded-lg border border-slate-100 h-32 overflow-y-auto text-xs text-slate-500 font-mono shadow-inner leading-relaxed">
-              <p className="font-bold text-slate-700 mb-2">SALES CONTRACT #{signatureTarget?.record?.contractNumber}</p>
-              <p>Buyer: {signatureTarget?.record?.buyer?.name}</p>
-              <p>Total Value: {signatureTarget?.record?.totalAmount} {signatureTarget?.record?.currencyCode}</p>
-              <p>Incoterm: {signatureTarget?.record?.incoterm}</p>
+              <p className="font-bold text-slate-700 mb-2">SALES CONTRACT #{signatureTarget?.record?.contractNumber || 'N/A'}</p>
+              <p>Buyer: {signatureTarget?.record?.buyer?.name || 'N/A'}</p>
+              <p>Total Value: {signatureTarget?.record?.totalAmount || 0} {signatureTarget?.record?.currencyCode || 'USD'}</p>
+              <p>Incoterm: {signatureTarget?.record?.incoterm || 'N/A'}</p>
               <p className="mt-2 italic">-- Please scroll to review full contract terms --</p>
               <br/><br/><br/><br/><br/>
               <p>End of document.</p>
@@ -924,9 +926,9 @@ const SalesContractTable = () => {
                 label="Mật khẩu xác thực (2FA)"
                 name="password"
                 rules={[{ required: true, message: 'Vui lòng nhập mật khẩu để xác thực chữ ký' }]}
-                extra={<span className="text-xs text-slate-400">Bước bảo mật: Nhập mật khẩu đăng nhập của bạn để chốt hợp đồng.</span>}
+                extra={<span className="text-xs text-red-500 font-medium">Lưu ý: Nhập mật khẩu ĐĂNG NHẬP của tài khoản bạn. Vui lòng KHÔNG copy/dán Hash chứng từ hay Certificate vào đây.</span>}
               >
-                <Input.Password placeholder="Nhập mật khẩu của bạn..." size="large" />
+                <Input.Password placeholder="Nhập mật khẩu đăng nhập của bạn..." size="large" />
               </Form.Item>
 
               <Form.Item label="Ảnh chữ ký điện tử / Con dấu (Không bắt buộc)">

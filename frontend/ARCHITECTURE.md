@@ -24,3 +24,4 @@ This project follows the Next.js App Router structure with feature-oriented UI m
 - `utils` should be deterministic helpers. If it needs `fetch`, `session`, `notification`, or browser globals, it probably belongs elsewhere.
 - `context` and `providers` are intentionally separate: context defines app state contracts, providers wire third-party libraries or root wrappers.
 
+L

@@ -6,8 +6,16 @@ import {
   IsOptional,
   IsString,
 } from 'class-validator';
+import { Transform } from 'class-transformer';
 import { IsEntityId } from '@/common/ids/entity-id.validator';
 import { PortalReceiptType } from '../entities/portal-payment-receipt.entity';
+
+export enum PortalPaymentSource {
+  SEPAY_WEBHOOK = 'SEPAY_WEBHOOK',
+  CUSTOMER_PORTAL_UPLOAD = 'CUSTOMER_PORTAL_UPLOAD',
+  CUSTOMER_QR_INITIATED = 'CUSTOMER_QR_INITIATED',
+  MANUAL_ENTRY = 'MANUAL_ENTRY',
+}
 
 export class CreatePortalPaymentReceiptDto {
   @IsEnum(PortalReceiptType)
@@ -32,9 +40,9 @@ export class CreatePortalPaymentReceiptDto {
   @IsOptional()
   salesContractId?: string;
 
-  @IsEntityId()
-  @IsNotEmpty()
-  fileAsset_id: string;
+  @IsString()
+  @IsOptional()
+  fileAsset_id?: string;
 
   @IsString()
   @IsOptional()
@@ -51,4 +59,32 @@ export class CreatePortalPaymentReceiptDto {
   @IsString()
   @IsOptional()
   note?: string;
+
+  @IsEnum(PortalPaymentSource)
+  @IsOptional()
+  source?: PortalPaymentSource;
+
+  @IsString()
+  @IsOptional()
+  transferReference?: string;
+
+  @IsString()
+  @IsOptional()
+  senderBankName?: string;
+
+  @IsString()
+  @IsOptional()
+  senderAccountNumber?: string;
+
+  @IsString()
+  @IsOptional()
+  senderName?: string;
+
+  @IsString()
+  @IsOptional()
+  swiftCode?: string;
+
+  @Transform(({ value }) => value === 'true' || value === true)
+  @IsOptional()
+  autoApprove?: boolean;
 }

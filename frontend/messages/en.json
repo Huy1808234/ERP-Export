@@ -67,6 +67,7 @@
   "Sidebar": {
     "groups": {
       "main": "Executive Hub",
+      "customerPortal": "Customer Portal",
       "masterData": "Strategic Assets",
       "sales": "Revenue (O2C)",
       "purchase": "Procurement (P2P)",
@@ -78,7 +79,13 @@
       "overview": "Operation Overview",
       "approvals": "Smart Approvals",
       "approvalMatrix": "Approval Matrix",
+      "portalOverview": "Overview",
+      "portalProducts": "Products",
+      "portalOrders": "Orders",
+      "portalFinance": "Finance & Receivables",
+      "portalShipments": "Shipment Tracking",
       "partners": "Global Partners",
+      "customers": "Customers",
       "products": "Product Catalog",
       "inventory": "Live Inventory",
       "inventoryLedger": "Stock History",
@@ -119,7 +126,11 @@
   "Breadcrumb": {
     "home": "Home",
     "dashboard": "Dashboard",
+    "portal": "Customer Portal",
+    "orders": "Orders",
+    "shipments": "Shipments",
     "partners": "Partners",
+    "customers": "Customers",
     "inventory": "Inventory",
     "product": "Product",
     "products": "Products Catalog",
@@ -1575,7 +1586,8 @@
     "description": "Recording goods received into warehouse from purchase orders",
     "createBtn": "New Goods Receipt",
     "filters": {
-      "searchPlaceholder": "Search by GRN number..."
+      "searchPlaceholder": "Search by GRN number...",
+      "statusPlaceholder": "Filter status"
     },
     "modal": {
       "titleCreate": "Create Goods Receipt (GRN) from {poNumber}",
@@ -1654,6 +1666,9 @@
         "qtyMaxError": "Max: {max}",
         "qtyRemainingError": "Cannot exceed the remaining PO quantity",
         "rejectedMaxError": "Rejected quantity cannot exceed received quantity",
+        "rejectedQualityRequired": "Damaged/quarantine goods must have rejected quantity",
+        "rejectedPassMismatch": "Lines with rejected quantity cannot be marked as Pass",
+        "rejectionReasonRequired": "Please enter a reason for rejected goods",
         "qtyPlaceholder": "Input Qty"
       }
     },
@@ -1669,12 +1684,43 @@
     },
     "status": {
       "DRAFT": "Draft",
+      "PENDING_QC": "Pending QC",
       "COMPLETED": "Received",
       "CANCELLED": "Cancelled"
     },
     "tooltips": {
       "viewDetail": "View details",
-      "reverse": "Reverse goods receipt"
+      "reverse": "Reverse goods receipt",
+      "inspectQc": "Inspect QC"
+    },
+    "qc": {
+      "title": "QC Inspection",
+      "submit": "Submit QC",
+      "cancel": "Cancel",
+      "empty": "This goods receipt has no lines requiring QC.",
+      "warningTitle": "QC will create a quality check record",
+      "warningDescription": "Rejected lines remain outside accepted inventory. Use quarantine or reject for lines that already have rejected quantity.",
+      "line": "Goods receipt line",
+      "lineRequired": "Please select a line",
+      "received": "Received",
+      "rejected": "Rejected",
+      "decision": "QC decision",
+      "decisionRequired": "Please select a QC decision",
+      "passDisabledHint": "PASS is disabled because this line already has rejected quantity excluded from inventory.",
+      "decisions": {
+        "PASS": "PASS",
+        "QUARANTINE": "QUARANTINE",
+        "REJECT": "REJECT"
+      },
+      "rejectedQuantity": "Rejected quantity",
+      "rejectedRequired": "Please enter rejected quantity",
+      "defectRate": "Defect rate",
+      "inspectorNotes": "Inspector notes",
+      "notesRequired": "Please enter inspection notes",
+      "correctiveAction": "Corrective action",
+      "defaultCorrectiveAction": "Create supplier claim or return for non-conforming goods.",
+      "success": "QC inspection created",
+      "failed": "Could not create QC inspection"
     },
     "reverseModal": {
       "title": "Reverse {grnNumber}",
@@ -1840,6 +1886,19 @@
     "title": "Purchase Returns",
     "description": "Manage returning defective or non-compliant goods to suppliers",
     "createBtn": "Create Return Note",
+    "stats": {
+      "total": "Total returns",
+      "totalRefundable": "Total refundable",
+      "pendingValue": "Pending vendor",
+      "inTransitValue": "In transit",
+      "draft": "Drafts",
+      "pendingVendor": "Pending",
+      "sent": "Sent",
+      "credited": "Credited",
+      "replaced": "Replaced",
+      "closed": "Closed",
+      "cancelled": "Cancelled"
+    },
     "table": {
       "columns": {
         "returnNumber": "RETURN NO.",
@@ -1847,7 +1906,23 @@
         "poNumber": "RELATED PO NO.",
         "reason": "REASON",
         "actions": "ACTIONS",
-        "status": "STATUS"
+        "status": "STATUS",
+        "vendor": "VENDOR",
+        "itemsCount": "ITEMS",
+        "refundable": "REFUNDABLE",
+        "claimNumber": "CLAIM NO."
+      },
+      "filters": {
+        "searchPlaceholder": "Search by return no., PO, vendor...",
+        "status": "Status",
+        "statusAll": "All",
+        "reasonCode": "Reason code",
+        "dateRange": "Return date range",
+        "sort": "Sort by",
+        "sortNewest": "Newest",
+        "sortReturnDate": "Return date",
+        "sortAmount": "Refund amount",
+        "reset": "Reset"
       },
       "tooltips": {
         "viewDetail": "View details",
@@ -1875,7 +1950,39 @@
         "quantity": "Qty",
         "unit": "Unit",
         "receivedHint": "Received: {quantity}",
-        "addLineBtn": "Add returned item"
+        "addLineBtn": "Add returned item",
+        "reasonCode": "Reason code",
+        "claimNumber": "Vendor claim number",
+        "claimNumberPlaceholder": "e.g. CLM-2024-001",
+        "carrierTrackingRef": "Carrier tracking no.",
+        "carrierTrackingRefPlaceholder": "Shipping line / carrier tracking number",
+        "expectedPickupAt": "Expected pickup date",
+        "lineCondition": "Condition",
+        "lineUnitPrice": "Unit price",
+        "lineRefund": "Refund amount",
+        "lineBatch": "Batch / Lot",
+        "lineBatchPlaceholder": "e.g. LOT-2024-08-A",
+        "lineExpiry": "Expiry date",
+        "lineNote": "Line note",
+        "lineNotePlaceholder": "e.g. Crushed box, torn label",
+        "totalRefundable": "Estimated total refund",
+        "qualityCheck": "QC link"
+      },
+      "reasonCode": {
+        "DEFECTIVE": "Defective",
+        "EXPIRED": "Expired / near expiry",
+        "WRONG_SPEC": "Wrong specification",
+        "DAMAGED_IN_TRANSIT": "Damaged in transit",
+        "OVERSUPPLY": "Over-supply",
+        "QUALITY_REJECT": "QC rejected",
+        "OTHER": "Other"
+      },
+      "condition": {
+        "GOOD": "Usable",
+        "DAMAGED": "Damaged",
+        "DEFECTIVE": "Defective",
+        "EXPIRED": "Expired",
+        "WRONG_SPEC": "Wrong spec"
       },
       "rules": {
         "purchaseOrderRequired": "Please select PO",
@@ -1884,6 +1991,17 @@
         "qtyMax": "Cannot exceed received qty: {max}",
         "unitRequired": "Unit"
       }
+    },
+    "resolveModal": {
+      "title": "Update resolution",
+      "settlementType": "Resolution type",
+      "settlementNote": "Note",
+      "settlementNotePlaceholder": "e.g. Vendor agreed to refund 100%",
+      "creditNoteNumber": "Credit note no.",
+      "creditNoteNumberPlaceholder": "Vendor credit note number",
+      "replacementPoNumber": "Replacement PO no.",
+      "replacementPoNumberPlaceholder": "PO-2024-XXXX replacement",
+      "submit": "Confirm"
     },
     "notifications": {
       "createSuccess": "Return note created successfully",
@@ -1896,7 +2014,8 @@
       "cancelPrompt": "Cancel {id}",
       "cancelReason": "Reason",
       "cancelReasonRequired": "Reason is required",
-      "cancelled": "Purchase return cancelled"
+      "cancelled": "Purchase return cancelled",
+      "loadDetailError": "Unable to load detail"
     },
     "detail": {
       "status": "Status",
@@ -1905,7 +2024,32 @@
       "product": "Product",
       "sku": "SKU",
       "qty": "Qty",
-      "unit": "Unit"
+      "unit": "Unit",
+      "vendor": "Vendor",
+      "returnDate": "Return date",
+      "createdBy": "Created by",
+      "createdAt": "Created at",
+      "sentBy": "Sent by",
+      "sentAt": "Sent at",
+      "resolvedBy": "Resolved by",
+      "resolvedAt": "Resolved at",
+      "claimNumber": "Claim number",
+      "creditNoteNumber": "Credit note",
+      "replacementPo": "Replacement PO",
+      "carrierTracking": "Carrier tracking",
+      "expectedPickupAt": "Expected pickup",
+      "totalRefundable": "Total refundable",
+      "currency": "Currency",
+      "attachments": "Attachments",
+      "itemsTitle": "Returned items",
+      "unitPrice": "Unit price",
+      "lineRefund": "Refund",
+      "condition": "Condition",
+      "batchNumber": "Batch",
+      "expiryDate": "Expiry",
+      "note": "Note",
+      "workflowTitle": "Workflow log",
+      "reasonCode": "Reason code"
     },
     "status": {
       "DRAFT": "DRAFT",
@@ -2100,10 +2244,13 @@
       "lowStock": "OUT OF STOCK ALERTS",
       "lowStockDescription": "SKUs below the safety threshold",
       "productCatalog": "PRODUCT CATALOG",
-      "productCatalogDescription": "Total managed SKUs"
+      "productCatalogDescription": "Total managed SKUs",
+      "quarantineStock": "QUARANTINE STOCK",
+      "quarantineStockDescription": "{count} SKUs currently isolated"
     },
     "filters": {
-      "searchPlaceholder": "Search by name or SKU..."
+      "searchPlaceholder": "Search by name or SKU...",
+      "statusPlaceholder": "Stock status"
     },
     "table": {
       "columns": {
@@ -2116,7 +2263,8 @@
     },
     "stockStatus": {
       "low": "Low stock",
-      "out": "Out of stock"
+      "out": "Out of stock",
+      "quarantine": "Quarantine"
     },
     "transactionTypes": {
       "GOODS_RECEIPT": "Purchase Receipt (GRN)",
@@ -2542,6 +2690,8 @@
       "paymentTermsPlaceholder": "Select payment terms",
       "deliveryDate": "Delivery Date",
       "deliveryDatePlaceholder": "Select delivery date",
+      "validUntil": "Valid Until",
+      "validUntilPlaceholder": "Select expiration date",
       "logisticsDivider": "Logistics Costs (Auto-calculated based on Incoterm)",
       "transport": "Domestic Transport",
       "port": "Port Charges (THC...)",
@@ -4326,7 +4476,8 @@
       "cancel": "Cancel",
       "invoicePdf": "Invoice PDF",
       "createDraft": "Create draft",
-      "cancelDocument": "Cancel document"
+      "cancelDocument": "Cancel document",
+      "continue": "Continue"
     },
     "stats": {
       "documents": "Documents",
@@ -4386,7 +4537,16 @@
       "dueDate": "Due date",
       "taxRate": "Tax rate (%)",
       "note": "Note",
-      "reason": "Reason"
+      "reason": "Reason",
+      "exchangeRate": "Exchange Rate",
+      "bankAccount": "Beneficiary Bank Account",
+      "selectBankAccount": "Select bank account",
+      "notePlaceholder": "Additional terms, payment instructions...",
+      "shipmentSection": "Shipment Selection",
+      "invoiceSection": "Invoice Details",
+      "selectShipmentToPreview": "Select a shipment to preview the invoice",
+      "previewHint": "Invoice preview will update automatically as you fill in the form",
+      "viewExisting": "View existing CI"
     },
     "validation": {
       "selectShipment": "Select shipment",
@@ -4405,6 +4565,48 @@
       "detailFailed": "Cannot load Commercial Invoice detail",
       "downloadFailed": "Cannot download Commercial Invoice PDF",
       "issueBeforeDownload": "Issue the Commercial Invoice before downloading its official PDF"
+    },
+    "warnings": {
+      "noItemsTitle": "No items in shipment",
+      "noItemsDesc": "This shipment has no items. You can still create a blank CI, but it will need manual item entry later.",
+      "shipmentNotShippedTitle": "Shipment not yet shipped",
+      "shipmentNotShippedDesc": "This shipment is not ON_BOARD yet. Consider waiting until cargo is on vessel.",
+      "existingCiTitle": "Commercial Invoice already exists",
+      "existingCiDesc": "A CI {invoiceNumber} already exists for this shipment. Do you want to create another one?",
+      "confirmNoItemsTitle": "Create CI without items?",
+      "confirmNoItemsDesc": "The selected shipment has no items. This CI will need manual line item entry later. Continue?"
+    },
+    "preview": {
+      "title": "Live Preview",
+      "autoUpdate": "Preview updates automatically",
+      "buyer": "Buyer / Consignee",
+      "shipmentRoute": "Shipment Route",
+      "shipment": "Shipment",
+      "description": "Description",
+      "qty": "Qty",
+      "unit": "Unit",
+      "unitPrice": "Unit Price",
+      "total": "Total",
+      "subtotal": "Subtotal",
+      "tax": "Tax",
+      "grandTotal": "GRAND TOTAL",
+      "bankInfo": "Bank Information",
+      "selectBankAccount": "Select a bank account above"
+    },
+    "labels": {
+      "ar": "A/R",
+      "exportDoc": "Export Doc",
+      "status": "Status",
+      "buyer": "Buyer",
+      "shipment": "Shipment",
+      "contract": "Contract",
+      "invoiceDate": "Invoice date",
+      "dueDate": "Due date",
+      "subtotal": "Subtotal",
+      "tax": "Tax",
+      "total": "Total",
+      "totalVnd": "Total VND",
+      "exchangeRate": "Exchange Rate"
     }
   },
   "AdjustmentModal": {
@@ -4440,5 +4642,57 @@
       "success": "Inventory adjusted successfully",
       "error": "Error"
     }
+  },
+  "Signing": {
+    "secureSigning": "Secure buyer signing",
+    "otpVerification": "OTP verification",
+    "signerDetails": "Signer details",
+    "contractSnapshot": "Contract snapshot",
+    "signerName": "Signer name",
+    "title": "Title",
+    "email": "Email",
+    "consent": "Consent",
+    "signContract": "Sign contract",
+    "verify": "Verify",
+    "product": "Product",
+    "quantity": "Quantity",
+    "unitPrice": "Unit price",
+    "lineTotal": "Line total",
+    "incoterm": "Incoterm",
+    "currency": "Currency",
+    "totalValue": "Total value",
+    "deliveryDate": "Delivery date",
+    "paymentTerms": "Payment terms",
+    "documentHash": "Document hash",
+    "otpSentTo": "A 6-digit OTP has been sent to",
+    "otpSentToMasked": "A 6-digit OTP has been sent to your registered email",
+    "checkEmail": "Please check your email and enter the OTP below.",
+    "checkEmailNow": "Check your email now",
+    "otpExpiryNote": "OTP expires in 15 minutes",
+    "linkExpiryNote": "Signing link expires in {days} days",
+    "resendOtp": "Did not receive OTP?",
+    "resendOtpAction": "Resend OTP",
+    "resendSuccess": "New OTP has been sent to your email",
+    "resendError": "Failed to resend OTP. Please try again.",
+    "resendCooldown": "Please wait {seconds}s before requesting a new OTP",
+    "otpMustBe6Digits": "OTP must be 6 digits",
+    "otpVerified": "OTP verified",
+    "signature": "Signature",
+    "certificate": "Certificate",
+    "signedSuccess": "Sales contract signed",
+    "signedSuccessSubtitle": "Certificate {certNo}",
+    "sessionUnavailable": "Signing session unavailable",
+    "sessionUnavailableDesc": "The signing link is invalid, expired, or revoked.",
+    "consentPlaceholder": "I confirm that I am authorized to sign this sales contract and agree to its commercial terms.",
+    "consentRequired": "You must agree to the consent text before signing.",
+    "signerNameRequired": "Signer name is required.",
+    "emailInvalid": "Email is invalid.",
+    "auditInfo": "Audit information",
+    "certificateNumber": "Certificate number",
+    "certificateHash": "Certificate hash",
+    "packetHash": "Audit packet hash",
+    "signerInfo": "Signer information",
+    "ipAddress": "IP address",
+    "signedAt": "Signed at"
   }
 }

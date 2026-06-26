@@ -8,9 +8,14 @@ import { Partner } from '@/modules/partners/entities/partner.entity';
 import { PricingPoliciesModule } from '@/modules/pricing-policies/pricing-policies.module';
 import { Product } from '@/modules/products/entities/product.entity';
 import { ProformaInvoice } from '@/modules/proforma-invoices/entities/proforma-invoice.entity';
+import { Quotation } from '@/modules/quotations/entities/quotation.entity';
 import { SalesContract } from '@/modules/sales-contracts/entities/sales-contract.entity';
 import { Shipment } from '@/modules/shipments/entities/shipment.entity';
+import { User as UserEntity } from '@/modules/users/entities/user.entity';
 import { TradeFinanceModule } from '@/modules/trade-finance/trade-finance.module';
+import { AuditLog } from '@/modules/audit-logs/entities/audit-log.entity';
+import { SalesContractsModule } from '@/modules/sales-contracts/sales-contracts.module';
+import { CustomerController } from './customer.controller';
 import { PortalController } from './portal.controller';
 import { PortalService } from './portal.service';
 import { PortalNotification } from './entities/portal-notification.entity';
@@ -26,9 +31,12 @@ import { PortalSupportTicket } from './entities/portal-support-ticket.entity';
       Inquiry,
       Partner,
       Product,
+      Quotation,
+      UserEntity,
       ProformaInvoice,
       SalesContract,
       Shipment,
+      AuditLog,
       PortalNotification,
       PortalPaymentReceipt,
       PortalSupportMessage,
@@ -37,8 +45,9 @@ import { PortalSupportTicket } from './entities/portal-support-ticket.entity';
     FilesModule,
     PricingPoliciesModule,
     TradeFinanceModule,
+    SalesContractsModule,
   ],
-  controllers: [PortalController],
+  controllers: [PortalController, CustomerController],
   providers: [PortalService],
   exports: [PortalService],
 })

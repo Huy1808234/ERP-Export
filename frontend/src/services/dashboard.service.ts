@@ -63,6 +63,20 @@ export interface DashboardSales {
   shippedPIs: number;
   pendingShipments: number;
   conversionRate: number;
+  pendingInquiries?: number;
+  submittedInquiries?: number;
+  quotedInquiries?: number;
+  recentInquiries?: Array<{
+    _id: string;
+    inquiryNumber?: string | null;
+    customerName: string;
+    customerEmail: string;
+    status: string;
+    lineCount: number;
+    incoterm?: string | null;
+    destinationPort?: string | null;
+    createdAt?: string | Date | null;
+  }>;
   activeShipments: number;
   poGrowth: number;
 }

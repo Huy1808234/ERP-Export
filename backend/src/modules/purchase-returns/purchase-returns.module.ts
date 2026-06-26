@@ -4,6 +4,7 @@ import { PurchaseReturnsController } from './purchase-returns.controller';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import {
   PurchaseReturn,
+  PurchaseReturnAttachment,
   PurchaseReturnItem,
 } from './entities/purchase-return.entity';
 import { Product } from '../products/entities/product.entity';
@@ -17,6 +18,7 @@ import { VendorInvoice } from '../vendor-invoices/entities/vendor-invoice.entity
     TypeOrmModule.forFeature([
       PurchaseReturn,
       PurchaseReturnItem,
+      PurchaseReturnAttachment,
       Product,
       PurchaseOrder,
       VendorInvoice,
@@ -26,5 +28,6 @@ import { VendorInvoice } from '../vendor-invoices/entities/vendor-invoice.entity
   ],
   controllers: [PurchaseReturnsController],
   providers: [PurchaseReturnsService],
+  exports: [PurchaseReturnsService],
 })
 export class PurchaseReturnsModule {}

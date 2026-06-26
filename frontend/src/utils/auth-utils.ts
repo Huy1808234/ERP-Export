@@ -1,4 +1,8 @@
-import { getAccessRoleName, isStaffRole } from "@/lib/access-control";
+import {
+  getAccessRoleName,
+  isDashboardUserRole,
+  isStaffRole,
+} from "@/lib/access-control";
 
 /**
  * List of roles that are allowed to access the administrative dashboard.
@@ -15,4 +19,12 @@ export function isStaff(user: Parameters<typeof getAccessRoleName>[0]): boolean 
   const roleName = getAccessRoleName(user);
 
   return isStaffRole(roleName);
+}
+
+export function isDashboardUser(user: Parameters<typeof getAccessRoleName>[0]): boolean {
+  if (!user) return false;
+
+  const roleName = getAccessRoleName(user);
+
+  return isDashboardUserRole(roleName);
 }

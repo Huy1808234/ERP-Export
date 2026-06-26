@@ -4,7 +4,7 @@ import { IsIn, IsOptional, IsString, MinLength } from 'class-validator';
 const trimString = () =>
   Transform(({ value }: TransformFnParams) => {
     const input: unknown = value;
-    return typeof input === 'string' ? input.trim() : input;
+    return typeof input === 'string' ? value.trim() : input;
   });
 
 export const PURCHASE_RETURN_SETTLEMENT_TYPES = [
@@ -21,6 +21,16 @@ export class ResolvePurchaseReturnDto {
   @trimString()
   @IsString()
   settlementNote?: string | null;
+
+  /** Required when settlementType === 'CREDITED'. */
+  @IsOptional()
+  @IsString()
+  creditNoteNumber?: string | null;
+
+  /** Required when settlementType === 'REPLACED'. */
+  @IsOptional()
+  @IsString()
+  replacementPurchaseOrderId?: string | null;
 }
 
 export class CancelPurchaseReturnDto {

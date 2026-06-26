@@ -140,6 +140,15 @@ interface InitialInquiryData {
   productId?: string;
   quantity?: number;
   product?: Pick<IProduct, 'unitOfMeasure'>;
+  lineItems?: Array<{
+    product_id: string;
+    quantity: number;
+    unitOfMeasure?: string | null;
+    note?: string | null;
+  }>;
+  incoterm?: IncotermKey;
+  destinationPort?: string | null;
+  expectedShipmentDate?: string | null;
   note?: string;
 }
 
@@ -632,10 +641,25 @@ const QuotationFormInner = (props: InnerProps) => {
       }, {}));
     } else if (initialInquiryData) {
       // TECH LEAD: Auto-fill from Inquiry (I2Q Workflow)
+      const inquiryItems = initialInquiryData.lineItems?.length
+        ? initialInquiryData.lineItems.map((item) => ({
+            productId: item.product_id,
+            quantity: item.quantity,
+            unit: item.unitOfMeasure || 'CARTONS',
+            unitPrice: 0,
+            note: item.note || undefined,
+          }))
+        : [{
+            productId: initialInquiryData.productId,
+            quantity: initialInquiryData.quantity,
+            unit: initialInquiryData.product?.unitOfMeasure || 'CARTONS',
+            unitPrice: 0,
+          }];
       form.setFieldsValue({
         customerId: initialInquiryData.customerId || undefined, // Nếu có mapping khách hàng
         currency: 'USD',
-        incoterm: 'FOB',
+        incoterm: initialInquiryData.incoterm || 'FOB',
+        portOfDischarge: initialInquiryData.destinationPort || undefined,
         logisticsFee: 0,
         otherFee: 0,
         domesticTransportCost: 0,
@@ -643,12 +667,7 @@ const QuotationFormInner = (props: InnerProps) => {
         seaFreight: 0,
         insuranceCost: 0,
         issueDate: dayjs(),
-        items: [{
-          productId: initialInquiryData.productId,
-          quantity: initialInquiryData.quantity,
-          unit: initialInquiryData.product?.unitOfMeasure || 'CARTONS',
-          unitPrice: 0,
-        }],
+        items: inquiryItems,
         note: `Được tạo từ Yêu cầu báo giá của: ${initialInquiryData.customerName}\n${initialInquiryData.note || ''}`,
       });
       setManualPriceRows(new Set());
@@ -854,7 +873,7 @@ const QuotationFormInner = (props: InnerProps) => {
           await sendRequest({
             url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/inquiries/${initialInquiryData._id}/status`,
             method: 'PATCH',
-            body: { status: 'PROCESSED' },
+            body: { status: 'QUOTED' },
             headers: { Authorization: `Bearer ${accessToken}` },
           });
         } catch (e) {

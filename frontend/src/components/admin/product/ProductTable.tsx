@@ -25,6 +25,7 @@ import { IProduct } from "@/types/product";
 import type { ColumnsType, TableProps } from 'antd/es/table';
 import { getAccessToken } from '@/lib/auth-token';
 import { useHasMounted } from '@/hooks/useHasMounted';
+import { getAccessRoleName } from '@/lib/access-control';
 import type { Dayjs } from 'dayjs';
 
 const { Text } = Typography;
@@ -139,11 +140,7 @@ const ProductTable = ({ categories }: ProductTableProps) => {
   const { token } = theme.useToken();
   const accessToken = getAccessToken(session);
   const currentUsername = session?.user?.username || session?.user?.name || '';
-  const currentRoleName = String(
-    typeof (session?.user as any)?.role === 'string'
-      ? (session?.user as any)?.role
-      : session?.user?.role?.name || '',
-  ).toUpperCase();
+  const currentRoleName = getAccessRoleName(session?.user);
   const canApproveProductChanges = ['ADMIN', 'SUPER ADMIN', 'SUPER_ADMIN', 'DIRECTOR', 'MANAGER', 'PURCHASING', 'ACCOUNTANT', 'CHIEF_ACCOUNTANT'].includes(currentRoleName);
 
   const [currencyRates, setCurrencyRates] = useState<Record<string, number>>({});

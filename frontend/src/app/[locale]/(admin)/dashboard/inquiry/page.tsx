@@ -49,6 +49,50 @@ const csvEscape = (value: unknown) => {
     return `"${text.replace(/"/g, '""')}"`;
 };
 
+const activeInquiryStatuses = ['SUBMITTED', 'IN_REVIEW', 'PENDING'];
+
+type AdminInquiryLineItem = {
+    product_id?: string | null;
+    productSnapshotName?: string | null;
+    productSnapshotCode?: string | null;
+    unitOfMeasure?: string | null;
+    quantity?: number | string | null;
+    targetPrice?: number | string | null;
+    note?: string | null;
+};
+
+type AdminInquiryRecord = {
+    productId?: string | null;
+    productSnapshotName?: string | null;
+    productSnapshotCode?: string | null;
+    product?: {
+        name?: string | null;
+        vietnameseName?: string | null;
+        englishName?: string | null;
+        sku?: string | null;
+        unitOfMeasure?: string | null;
+    } | null;
+    quantity?: number | string | null;
+    note?: string | null;
+    lineItems?: AdminInquiryLineItem[] | null;
+};
+
+const getInquiryLineItems = (inquiry: AdminInquiryRecord): AdminInquiryLineItem[] => {
+    if (Array.isArray(inquiry.lineItems) && inquiry.lineItems.length) {
+        return inquiry.lineItems;
+    }
+
+    return [{
+        product_id: inquiry.productId,
+        productSnapshotName: inquiry.productSnapshotName || inquiry.product?.name || inquiry.product?.vietnameseName || inquiry.product?.englishName,
+        productSnapshotCode: inquiry.productSnapshotCode || inquiry.product?.sku,
+        unitOfMeasure: inquiry.product?.unitOfMeasure,
+        quantity: inquiry.quantity,
+        targetPrice: null,
+        note: inquiry.note,
+    }];
+};
+
 const InquiryPage = () => {
     const { data: session } = useSession();
     const accessToken = getAccessToken(session);
@@ -138,14 +182,13 @@ const InquiryPage = () => {
         if (!accessToken) return;
         try {
             const res = await sendRequest<IBackendRes<any>>({
-                url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/inquiries?status=PENDING&pageSize=1`,
+                url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/inquiries?current=1&pageSize=10000`,
                 method: 'GET',
                 headers: { Authorization: `Bearer ${accessToken}` },
             });
             const result = res?.data?.data ?? res?.data;
-            if (result?.total !== undefined) {
-                setPendingCount(result.total);
-            }
+            const rows = result?.items ?? (Array.isArray(result) ? result : []);
+            setPendingCount(rows.filter((item: { status?: string }) => activeInquiryStatuses.includes(item.status || '')).length);
         } catch {}
     }, [accessToken]);
 
@@ -240,16 +283,21 @@ const InquiryPage = () => {
                 t('drawer.note'),
                 t('table.date'),
             ];
-            const rows = exportRows.map((item: any) => [
+            const rows = exportRows.map((item: any) => {
+                const lineItems = getInquiryLineItems(item);
+                const totalQuantity = lineItems.reduce((sum, line) => sum + Number(line.quantity || 0), 0);
+
+                return [
                 item.customerName,
                 item.customerEmail,
                 item.customerPhone,
-                item.productSnapshotName || item.product?.name || item.product?.vietnameseName || item.product?.englishName || '',
-                item.quantity,
+                lineItems.map((line) => line.productSnapshotCode || line.productSnapshotName || '').filter(Boolean).join(' / '),
+                totalQuantity,
                 item.status === 'PROCESSED' ? t('table.processed') : item.status === 'REJECTED' ? t('table.rejected') : t('table.pending'),
                 item.note,
                 item.createdAt ? dayjs.utc(item.createdAt).local().format('DD/MM/YYYY HH:mm:ss') : '',
-            ]);
+                ];
+            });
 
             const csv = [headers, ...rows]
                 .map((row) => row.map(csvEscape).join(','))
@@ -288,19 +336,32 @@ const InquiryPage = () => {
         {
             title: t('table.product'),
             key: 'product',
-            render: (r: any) => (
-                <Space size="small">
-                    <ShoppingOutlined style={{ color: '#8b5cf6' }} />
-                    <Text strong>{r.productSnapshotName || r.product?.name || t('table.deletedProduct')}</Text>
-                </Space>
-            )
+            render: (r: any) => {
+                const lineItems = getInquiryLineItems(r);
+                const firstLine = lineItems[0];
+
+                return (
+                    <Space size="small">
+                        <ShoppingOutlined style={{ color: '#8b5cf6' }} />
+                        <Space orientation="vertical" size={0}>
+                            <Text strong>{firstLine?.productSnapshotName || t('table.deletedProduct')}</Text>
+                            <Text type="secondary" style={{ fontSize: 12 }}>
+                                {firstLine?.productSnapshotCode || '-'}{lineItems.length > 1 ? ` +${lineItems.length - 1} SKU` : ''}
+                            </Text>
+                        </Space>
+                    </Space>
+                );
+            }
         },
         {
             title: t('table.quantity'),
             dataIndex: 'quantity',
             key: 'quantity',
             sorter: (a: any, b: any) => Number(a.quantity) - Number(b.quantity),
-            render: (v: number) => <Text strong>{Number(v).toLocaleString()}</Text>
+            render: (_value: number, record: any) => {
+                const totalQuantity = getInquiryLineItems(record).reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+                return <Text strong>{Number(totalQuantity).toLocaleString()}</Text>;
+            }
         },
         {
             title: t('table.date'),
@@ -321,12 +382,20 @@ const InquiryPage = () => {
             render: (status: string) => {
                 let color = 'gold';
                 let icon = <ClockCircleOutlined />;
-                let text = t('table.pending');
+                let text = status === 'SUBMITTED' ? 'Submitted' : t('table.pending');
 
-                if (status === 'PROCESSED') {
+                if (status === 'IN_REVIEW') {
+                    color = 'blue';
+                    icon = <ClockCircleOutlined />;
+                    text = 'In Review';
+                } else if (status === 'QUOTED' || status === 'PROCESSED') {
                     color = 'green';
                     icon = <CheckCircleOutlined />;
-                    text = t('table.processed');
+                    text = status === 'QUOTED' ? 'Quoted' : t('table.processed');
+                } else if (status === 'CLOSED') {
+                    color = 'default';
+                    icon = <CheckCircleOutlined />;
+                    text = 'Closed';
                 } else if (status === 'REJECTED') {
                     color = 'red';
                     icon = <CloseCircleOutlined />;
@@ -400,6 +469,10 @@ const InquiryPage = () => {
                                 value={filterStatus}
                                 onChange={(val) => { setFilterStatus(val); setCurrent(1); }}
                                 options={[
+                                    { label: 'Submitted', value: 'SUBMITTED' },
+                                    { label: 'In Review', value: 'IN_REVIEW' },
+                                    { label: 'Quoted', value: 'QUOTED' },
+                                    { label: 'Closed', value: 'CLOSED' },
                                     { label: t('table.pending'), value: 'PENDING' },
                                     { label: t('table.processed'), value: 'PROCESSED' },
                                     { label: t('table.rejected'), value: 'REJECTED' },
@@ -459,7 +532,12 @@ const InquiryPage = () => {
                 }}
                 extra={
                     <Space>
-                        {selectedInquiry?.status === 'PENDING' && (
+                        {['SUBMITTED', 'PENDING'].includes(selectedInquiry?.status) && (
+                            <Button onClick={() => handleUpdateStatus(selectedInquiry._id, 'IN_REVIEW')}>
+                                In Review
+                            </Button>
+                        )}
+                        {activeInquiryStatuses.includes(selectedInquiry?.status) && (
                             <Button danger onClick={() => handleUpdateStatus(selectedInquiry._id, 'REJECTED')}>
                                 {t('drawer.reject')}
                             </Button>
@@ -479,21 +557,35 @@ const InquiryPage = () => {
                         </Card>
 
                         <Card size="small" title={t('drawer.requestedProduct')} style={detailCardStyle}>
-                            <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
-                                <div style={productIconStyle}>
-                                    <ShoppingOutlined style={{ fontSize: 24, color: '#8b5cf6' }} />
-                                </div>
-                                <div>
-                                    <Text strong style={{ fontSize: 16, display: 'block' }}>{selectedInquiry.productSnapshotName || selectedInquiry.product?.name || t('table.deletedProduct')}</Text>
-                                    <Text type="secondary">{t('drawer.quantity')}: <Text strong>{Number(selectedInquiry.quantity).toLocaleString()}</Text></Text>
-                                </div>
-                            </div>
+                            <Space orientation="vertical" size={12} style={{ width: '100%' }}>
+                                {getInquiryLineItems(selectedInquiry).map((item) => (
+                                    <div key={`${item.product_id}-${item.productSnapshotCode}`} style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+                                        <div style={productIconStyle}>
+                                            <ShoppingOutlined style={{ fontSize: 24, color: '#8b5cf6' }} />
+                                        </div>
+                                        <div>
+                                            <Text strong style={{ fontSize: 16, display: 'block' }}>{item.productSnapshotName || t('table.deletedProduct')}</Text>
+                                            <Text type="secondary">
+                                                {item.productSnapshotCode || '-'} / {t('drawer.quantity')}: <Text strong>{Number(item.quantity || 0).toLocaleString()} {item.unitOfMeasure || ''}</Text>
+                                                {item.targetPrice ? <> / Target: <Text strong>{Number(item.targetPrice).toLocaleString()} {selectedInquiry.targetPriceCurrency || ''}</Text></> : null}
+                                            </Text>
+                                        </div>
+                                    </div>
+                                ))}
+                            </Space>
+                            <Descriptions column={1} size="small" style={{ marginTop: 16 }}>
+                                <Descriptions.Item label="Incoterms">{selectedInquiry.incoterm || '-'}</Descriptions.Item>
+                                <Descriptions.Item label="Destination port">{selectedInquiry.destinationPort || '-'}</Descriptions.Item>
+                                <Descriptions.Item label="Expected shipment">
+                                    {selectedInquiry.expectedShipmentDate ? dayjs.utc(selectedInquiry.expectedShipmentDate).local().format('DD/MM/YYYY') : '-'}
+                                </Descriptions.Item>
+                            </Descriptions>
                             <div style={noteBoxStyle}>
                                 <Text italic>{selectedInquiry.note || t('drawer.noNote')}</Text>
                             </div>
                         </Card>
 
-                        {selectedInquiry.status === 'PENDING' ? (
+                        {activeInquiryStatuses.includes(selectedInquiry.status) ? (
                             <div style={{ marginTop: 24 }}>
                                 <Button 
                                     type="primary" 
@@ -618,8 +710,8 @@ const InquiryPage = () => {
                             </div>
                         ) : (
                             <div style={{ textAlign: 'center', padding: '24px' }}>
-                                <Tag color={selectedInquiry.status === 'PROCESSED' ? 'green' : 'red'} style={{ fontSize: 14, padding: '8px 16px', borderRadius: 8 }}>
-                                    {selectedInquiry.status === 'PROCESSED' ? t('drawer.statusProcessed') : t('drawer.statusRejected')}
+                                <Tag color={['QUOTED', 'PROCESSED', 'CLOSED'].includes(selectedInquiry.status) ? 'green' : 'red'} style={{ fontSize: 14, padding: '8px 16px', borderRadius: 8 }}>
+                                    {selectedInquiry.status === 'QUOTED' ? 'Quoted' : selectedInquiry.status === 'CLOSED' ? 'Closed' : selectedInquiry.status === 'PROCESSED' ? t('drawer.statusProcessed') : t('drawer.statusRejected')}
                                 </Tag>
                             </div>
                         )}

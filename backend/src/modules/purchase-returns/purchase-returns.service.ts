@@ -7,12 +7,14 @@ import { InjectRepository } from '@nestjs/typeorm';
 import {
   DataSource,
   EntityManager,
-  FindOptionsWhere,
   Repository,
 } from 'typeorm';
 import {
   PurchaseReturn,
+  PurchaseReturnAttachment,
   PurchaseReturnItem,
+  PurchaseReturnLineCondition,
+  PurchaseReturnReasonCode,
   PurchaseReturnStatus,
 } from './entities/purchase-return.entity';
 import { Product } from '../products/entities/product.entity';
@@ -37,12 +39,23 @@ type PurchaseReturnListQuery = {
   purchaseOrderId?: string;
   qualityCheckId?: string;
   claimNumber?: string;
+  vendorId?: string;
+  reasonCode?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  search?: string;
   sort?: string;
 };
 
 type ReturnedQuantityRow = {
   productId: string;
   returnedQuantity: string | number | null;
+};
+
+type ReturnTotals = {
+  totalQuantity: number;
+  totalRefundableAmount: number;
+  byProduct: Map<string, number>;
 };
 
 @Injectable()
@@ -90,6 +103,7 @@ export class PurchaseReturnsService {
 
     const purchaseOrder = await manager.findOne(PurchaseOrder, {
       where: { _id: purchaseOrderId },
+      relations: ['vendor'],
     });
     if (!purchaseOrder) {
       throw new NotFoundException('Purchase Order not found');
@@ -216,13 +230,55 @@ export class PurchaseReturnsService {
     }
   }
 
+  private computeRefundTotals(
+    dto: CreatePurchaseReturnDto,
+    purchaseOrder: PurchaseOrder | null,
+  ): ReturnTotals {
+    let totalQuantity = 0;
+    let totalRefundableAmount = 0;
+    const byProduct = new Map<string, number>();
+
+    for (const item of dto.items) {
+      const quantity = Number(item.quantity);
+      totalQuantity += quantity;
+
+      let unitPrice = Number(item.unitPrice ?? 0);
+      if (!unitPrice && purchaseOrder) {
+        const poItem = this.getSinglePoItemForProduct(
+          purchaseOrder,
+          item.productId,
+        );
+        unitPrice = Number(poItem?.unitPrice ?? 0);
+      }
+      const lineRefund = +(unitPrice * quantity).toFixed(2);
+      totalRefundableAmount += lineRefund;
+      byProduct.set(
+        item.productId,
+        (byProduct.get(item.productId) || 0) + quantity,
+      );
+    }
+
+    return {
+      totalQuantity: +totalQuantity.toFixed(2),
+      totalRefundableAmount: +totalRefundableAmount.toFixed(2),
+      byProduct,
+    };
+  }
+
   private async findOneInManager(
     manager: EntityManager,
     recordId: string,
   ): Promise<PurchaseReturn> {
     const purchaseReturn = await manager.findOne(PurchaseReturn, {
       where: { _id: recordId },
-      relations: ['items', 'items.product', 'purchaseOrder'],
+      relations: [
+        'items',
+        'items.product',
+        'attachments',
+        'purchaseOrder',
+        'purchaseOrder.vendor',
+        'replacementPurchaseOrder',
+      ],
     });
     if (!purchaseReturn) {
       throw new NotFoundException('Purchase return not found');
@@ -245,6 +301,9 @@ export class PurchaseReturnsService {
     purchaseReturn.items = await manager.find(PurchaseReturnItem, {
       where: { purchaseReturnId: purchaseReturn._id },
       relations: ['product'],
+    });
+    purchaseReturn.attachments = await manager.find(PurchaseReturnAttachment, {
+      where: { purchaseReturnId: purchaseReturn._id },
     });
     purchaseReturn.purchaseOrder = await this.loadPurchaseOrderWithItems(
       manager,
@@ -272,6 +331,55 @@ export class PurchaseReturnsService {
     return count > 0;
   }
 
+  /**
+   * Aggregated stats used by dashboard tiles / list filters.
+   */
+  async getStats(): Promise<{
+    total: number;
+    byStatus: Record<PurchaseReturnStatus, number>;
+    totalRefundableAmount: number;
+    pendingVendorValue: number;
+    inTransitValue: number;
+    byReasonCode: Record<PurchaseReturnReasonCode, number>;
+  }> {
+    const all = await this.purchaseReturnRepository.find({
+      select: ['status', 'totalRefundableAmount', 'reasonCode'],
+    });
+    const byStatus = Object.values(PurchaseReturnStatus).reduce(
+      (acc, s) => ({ ...acc, [s]: 0 }),
+      {} as Record<PurchaseReturnStatus, number>,
+    );
+    const byReasonCode = Object.values(PurchaseReturnReasonCode).reduce(
+      (acc, c) => ({ ...acc, [c]: 0 }),
+      {} as Record<PurchaseReturnReasonCode, number>,
+    );
+    let totalRefundableAmount = 0;
+    let pendingVendorValue = 0;
+    let inTransitValue = 0;
+
+    for (const row of all) {
+      byStatus[row.status] = (byStatus[row.status] || 0) + 1;
+      if (row.reasonCode) byReasonCode[row.reasonCode] += 1;
+      const amount = Number(row.totalRefundableAmount || 0);
+      totalRefundableAmount += amount;
+      if (row.status === PurchaseReturnStatus.PENDING_VENDOR) {
+        pendingVendorValue += amount;
+      }
+      if (row.status === PurchaseReturnStatus.SENT) {
+        inTransitValue += amount;
+      }
+    }
+
+    return {
+      total: all.length,
+      byStatus,
+      totalRefundableAmount: +totalRefundableAmount.toFixed(2),
+      pendingVendorValue: +pendingVendorValue.toFixed(2),
+      inTransitValue: +inTransitValue.toFixed(2),
+      byReasonCode,
+    };
+  }
+
   async create(
     createDto: CreatePurchaseReturnDto,
     user: IUser,
@@ -290,6 +398,8 @@ export class PurchaseReturnsService {
       );
       await this.validateReturnItems(manager, createDto, purchaseOrder);
 
+      const totals = this.computeRefundTotals(createDto, purchaseOrder);
+
       const returnNumber = `RET-${Date.now()}`;
       const purchaseReturn = manager.create(PurchaseReturn, {
         returnNumber,
@@ -298,21 +408,61 @@ export class PurchaseReturnsService {
         claimNumber: createDto.claimNumber ?? null,
         status: PurchaseReturnStatus.DRAFT,
         returnDate: this.parseReturnDate(createDto.returnDate),
+        reasonCode: createDto.reasonCode ?? null,
         reason: createDto.reason?.trim() || null,
+        carrierTrackingRef: createDto.carrierTrackingRef?.trim() || null,
+        expectedPickupAt: createDto.expectedPickupAt
+          ? new Date(createDto.expectedPickupAt)
+          : null,
+        currency: purchaseOrder?.currency || 'VND',
+        totalRefundableAmount: totals.totalRefundableAmount,
         createdByUsername: user.username,
       });
 
       const savedReturn = await manager.save(PurchaseReturn, purchaseReturn);
 
-      const returnItems = createDto.items.map((item) =>
-        manager.create(PurchaseReturnItem, {
-          purchaseReturnId: savedReturn._id,
-          productId: item.productId,
-          quantity: Number(item.quantity),
-          unit: item.unit || null,
-        }),
-      );
+      const returnItems: PurchaseReturnItem[] = [];
+      for (const item of createDto.items) {
+        const poItem = this.getSinglePoItemForProduct(
+          purchaseOrder,
+          item.productId,
+        );
+        const unitPrice = Number(
+          item.unitPrice ?? poItem?.unitPrice ?? 0,
+        );
+        const quantity = Number(item.quantity);
+        returnItems.push(
+          manager.create(PurchaseReturnItem, {
+            purchaseReturnId: savedReturn._id,
+            productId: item.productId,
+            quantity,
+            unit: item.unit || poItem?.unit || null,
+            unitPrice,
+            lineRefundAmount: +(unitPrice * quantity).toFixed(2),
+            condition:
+              item.condition || PurchaseReturnLineCondition.DAMAGED,
+            batchNumber: item.batchNumber?.trim() || null,
+            expiryDate: item.expiryDate ? new Date(item.expiryDate) : null,
+            note: item.note?.trim() || null,
+          }),
+        );
+      }
       await manager.save(PurchaseReturnItem, returnItems);
+
+      if (createDto.attachments?.length) {
+        const attachments = createDto.attachments.map((a) =>
+          manager.create(PurchaseReturnAttachment, {
+            purchaseReturnId: savedReturn._id,
+            fileUrl: a.fileUrl,
+            fileName: a.fileName ?? null,
+            mimeType: a.mimeType ?? null,
+            fileSize: a.fileSize ?? null,
+            category: a.category || 'EVIDENCE',
+            uploadedByUsername: user.username,
+          }),
+        );
+        await manager.save(PurchaseReturnAttachment, attachments);
+      }
 
       return this.findOneInManager(manager, savedReturn._id);
     });
@@ -325,6 +475,25 @@ export class PurchaseReturnsService {
         throw new BadRequestException(
           'Only draft purchase returns can be submitted',
         );
+      }
+      if (!purchaseReturn.items?.length) {
+        throw new BadRequestException(
+          'Purchase return must have at least one item before submitting',
+        );
+      }
+      // Each line must have a positive quantity and a known product.
+      for (const item of purchaseReturn.items) {
+        const qty = Number(item.quantity || 0);
+        if (!Number.isFinite(qty) || qty <= 0) {
+          throw new BadRequestException(
+            `Item ${item.productId} has invalid quantity ${qty}`,
+          );
+        }
+        if (!item.productId) {
+          throw new BadRequestException(
+            'Every line must reference a product before submitting',
+          );
+        }
       }
 
       purchaseReturn.status = PurchaseReturnStatus.PENDING_VENDOR;
@@ -354,6 +523,14 @@ export class PurchaseReturnsService {
       if (!purchaseReturn.items?.length) {
         throw new BadRequestException('Purchase return has no items');
       }
+      for (const item of purchaseReturn.items) {
+        const qty = Number(item.quantity || 0);
+        if (!Number.isFinite(qty) || qty <= 0) {
+          throw new BadRequestException(
+            `Item ${item.productId} has invalid quantity ${qty}`,
+          );
+        }
+      }
       if (!purchaseReturn.purchaseOrder) {
         throw new BadRequestException(
           'Purchase return must be linked to a Purchase Order before sending',
@@ -371,17 +548,26 @@ export class PurchaseReturnsService {
           throw new BadRequestException(`Product ${item.productId} not found`);
         }
 
-        const poItem = this.getSinglePoItemForProduct(
-          purchaseReturn.purchaseOrder,
-          item.productId,
-        );
         const partnerId =
           purchaseReturn.purchaseOrder?.vendorId ||
           product.preferredSupplierId ||
           undefined;
-        const unitPrice = Number(
-          poItem?.unitPrice ?? product.purchasePriceVnd ?? 0,
-        );
+        // Prefer the snapshot stored at creation time so accounting matches
+        // the document the user signed off on. Fall back to the live PO
+        // price only for legacy rows written before this column existed.
+        const lineRefund = Number(item.lineRefundAmount || 0);
+        const unitPrice =
+          lineRefund > 0
+            ? +(lineRefund / Number(item.quantity || 1)).toFixed(4)
+            : Number(
+                item.unitPrice ||
+                  this.getSinglePoItemForProduct(
+                    purchaseReturn.purchaseOrder,
+                    item.productId,
+                  )?.unitPrice ||
+                  product.purchasePriceVnd ||
+                  0,
+              );
 
         const ledger = await this.inventoryService.executeInventoryTransaction(
           item.productId,
@@ -462,6 +648,76 @@ export class PurchaseReturnsService {
         );
       }
 
+      // Type-specific requirements for downstream audit/reporting.
+      if (dto.settlementType === 'CREDITED' && !dto.creditNoteNumber) {
+        throw new BadRequestException(
+          'creditNoteNumber is required when settlementType is CREDITED',
+        );
+      }
+      if (
+        dto.settlementType === 'REPLACED' &&
+        !dto.replacementPurchaseOrderId
+      ) {
+        throw new BadRequestException(
+          'replacementPurchaseOrderId is required when settlementType is REPLACED',
+        );
+      }
+      if (dto.settlementType === 'REPLACED' && dto.replacementPurchaseOrderId) {
+        const replacementPo = await manager.findOne(PurchaseOrder, {
+          where: { _id: dto.replacementPurchaseOrderId },
+        });
+        if (!replacementPo) {
+          throw new NotFoundException('Replacement Purchase Order not found');
+        }
+        // Guard: a return cannot be replaced by the same PO it returns from.
+        if (replacementPo._id === purchaseReturn.purchaseOrderId) {
+          throw new BadRequestException(
+            'Replacement PO must be different from the original PO',
+          );
+        }
+        // Guard: the replacement PO must belong to the same vendor as the
+        // original (otherwise the cross-vendor return has no accounting
+        // story).
+        if (
+          purchaseReturn.purchaseOrder?.vendorId &&
+          replacementPo.vendorId &&
+          purchaseReturn.purchaseOrder.vendorId !== replacementPo.vendorId
+        ) {
+          throw new BadRequestException(
+            'Replacement PO must reference the same vendor as the original PO',
+          );
+        }
+        // Guard: do not let a single replacement PO be linked to two
+        // different returns.
+        const conflict = await manager.findOne(PurchaseReturn, {
+          where: {
+            replacementPurchaseOrderId: replacementPo._id,
+            status: PurchaseReturnStatus.REPLACED,
+          },
+        });
+        if (conflict && conflict._id !== purchaseReturn._id) {
+          throw new BadRequestException(
+            `Replacement PO ${replacementPo.poNumber} is already linked to return ${conflict.returnNumber}`,
+          );
+        }
+        purchaseReturn.replacementPurchaseOrderId = replacementPo._id;
+      }
+      if (dto.settlementType === 'CREDITED' && dto.creditNoteNumber) {
+        // Guard: credit note number must be unique across all CREDITED returns.
+        const duplicate = await manager.findOne(PurchaseReturn, {
+          where: {
+            creditNoteNumber: dto.creditNoteNumber.trim(),
+            status: PurchaseReturnStatus.CREDITED,
+          },
+        });
+        if (duplicate && duplicate._id !== purchaseReturn._id) {
+          throw new BadRequestException(
+            `Credit note ${dto.creditNoteNumber} is already linked to return ${duplicate.returnNumber}`,
+          );
+        }
+        purchaseReturn.creditNoteNumber = dto.creditNoteNumber.trim();
+      }
+
       purchaseReturn.status = dto.settlementType as PurchaseReturnStatus;
       purchaseReturn.settlementType = dto.settlementType;
       purchaseReturn.settlementNote = this.buildWorkflowNote(
@@ -520,27 +776,80 @@ export class PurchaseReturnsService {
     meta: { current: number; pageSize: number; pages: number; total: number };
     results: PurchaseReturn[];
   }> {
-    const where: FindOptionsWhere<PurchaseReturn> = {};
-    if (query.status) where.status = query.status as PurchaseReturnStatus;
-    if (query.purchaseOrderId) where.purchaseOrderId = query.purchaseOrderId;
-    if (query.qualityCheckId) where.qualityCheckId = query.qualityCheckId;
-    if (query.claimNumber) where.claimNumber = query.claimNumber;
+    const baseQb = this.purchaseReturnRepository.createQueryBuilder('pr');
+
+    if (query.status) {
+      baseQb.andWhere('pr.status = :status', { status: query.status });
+    }
+    if (query.purchaseOrderId) {
+      baseQb.andWhere('pr.purchaseOrderId = :purchaseOrderId', {
+        purchaseOrderId: query.purchaseOrderId,
+      });
+    }
+    if (query.qualityCheckId) {
+      baseQb.andWhere('pr.qualityCheckId = :qualityCheckId', {
+        qualityCheckId: query.qualityCheckId,
+      });
+    }
+    if (query.claimNumber) {
+      baseQb.andWhere('pr.claimNumber = :claimNumber', {
+        claimNumber: query.claimNumber,
+      });
+    }
+    if (query.vendorId) {
+      baseQb.andWhere(
+        'pr.purchaseOrderId IN (SELECT _id FROM purchase_orders WHERE "vendorId" = :vendorId)',
+        { vendorId: query.vendorId },
+      );
+    }
+    if (query.reasonCode) {
+      baseQb.andWhere('pr.reasonCode = :reasonCode', {
+        reasonCode: query.reasonCode,
+      });
+    }
+    if (query.dateFrom) {
+      baseQb.andWhere('pr.returnDate >= :dateFrom', { dateFrom: query.dateFrom });
+    }
+    if (query.dateTo) {
+      baseQb.andWhere('pr.returnDate <= :dateTo', { dateTo: query.dateTo });
+    }
+    if (query.search) {
+      const keyword = `%${query.search.trim()}%`;
+      baseQb.andWhere(
+        '(pr.returnNumber ILIKE :kw OR pr.reason ILIKE :kw OR pr.claimNumber ILIKE :kw OR pr.purchaseOrderId IN (SELECT _id FROM purchase_orders WHERE "poNumber" ILIKE :kw) OR pr.purchaseOrderId IN (SELECT _id FROM purchase_orders WHERE "vendorId" IN (SELECT _id FROM partners WHERE name ILIKE :kw)))',
+        { kw: keyword },
+      );
+    }
+
+    // Count must be done on a SEPARATE query (no joins) to avoid
+    // cartesian-product duplicates inflating the total.
+    const total = await baseQb.clone().getCount();
 
     const normalizedCurrent = Number(current || 1);
     const normalizedPageSize = Number(pageSize || 10);
     const offset = (normalizedCurrent - 1) * normalizedPageSize;
-    const order =
-      query.sort === 'returnDate'
-        ? { returnDate: 'ASC' as const }
-        : { createdAt: 'DESC' as const };
 
-    const [result, total] = await this.purchaseReturnRepository.findAndCount({
-      where,
-      take: normalizedPageSize,
-      skip: offset,
-      order,
-      relations: ['items', 'items.product', 'purchaseOrder'],
-    });
+    if (query.sort === 'returnDate') {
+      baseQb.orderBy('pr.returnDate', 'ASC');
+    } else if (query.sort === 'amount') {
+      baseQb.orderBy('pr.totalRefundableAmount', 'DESC');
+    } else {
+      baseQb.orderBy('pr.createdAt', 'DESC');
+    }
+
+    // Pagination + joins on the data query. We use distinct() so the page
+    // also collapses to one row per return (otherwise limit cuts mid-group).
+    baseQb
+      .leftJoinAndSelect('pr.purchaseOrder', 'purchaseOrder')
+      .leftJoinAndSelect('purchaseOrder.vendor', 'vendor')
+      .leftJoinAndSelect('pr.replacementPurchaseOrder', 'replacementPo')
+      .leftJoinAndSelect('pr.items', 'items')
+      .leftJoinAndSelect('items.product', 'product')
+      .distinct(true)
+      .take(normalizedPageSize)
+      .skip(offset);
+
+    const result = await baseQb.getMany();
 
     return {
       meta: {

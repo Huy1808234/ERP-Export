@@ -16,6 +16,7 @@ import { PortsService } from './ports.service';
 
 type RequestUser = {
   username?: string;
+  roleName?: string | null;
 };
 
 @Controller('ports')
@@ -29,9 +30,16 @@ export class PortsController {
   }
 
   @Get()
-  @Roles('ADMIN', 'MANAGER', 'SALES_EXPORT', 'ACCOUNTANT', 'LOGISTICS')
-  findAll(@Query() query: QueryPortDto) {
-    return this.portsService.findAll(query);
+  @Roles(
+    'ADMIN',
+    'MANAGER',
+    'SALES_EXPORT',
+    'ACCOUNTANT',
+    'LOGISTICS',
+    'CUSTOMER',
+  )
+  findAll(@Query() query: QueryPortDto, @User() user?: RequestUser) {
+    return this.portsService.findAll(query, user);
   }
 
   @Get(':_id')

@@ -5,6 +5,7 @@ type PostLoginRedirectInput = {
   callbackUrl?: string | null;
   locale?: string;
   isStaffUser: boolean;
+  roleName?: string | null;
 };
 
 const normalizeLocale = (locale?: string): string => {
@@ -74,6 +75,7 @@ export const getPostLoginRedirectPath = ({
   callbackUrl,
   locale,
   isStaffUser,
+  roleName,
 }: PostLoginRedirectInput): string => {
   const safeLocale = normalizeLocale(locale);
   const safeCallbackPath = getSafeInternalRedirectPath(callbackUrl, locale);
@@ -81,11 +83,19 @@ export const getPostLoginRedirectPath = ({
     const callbackPathname = new URL(safeCallbackPath, REDIRECT_BASE_URL).pathname;
 
     if (isStaffUser) {
-      return isGuestHomePath(callbackPathname) ? `/${safeLocale}/dashboard` : safeCallbackPath;
+      if (isGuestHomePath(callbackPathname)) {
+        // If it's a customer, redirect to /dashboard/portal, otherwise /dashboard
+        return roleName === 'CUSTOMER' ? `/${safeLocale}/dashboard/portal` : `/${safeLocale}/dashboard`;
+      }
+      return safeCallbackPath;
     }
 
     return isDashboardPath(callbackPathname) ? `/${safeLocale}` : safeCallbackPath;
   }
 
-  return isStaffUser ? `/${safeLocale}/dashboard` : `/${safeLocale}`;
+  if (isStaffUser) {
+    return roleName === 'CUSTOMER' ? `/${safeLocale}/dashboard/portal` : `/${safeLocale}/dashboard`;
+  }
+
+  return `/${safeLocale}`;
 };

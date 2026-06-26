@@ -146,6 +146,7 @@ type SignatureInvitationResponse = {
   signerEmailMasked: string | null;
   status: ContractSignatureInvitationStatus;
   expiresAt: Date;
+  otpExpiresAt: Date | null;
   sentAt: Date | null;
   openedAt: Date | null;
   verifiedAt: Date | null;
@@ -449,6 +450,7 @@ export class SalesContractsService {
       signerEmailMasked: this.maskEmail(invitation.signerEmail),
       status: invitation.status,
       expiresAt: invitation.expiresAt,
+      otpExpiresAt: invitation.otpExpiresAt,
       sentAt: invitation.sentAt,
       openedAt: invitation.openedAt,
       verifiedAt: invitation.verifiedAt,
@@ -564,9 +566,12 @@ export class SalesContractsService {
       ? manager.getRepository(ContractSignatureInvitation)
       : this.signatureInvitationRepository;
 
+    // Decode URL-encoded token (Next.js/NestJS may double-encode special chars)
+    const decodedToken = decodeURIComponent(token);
+
     if (lock) {
       const lockedInvitation = await repository.findOne({
-        where: { tokenHash: this.hashSecret(token) },
+        where: { tokenHash: this.hashSecret(decodedToken) },
         lock: { mode: 'pessimistic_write' as const },
       });
 
@@ -587,7 +592,7 @@ export class SalesContractsService {
     }
 
     const invitation = await repository.findOne({
-      where: { tokenHash: this.hashSecret(token) },
+      where: { tokenHash: this.hashSecret(decodedToken) },
       relations: this.getSignatureInvitationRelations(),
     });
 
@@ -637,6 +642,88 @@ export class SalesContractsService {
     }
   }
 
+  private async deliverInvitationEmail(
+    invitation: ContractSignatureInvitation,
+    contract: SalesContract,
+    signingUrl: string,
+  ): Promise<SignatureDeliveryStatus> {
+    if (!invitation.signerEmail) return 'EMAIL_SKIPPED';
+
+    const expiryDate = new Date(invitation.expiresAt);
+    const formattedExpiry = expiryDate.toLocaleDateString('vi-VN', {
+      day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit',
+    }) + ' (GMT+7)';
+
+    try {
+      await this.mailerService.sendMail({
+        to: invitation.signerEmail,
+        subject: `Yêu cầu ký hợp đồng: ${contract.contractNumber}`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <div style="background: #1a56db; padding: 20px 24px; color: white;">
+              <h2 style="margin: 0;">Yêu cầu ký hợp đồng</h2>
+            </div>
+            <div style="padding: 24px; background: #f9fafb;">
+              <p>Xin chào <strong>${invitation.signerName}</strong>,</p>
+              <p>Bạn được mời ký hợp đồng <strong>${contract.contractNumber}</strong>.</p>
+              <p>Vui lòng bấm vào đường dẫn bên dưới để xem và ký hợp đồng.</p>
+              <div style="background: white; border: 2px solid #e5e7eb; border-radius: 8px; padding: 16px; text-align: center; margin: 20px 0;">
+                <a href="${signingUrl}" style="display: inline-block; background: #1a56db; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Ký hợp đồng ngay</a>
+                <p style="margin: 12px 0 0; font-size: 12px; color: #6b7280;">
+                  Link có hiệu lực đến: ${formattedExpiry}
+                </p>
+              </div>
+              <p style="font-size: 13px; color: #6b7280;">
+                Lưu ý: Mã xác thực (OTP) sẽ được gửi đến email này khi bạn bắt đầu quy trình ký.
+              </p>
+            </div>
+          </div>
+        `,
+      });
+      return 'EMAIL_SENT';
+    } catch {
+      return 'EMAIL_FAILED';
+    }
+  }
+
+  private async deliverOtpOnlyEmail(
+    invitation: ContractSignatureInvitation,
+    contract: SalesContract,
+    otp: string,
+  ): Promise<SignatureDeliveryStatus> {
+    if (!invitation.signerEmail) return 'EMAIL_SKIPPED';
+
+    try {
+      await this.mailerService.sendMail({
+        to: invitation.signerEmail,
+        subject: `Mã xác thực ký hợp đồng: ${contract.contractNumber}`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <div style="background: #059669; padding: 20px 24px; color: white;">
+              <h2 style="margin: 0;">Mã xác thực ký hợp đồng</h2>
+            </div>
+            <div style="padding: 24px; background: #f9fafb;">
+              <p>Xin chào <strong>${invitation.signerName}</strong>,</p>
+              <p>Mã xác thực ký hợp đồng <strong>${contract.contractNumber}</strong> của bạn là:</p>
+              <div style="background: white; border: 2px solid #059669; border-radius: 8px; padding: 20px; text-align: center; margin: 20px 0;">
+                <span style="font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #059669;">${otp}</span>
+                <p style="margin: 8px 0 0; font-size: 13px; color: #6b7280;">
+                  Mã có hiệu lực trong <strong>15 phút</strong>.
+                </p>
+              </div>
+              <p style="font-size: 13px; color: #dc2626;">
+                Không chia sẻ mã này với bất kỳ ai. Nếu bạn không yêu cầu mã này, vui lòng bỏ qua.
+              </p>
+            </div>
+          </div>
+        `,
+      });
+      return 'EMAIL_SENT';
+    } catch {
+      return 'EMAIL_FAILED';
+    }
+  }
+
   private async deliverSignatureInvitation(
     invitation: ContractSignatureInvitation,
     contract: SalesContract,
@@ -672,7 +759,6 @@ export class SalesContractsService {
   }> {
     const now = new Date();
     const rawToken = this.generateSigningToken();
-    const rawOtp = this.generateOtp();
     const tokenHash = this.hashSecret(rawToken);
     const invitation = input.manager.create(ContractSignatureInvitation, {
       contractId: input.contract._id,
@@ -682,8 +768,6 @@ export class SalesContractsService {
       signerEmail: input.signerEmail,
       status: ContractSignatureInvitationStatus.CREATED,
       tokenHash,
-      otpHash: this.hashOtp(rawOtp, tokenHash),
-      otpExpiresAt: this.addMinutes(now, 15),
       expiresAt: this.addDays(now, input.expiresInDays),
       sentByUsername: input.actorUsername,
       sentAt: now,
@@ -712,11 +796,10 @@ export class SalesContractsService {
     );
 
     const signingUrl = this.buildFrontendSigningUrl(rawToken);
-    const deliveryStatus = await this.deliverSignatureInvitation(
+    const deliveryStatus = await this.deliverInvitationEmail(
       savedInvitation,
       input.contract,
       signingUrl,
-      rawOtp,
     );
     const deliveryEventType: Record<
       SignatureDeliveryStatus,
@@ -1625,9 +1708,15 @@ export class SalesContractsService {
         manager,
         lockedContract._id,
       );
-      if (contract.status !== SalesContractStatus.APPROVED) {
+      const allowedStatuses = [
+        SalesContractStatus.APPROVED,
+        SalesContractStatus.PENDING_BUYER_SIGNATURE,
+      ];
+      console.log(`[SalesContracts] sendForSignature - contract: ${recordId}, status: ${contract.status}, allowed: ${allowedStatuses.join(',')}`);
+      if (!allowedStatuses.includes(contract.status)) {
+        console.warn(`[SalesContracts] Contract ${recordId} has invalid status for signature: ${contract.status}`);
         throw new BadRequestException(
-          'Only APPROVED sales contracts can be sent for signature.',
+          `Only APPROVED or PENDING_BUYER_SIGNATURE sales contracts can be sent for signature. Current status: ${contract.status}`,
         );
       }
 
@@ -1663,6 +1752,17 @@ export class SalesContractsService {
 
       const now = new Date();
       const expiresInDays = dto.expiresInDays || 7;
+
+      // Only update contract status if it's APPROVED (first time sending)
+      // If already PENDING_BUYER_SIGNATURE, keep it as is (resending invitation)
+      const isFirstTimeSending = contract.status === SalesContractStatus.APPROVED;
+      if (isFirstTimeSending) {
+        contract.status = SalesContractStatus.PENDING_BUYER_SIGNATURE;
+        contract.signatureStatus = SalesContractSignatureStatus.PENDING_BUYER;
+        contract.signatureRequestedByUsername = actorUsername;
+        contract.signatureRequestedAt = now;
+        contract.signatureDocumentHash = documentHash;
+      }
       await this.recordSignatureEvent(
         {
           contractId: contract._id,
@@ -1691,22 +1791,20 @@ export class SalesContractsService {
         documentHash,
       });
 
-      contract.status = SalesContractStatus.PENDING_BUYER_SIGNATURE;
-      contract.signatureStatus = SalesContractSignatureStatus.PENDING_BUYER;
-      contract.signatureRequestedByUsername = actorUsername;
-      contract.signatureRequestedAt = now;
-      contract.signatureDocumentHash = documentHash;
-      await manager.update(
-        SalesContract,
-        { _id: contract._id },
-        {
-          status: contract.status,
-          signatureStatus: contract.signatureStatus,
-          signatureRequestedByUsername: contract.signatureRequestedByUsername,
-          signatureRequestedAt: contract.signatureRequestedAt,
-          signatureDocumentHash: contract.signatureDocumentHash,
-        },
-      );
+      // Only update contract fields if it's the first time sending (was APPROVED)
+      if (isFirstTimeSending) {
+        await manager.update(
+          SalesContract,
+          { _id: contract._id },
+          {
+            status: SalesContractStatus.PENDING_BUYER_SIGNATURE,
+            signatureStatus: SalesContractSignatureStatus.PENDING_BUYER,
+            signatureRequestedByUsername: actorUsername,
+            signatureRequestedAt: now,
+            signatureDocumentHash: documentHash,
+          },
+        );
+      }
 
       const refreshed = await this.findContractWithSignatureRelations(
         manager,
@@ -1761,6 +1859,12 @@ export class SalesContractsService {
     const invitation = await this.findInvitationByToken(token);
     await this.ensureInvitationUsable(invitation);
 
+    if (!invitation.otpHash) {
+      throw new BadRequestException(
+        'OTP has not been requested yet. Please click "Sign contract now" to request an OTP.',
+      );
+    }
+
     if (invitation.status === ContractSignatureInvitationStatus.OTP_VERIFIED) {
       return this.toSigningSessionResponse(invitation);
     }
@@ -1769,7 +1873,7 @@ export class SalesContractsService {
         'OTP attempt limit exceeded. Please request a new signing invitation.',
       );
     }
-    if (invitation.otpExpiresAt.getTime() < Date.now()) {
+    if (invitation.otpExpiresAt && invitation.otpExpiresAt.getTime() < Date.now()) {
       this.appendInvitationAudit(invitation, 'OTP_EXPIRED', {
         ipAddress: meta?.ipAddress || null,
         userAgent: meta?.userAgent || null,
@@ -1856,7 +1960,7 @@ export class SalesContractsService {
         const incomingHash = this.hashOtp(dto.otp.trim(), invitation.tokenHash);
         if (
           incomingHash !== invitation.otpHash ||
-          invitation.otpExpiresAt.getTime() < Date.now()
+          (invitation.otpExpiresAt && invitation.otpExpiresAt.getTime() < Date.now())
         ) {
           invitation.otpAttemptCount =
             Number(invitation.otpAttemptCount || 0) + 1;
@@ -2039,6 +2143,142 @@ export class SalesContractsService {
       session,
       auditPacket: await this.getSignatureAuditPacket(result.contract._id),
     };
+  }
+
+  async requestSigningOtp(token: string, meta?: RequestMeta): Promise<{
+    message: string;
+    expiresAt: Date;
+  }> {
+    return this.dataSource.transaction(async (manager) => {
+      const invitation = await this.findInvitationByToken(token, manager, true);
+      await this.ensureInvitationUsable(invitation, manager);
+
+      if (invitation.otpHash && invitation.otpExpiresAt && invitation.otpExpiresAt.getTime() > Date.now()) {
+        return {
+          message: `A valid OTP is already active. Check your email or wait for it to expire.`,
+          expiresAt: invitation.otpExpiresAt,
+        };
+      }
+
+      const now = new Date();
+      const rawOtp = this.generateOtp();
+      const newOtpHash = this.hashOtp(rawOtp, invitation.tokenHash);
+
+      invitation.otpHash = newOtpHash;
+      invitation.otpExpiresAt = this.addMinutes(now, 15);
+      invitation.otpAttemptCount = 0;
+
+      this.appendInvitationAudit(invitation, 'OTP_REQUESTED', {
+        ipAddress: meta?.ipAddress || null,
+        userAgent: meta?.userAgent || null,
+        note: `OTP requested by buyer`,
+      });
+
+      await this.persistSignatureInvitation(invitation, manager);
+
+      const contract = invitation.contract;
+      const documentHash = contract?.signatureDocumentHash || this.buildContractHash(contract);
+      await this.recordSignatureEvent(
+        {
+          contractId: invitation.contractId,
+          invitationId: invitation._id,
+          eventType: ContractSignatureEventType.EMAIL_SENT,
+          actorType: ContractSignatureActorType.BUYER,
+          signerEmail: invitation.signerEmail,
+          ipAddress: meta?.ipAddress || null,
+          userAgent: meta?.userAgent || null,
+          documentHash,
+          note: `OTP sent to buyer email`,
+        },
+        manager,
+      );
+
+      await this.deliverOtpOnlyEmail(invitation, contract, rawOtp);
+
+      return {
+        message: `OTP sent to ${invitation.signerEmail}`,
+        expiresAt: invitation.otpExpiresAt,
+      };
+    });
+  }
+
+  async resendSigningOtpByToken(token: string): Promise<{
+    message: string;
+    expiresAt: Date;
+  }> {
+    return this.dataSource.transaction(async (manager) => {
+      const invitation = await this.findInvitationByToken(token, manager, true);
+
+      if (invitation.status === ContractSignatureInvitationStatus.REVOKED) {
+        throw new BadRequestException(
+          'Signature invitation has been revoked. Please contact the sender for a new link.',
+        );
+      }
+      if (invitation.status === ContractSignatureInvitationStatus.SIGNED) {
+        throw new BadRequestException(
+          'This invitation has already been signed.',
+        );
+      }
+      if (
+        invitation.status === ContractSignatureInvitationStatus.EXPIRED ||
+        invitation.expiresAt.getTime() < Date.now()
+      ) {
+        throw new BadRequestException(
+          'This signing link has expired. Please contact the sender for a new link.',
+        );
+      }
+      if (!invitation.signerEmail) {
+        throw new BadRequestException(
+          'No email address is associated with this invitation.',
+        );
+      }
+
+      const now = new Date();
+      const rawOtp = this.generateOtp();
+      const newOtpHash = this.hashOtp(rawOtp, invitation.tokenHash);
+
+      invitation.otpHash = newOtpHash;
+      invitation.otpExpiresAt = this.addMinutes(now, 15);
+      invitation.otpAttemptCount = 0;
+
+      this.appendInvitationAudit(invitation, 'OTP_RESENT', {
+        note: `OTP resent to ${invitation.signerEmail}`,
+      });
+
+      await this.persistSignatureInvitation(invitation, manager);
+
+      const contract = invitation.contract;
+      const documentHash =
+        contract?.signatureDocumentHash ||
+        this.buildContractHash(contract);
+      await this.recordSignatureEvent(
+        {
+          contractId: invitation.contractId,
+          invitationId: invitation._id,
+          eventType: ContractSignatureEventType.EMAIL_SENT,
+          actorType: ContractSignatureActorType.SYSTEM,
+          signerEmail: invitation.signerEmail,
+          documentHash,
+          note: `OTP resent to buyer email`,
+        },
+        manager,
+      );
+
+      const frontendBaseUrl = process.env.NEXT_PUBLIC_FRONTEND_URL || 'http://localhost:3000';
+      const signingUrl = `${frontendBaseUrl}/portal/sign/${token}`;
+
+      await this.deliverSignatureInvitation(
+        invitation,
+        contract,
+        signingUrl,
+        rawOtp,
+      );
+
+      return {
+        message: `A new OTP has been sent to ${invitation.signerEmail}`,
+        expiresAt: invitation.otpExpiresAt,
+      };
+    });
   }
 
   async getSignatureAuditPacket(

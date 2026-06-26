@@ -63,10 +63,14 @@ export interface ICommercialInvoiceShipmentOption {
   _id: string;
   shipmentNumber: string;
   status: string;
+  pol?: string | null;
+  pod?: string | null;
+  items?: ICommercialInvoiceItem[];
   salesContract?: {
     _id: string;
     contractNumber?: string | null;
     status?: string | null;
+    paymentTerms?: string | null;
     buyer?: { name?: string | null };
   };
 }

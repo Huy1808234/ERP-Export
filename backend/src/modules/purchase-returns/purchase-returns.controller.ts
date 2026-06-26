@@ -23,6 +23,11 @@ type PurchaseReturnQuery = {
   purchaseOrderId?: string;
   qualityCheckId?: string;
   claimNumber?: string;
+  vendorId?: string;
+  reasonCode?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  search?: string;
   sort?: string;
 };
 
@@ -68,6 +73,12 @@ export class PurchaseReturnsController {
     @User() user: IUser,
   ) {
     return this.purchaseReturnsService.cancel(recordId, dto, user);
+  }
+
+  @Get('stats')
+  @ResponseMessage('Lay thong ke phieu tra hang thanh cong')
+  stats() {
+    return this.purchaseReturnsService.getStats();
   }
 
   @Get()

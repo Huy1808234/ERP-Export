@@ -371,13 +371,19 @@ export class PurchaseOrdersService implements OnModuleInit {
         : ['items', 'items.product', 'vendor', 'createdBy', 'purchaseRequest'];
 
     // Xử lý lọc nhiều trạng thái (comma-separated)
-    if (
-      filter.status &&
-      typeof filter.status === 'string' &&
-      filter.status.includes(',')
-    ) {
+    // Lưu ý: api-query-params tự parse "a,b,c" thành object {$in: ['a','b','c']}
+    // nhưng TypeORM không hiểu object thuần — phải chuyển qua helper In(...).
+    if (filter.status !== undefined && filter.status !== null) {
       const { In } = require('typeorm');
-      filter.status = In(filter.status.split(','));
+      if (typeof filter.status === 'string' && filter.status.includes(',')) {
+        filter.status = In(filter.status.split(',').map((s: string) => s.trim()).filter(Boolean));
+      } else if (
+        typeof filter.status === 'object' &&
+        !Array.isArray(filter.status) &&
+        Array.isArray((filter.status as any).$in)
+      ) {
+        filter.status = In((filter.status as any).$in);
+      }
     }
 
     const [result, total] = await this.poRepository.findAndCount({

@@ -51,22 +51,42 @@ export const loadCountries = async (accessToken?: string, force: boolean = false
   isFetching = true;
   try {
     const res = await countryService.findAll({ pageSize: 1000, isActive: true }, accessToken);
-    if (res.data?.results) {
-      const items: CountryCatalogItem[] = res.data.results.map((c) => ({
-        code: c.code,
-        name: c.name,
-        nameVi: c.nameVi,
-        region: (c.region as BuyerRegionKey) || 'OTHER',
-        aliases: c.aliases || [],
-      }));
-      updateCountryCatalog(items);
-      isLoaded = true;
-      console.log(' loadCountries SUCCESS! Items count:', items.length);
+    // Defensive: backend may return either { data: { results: [] } } or
+    // { results: [] } depending on version, and may also fail with an
+    // unauthorised/empty body. In every failure case we keep the static
+    // fallback catalog so the UI keeps working.
+    const results =
+      (res as any)?.data?.results ??
+      (res as any)?.results ??
+      (Array.isArray((res as any)?.data) ? (res as any).data : null);
+
+    if (Array.isArray(results)) {
+      const items: CountryCatalogItem[] = results
+        .filter((c: any) => c && c.code && c.name)
+        .map((c: any) => ({
+          code: c.code,
+          name: c.name,
+          nameVi: c.nameVi || c.name,
+          region: (c.region as BuyerRegionKey) || 'OTHER',
+          aliases: c.aliases || [],
+        }));
+      if (items.length > 0) {
+        updateCountryCatalog(items);
+        isLoaded = true;
+        console.log(' loadCountries SUCCESS! Items count:', items.length);
+        return;
+      }
+      console.warn(
+        ' loadCountries returned no usable items; keeping fallback catalog',
+      );
     } else {
-      console.error(' loadCountries FAILED: res.data?.results is undefined', res);
+      console.warn(
+        ' loadCountries response shape unexpected; keeping fallback catalog',
+        res,
+      );
     }
   } catch (error) {
-    console.error('Failed to load countries from backend, using fallback catalog:', error);
+    console.warn(' loadCountries failed; keeping fallback catalog:', error);
   } finally {
     isFetching = false;
   }

@@ -8,6 +8,7 @@ import { Shipment } from '@/modules/shipments/entities/shipment.entity';
 import { ExportDocument } from '@/modules/export-documents/entities/export-document.entity';
 import { AccountingModule } from '@/modules/accounting/accounting.module';
 import { AccountReceivablesModule } from '@/modules/account-receivables/account-receivables.module';
+import { SettingsModule } from '@/modules/settings/settings.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { AccountReceivablesModule } from '@/modules/account-receivables/account-
     ]),
     AccountingModule,
     AccountReceivablesModule,
+    SettingsModule,
   ],
   controllers: [CommercialInvoicesController],
   providers: [CommercialInvoicesService],

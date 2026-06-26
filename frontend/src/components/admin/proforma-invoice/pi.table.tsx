@@ -10,7 +10,6 @@ import {
   Typography,
   Input,
   App,
-  theme,
 } from 'antd';
 import {
   DeleteOutlined,
@@ -27,7 +26,6 @@ import { formatDate } from '@/utils/format';
 import { useCurrency } from '@/hooks/useCurrency';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { useTranslations } from 'next-intl';
-import { useTheme } from '@/context/theme.context';
 import ProformaInvoiceDetailModal from './pi.detail';
 import PIFromQuotationModal from './pi.from-quotation';
 import POFromPIModal from '../purchase-order/po.from-pi';
@@ -45,8 +43,6 @@ type ProformaInvoiceRow = {
 
 const ProformaInvoiceTable = () => {
   const { notification } = App.useApp();
-  const { token } = theme.useToken();
-  const { isDark } = useTheme();
   const { formatMoney } = useCurrency();
   const [piList, setPiList] = useState<any[]>([]);
   const [quotations, setQuotations] = useState<any[]>([]);
@@ -187,23 +183,29 @@ const ProformaInvoiceTable = () => {
       title: t('table.piNumber'),
       dataIndex: 'piNumber',
       key: 'piNumber',
+      width: 150,
+      fixed: 'left' as const,
       render: (v: string) => <Text strong style={{ color: '#722ed1' }}>{v}</Text>,
     },
     {
       title: t('table.customer'),
       dataIndex: 'customer',
       key: 'customer',
+      width: 150,
+      ellipsis: true,
       render: (c: any) => c?.name ?? '-',
     },
     {
       title: t('table.incoterm'),
       dataIndex: 'incoterm',
       key: 'incoterm',
+      width: 80,
       render: (v: string) => <Tag color="geekblue">{v}</Tag>,
     },
     {
       title: t('table.total'),
       key: 'total',
+      width: 140,
       render: (_: any, r: any) => (
         <Text strong>
           {formatMoney(r.totalAmount, r.currency)}
@@ -213,6 +215,7 @@ const ProformaInvoiceTable = () => {
     {
       title: t('table.deposit'),
       key: 'deposit',
+      width: 130,
       render: (_: any, r: any) => (
         <Text style={{ color: '#fa8c16' }}>
           {r.depositPercent}% — {formatMoney(r.depositAmount, r.currency)}
@@ -223,16 +226,20 @@ const ProformaInvoiceTable = () => {
       title: t('table.contract'),
       dataIndex: 'salesContract',
       key: 'salesContract',
+      width: 140,
+      ellipsis: true,
       render: (sc: any) => sc ? <Tag color="purple">{sc.contractNumber}</Tag> : <Text type="secondary">—</Text>,
     },
     {
       title: t('table.issueDate'),
       dataIndex: 'issueDate',
+      width: 100,
       render: (v: string) => formatDate(v),
     },
     {
       title: t('table.status'),
       dataIndex: 'status',
+      width: 120,
       render: (v: string) => {
         const statusKey = `status.${v}`;
         return (
@@ -245,6 +252,8 @@ const ProformaInvoiceTable = () => {
     {
       title: t('table.actions'),
       key: 'action',
+      width: 280,
+      fixed: 'right' as const,
       render: (_: any, record: any) => (
         <Space size="small">
           {['DRAFT', 'REJECTED'].includes(record.status) && (
@@ -305,13 +314,13 @@ const ProformaInvoiceTable = () => {
   return (
     <>
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20, gap: 16, flexWrap: 'wrap' }}>
         <PageHeader
           title={t('title')}
           icon={<FileDoneOutlined />}
           description={t('description')}
         />
-        <Space>
+        <Space wrap size="small">
           <Input.Search
             placeholder={t('table.searchPlaceholder')}
             allowClear
@@ -332,7 +341,7 @@ const ProformaInvoiceTable = () => {
                     size="small"
                     onClick={() => handleOpenFromQuotation(qt)}
                   >
-                    {t('table.createFromQuotation', { number: qt.quotationNumber })}
+                    {qt.quotationNumber}
                   </Button>
                 </Tooltip>
               ))}
@@ -341,12 +350,13 @@ const ProformaInvoiceTable = () => {
         </Space>
       </div>
 
-      <div className="premium-table">
+      <div style={{ width: '100%', overflowX: 'auto' }}>
         <Table
           rowKey={(record: any) => record._id || record.piNumber}
           dataSource={piList}
           columns={columns}
-          scroll={{ x: 'max-content' }}
+          scroll={{ x: 1200 }}
+          size="middle"
           onChange={p => setMeta(prev => ({ ...prev, current: p.current!, pageSize: p.pageSize! }))}
           pagination={{
             current: meta.current,
@@ -390,35 +400,6 @@ const ProformaInvoiceTable = () => {
         />
       )}
 
-      <style jsx global>{`
-        .premium-table {
-          max-width: 100%;
-          overflow: hidden;
-        }
-        .premium-table .ant-table {
-          background: transparent !important;
-        }
-        .premium-table .ant-table-thead > tr > th {
-          background: ${isDark ? 'rgba(30, 41, 59, 0.5)' : '#fafafa'} !important;
-          color: ${isDark ? '#94a3b8' : '#595959'} !important;
-          font-weight: 600 !important;
-          border-bottom: 1px solid ${isDark ? '#334155' : '#f0f0f0'} !important;
-        }
-        .premium-table .ant-table-tbody > tr > td {
-          background: transparent !important;
-          color: ${isDark ? '#e2e8f0' : token.colorText} !important;
-          border-bottom: 1px solid ${isDark ? '#334155' : '#f0f0f0'} !important;
-        }
-        .premium-table .ant-table-tbody > tr:hover > td {
-          background: ${isDark ? 'rgba(51, 65, 85, 0.45)' : '#f8fafc'} !important;
-        }
-        .premium-table .ant-table-placeholder {
-          background: transparent !important;
-        }
-        .premium-table .ant-empty-description {
-          color: ${isDark ? '#94a3b8' : '#595959'} !important;
-        }
-      `}</style>
     </>
   );
 };

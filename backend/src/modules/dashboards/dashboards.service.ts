@@ -31,6 +31,7 @@ import {
   AccountPayable,
   APStatus,
 } from '../account-payables/entities/account-payable.entity';
+import { Inquiry, InquiryStatus } from '../inquiries/entities/inquiry.entity';
 import { maskCostFields } from '@/common/field-access.util';
 import type { AuthenticatedUser } from '@/common/types/authenticated-user.type';
 import { RedisCacheService } from '@/common/cache/redis-cache.service';
@@ -40,6 +41,11 @@ type PortalDashboardUser =
   | (AuthenticatedUser & { membershipLevel?: string })
   | undefined;
 const DASHBOARD_CACHE_TTL_SECONDS = 900;
+const ACTIVE_INQUIRY_STATUSES = [
+  InquiryStatus.SUBMITTED,
+  InquiryStatus.IN_REVIEW,
+  InquiryStatus.PENDING,
+];
 
 interface DashboardDateRange {
   start: Date;
@@ -183,6 +189,8 @@ export class DashboardsService {
     private arRepository: Repository<AccountReceivable>,
     @InjectRepository(AccountPayable)
     private apRepository: Repository<AccountPayable>,
+    @InjectRepository(Inquiry)
+    private inquiryRepository: Repository<Inquiry>,
     private accountingService: AccountingService,
     private cache: RedisCacheService,
   ) {}
@@ -729,6 +737,34 @@ export class DashboardsService {
           salesStats.conversionRate =
             (salesStats.confirmedContracts / salesStats.totalPIs) * 100;
 
+        const [
+          pendingInquiries,
+          submittedInquiries,
+          quotedInquiries,
+          recentInquiries,
+        ] = await Promise.all([
+          this.inquiryRepository.count({
+            where: { status: In(ACTIVE_INQUIRY_STATUSES) },
+          }),
+          this.inquiryRepository.count({
+            where: {
+              status: InquiryStatus.SUBMITTED,
+              createdAt: Between(start, end),
+            },
+          }),
+          this.inquiryRepository.count({
+            where: {
+              status: In([InquiryStatus.QUOTED, InquiryStatus.PROCESSED]),
+              createdAt: Between(start, end),
+            },
+          }),
+          this.inquiryRepository.find({
+            where: { status: In(ACTIVE_INQUIRY_STATUSES) },
+            order: { createdAt: 'DESC' },
+            take: 5,
+          }),
+        ]);
+
         // 3. LOGISTICS DASHBOARD
         const next14Days = new Date();
         next14Days.setDate(next14Days.getDate() + 14);
@@ -949,6 +985,20 @@ export class DashboardsService {
           },
           sales: {
             ...salesStats,
+            pendingInquiries,
+            submittedInquiries,
+            quotedInquiries,
+            recentInquiries: recentInquiries.map((inquiry) => ({
+              _id: inquiry._id,
+              inquiryNumber: inquiry.inquiryNumber,
+              customerName: inquiry.customerName,
+              customerEmail: inquiry.customerEmail,
+              status: inquiry.status,
+              lineCount: inquiry.lineItems?.length || 1,
+              incoterm: inquiry.incoterm,
+              destinationPort: inquiry.destinationPort,
+              createdAt: inquiry.createdAt,
+            })),
             activeShipments: activeShipmentsCount,
             poGrowth: 0,
           },

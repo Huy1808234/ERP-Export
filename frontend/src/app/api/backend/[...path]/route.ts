@@ -26,6 +26,8 @@ const BLOCKED_FORWARD_HEADERS = new Set([
   "upgrade",
 ]);
 
+const LOCAL_BACKEND_HOSTS = new Set(["127.0.0.1", "localhost"]);
+
 function buildBackendUrl(pathSegments: string[], search: string): string {
   const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL?.replace(/\/+$/, "");
 
@@ -35,6 +37,23 @@ function buildBackendUrl(pathSegments: string[], search: string): string {
 
   const path = pathSegments.map((segment) => encodeURIComponent(segment)).join("/");
   return `${backendUrl}/${path}${search}`;
+}
+
+function getBackendUrlCandidates(targetUrl: string): string[] {
+  try {
+    const parsedUrl = new URL(targetUrl);
+    const urls = [parsedUrl.toString()];
+
+    if (LOCAL_BACKEND_HOSTS.has(parsedUrl.hostname)) {
+      const fallbackUrl = new URL(parsedUrl.toString());
+      fallbackUrl.hostname = parsedUrl.hostname === "127.0.0.1" ? "localhost" : "127.0.0.1";
+      urls.push(fallbackUrl.toString());
+    }
+
+    return Array.from(new Set(urls));
+  } catch {
+    return [targetUrl];
+  }
 }
 
 function cloneForwardHeaders(request: NextRequest): Headers {
@@ -76,9 +95,15 @@ async function proxyBackendRequest(
   try {
     const { path } = await context.params;
     const targetUrl = buildBackendUrl(path, request.nextUrl.search);
+    const targetUrlCandidates = getBackendUrlCandidates(targetUrl);
     const method = request.method.toUpperCase();
     const headers = cloneForwardHeaders(request);
     await applySessionAuthHeader(headers);
+    headers.set("connection", "close"); // Prevent keep-alive ECONNRESET issues
+
+    const requestBody = method !== "GET" && method !== "HEAD"
+      ? await request.arrayBuffer()
+      : undefined;
 
     const init: RequestInit = {
       method,
@@ -86,11 +111,26 @@ async function proxyBackendRequest(
       cache: "no-store",
     };
 
-    if (method !== "GET" && method !== "HEAD") {
-      init.body = await request.arrayBuffer();
+    if (requestBody) {
+      init.body = requestBody;
     }
 
-    const response = await fetch(targetUrl, init);
+    let response: Response | null = null;
+    let lastFetchError: unknown = null;
+
+    for (const candidateUrl of targetUrlCandidates) {
+      try {
+        response = await fetch(candidateUrl, init);
+        break;
+      } catch (error) {
+        lastFetchError = error;
+      }
+    }
+
+    if (!response) {
+      throw lastFetchError;
+    }
+
     const responseHeaders = new Headers(response.headers);
     const responseBody = method === "HEAD" ? null : await response.arrayBuffer();
 

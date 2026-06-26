@@ -146,7 +146,21 @@ Mục tiêu: kiểm tra procurement chuẩn không ngoại lệ.
 14. [ ] Save GRN.
 15. [ ] Mở Live Inventory, kiểm tra current stock tăng đúng.
 16. [ ] Mở Stock History, kiểm tra ledger nhập kho có reference GRN/PO.
-17. [ ] Login Accounting.
+17. [ ] Login Accounting.⚠ Port 3000 is in use by process 18828, using available port 3001 instead.
+▲ Next.js 16.2.1 (Turbopack)
+- Local:         http://localhost:3001
+- Network:       http://172.22.224.1:3001
+- Environments: .env
+✓ Ready in 1846ms
+⨯ Another next dev server is already running.
+
+- Local:        http://localhost:3000
+- PID:          18828
+- Dir:          C:\Users\Admin\Desktop\mini-erp-export\frontend
+- Log:          .next\dev\logs\next-development.log
+
+Run taskkill /PID 18828 /F to stop it.
+Run taskkill /PID 18828 /F to stop it.
 18. [ ] Tạo Vendor Invoice từ PO/GRN.
 19. [ ] Mở 3-Way Matching, kiểm tra PO + GRN + Vendor Invoice khớp.
 20. [ ] Mở Công nợ NCC/AP, kiểm tra AP phát sinh đúng vendor, amount, due date.

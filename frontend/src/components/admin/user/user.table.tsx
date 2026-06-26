@@ -1,19 +1,48 @@
 'use client';
 
-import { DeleteOutlined, EditOutlined, PlusOutlined, SearchOutlined, TeamOutlined, CheckCircleOutlined, UserOutlined } from '@ant-design/icons';
+import {
+  CheckCircleOutlined,
+  DeleteOutlined,
+  EditOutlined,
+  PlusOutlined,
+  ReloadOutlined,
+  SearchOutlined,
+  TeamOutlined,
+  UserOutlined,
+} from '@ant-design/icons';
 import { PageHeader } from '@/components/ui/PageHeader';
-import { notification } from '@/providers/antd-static';
 import { useTheme } from '@/context/theme.context';
-import { sendRequest } from '@/lib/api-client';
-import { Avatar, Badge, Button, Card, Col, Input, Modal, Row, Select, Space, Statistic, Table, Tag, theme, Tooltip, Typography } from 'antd';
-import { getSession, useSession } from 'next-auth/react';
+import { useDebounce } from '@/hooks/useDebounce';
+import { useUsers } from '@/hooks/useUsers';
+import { notification } from '@/providers/antd-static';
+import type { CreateUserPayload, UpdateUserPayload, UserRow } from '@/types/user';
+import {
+  Alert,
+  Avatar,
+  Badge,
+  Button,
+  Card,
+  Col,
+  Empty,
+  Input,
+  Modal,
+  Row,
+  Select,
+  Space,
+  Statistic,
+  Table,
+  Tag,
+  Tooltip,
+  Typography,
+  theme,
+} from 'antd';
+import type { ColumnsType } from 'antd/es/table';
+import { useSession } from 'next-auth/react';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useState, type Key } from 'react';
 import UserCreateModal from './user.create';
 import UserUpdateModal from './user.update';
-import { getAccessToken } from '@/lib/auth-token';
 
-const { Option } = Select;
 const { Text } = Typography;
 
 const roleColorMap: Record<string, string> = {
@@ -22,7 +51,6 @@ const roleColorMap: Record<string, string> = {
   'SUPER ADMIN': 'magenta',
   DIRECTOR: 'red',
   MANAGER: 'gold',
-  SALES_MANAGER: 'gold',
   SALES: 'blue',
   SALES_EXPORT: 'blue',
   SALES_STAFF: 'blue',
@@ -39,51 +67,32 @@ const roleColorMap: Record<string, string> = {
   KHO: 'green',
 };
 
-interface RoleOption {
-  _id?: string;
-  name: string;
-  description?: string | null;
-}
-
-interface UserRow {
-  _id: string;
-  username: string;
-  name: string;
-  email: string;
-  phone?: string | null;
-  address?: string | null;
-  image?: string | null;
-  roleName?: string | null;
-  role?: RoleOption | string | null;
-  isActive: boolean;
-}
-
-interface UserSummary {
-  total: number;
-  active: number;
-  admin: number;
-}
-
-interface UserListResponse {
-  results: UserRow[];
-  totalPages: number;
-  totalItems: number;
-  summary?: UserSummary;
-}
+const getRoleName = (user: UserRow): string => {
+  if (typeof user.role === 'string') return user.role;
+  return user.role?.name || user.roleName || 'N/A';
+};
 
 const UserTable = () => {
   const t = useTranslations('UserManagement');
   const { token } = theme.useToken();
   const { isDark } = useTheme();
   const { data: session } = useSession();
-  const [users, setUsers] = useState<UserRow[]>([]);
-  const [summary, setSummary] = useState<UserSummary>({ total: 0, active: 0, admin: 0 });
-  const [meta, setMeta] = useState({
-    current: 1,
-    pageSize: 10,
-    pages: 0,
-    total: 0,
-  });
+  const {
+    users,
+    roles,
+    summary,
+    meta,
+    loading,
+    rolesLoading,
+    submitting,
+    error,
+    fetchUsers,
+    fetchRoles,
+    addUser,
+    editUser,
+    deactivate,
+    bulkDeactivate,
+  } = useUsers();
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
@@ -91,98 +100,79 @@ const UserTable = () => {
   const [searchText, setSearchText] = useState('');
   const [filterRole, setFilterRole] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
   const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([]);
-  const [roles, setRoles] = useState<RoleOption[]>([]);
-  const { current, pageSize } = meta;
+  const [paginationState, setPaginationState] = useState({
+    current: 1,
+    pageSize: 10,
+  });
 
-  const fetchRoles = useCallback(async () => {
-    const currentSession = await getSession();
-    const res = await sendRequest<IBackendRes<RoleOption[]>>({
-      url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/roles`,
-      method: 'GET',
-      headers: { Authorization: `Bearer ${getAccessToken(currentSession)}` },
-    });
+  const debouncedSearchText = useDebounce(searchText.trim(), 350);
+  const currentUsername = session?.user?.username;
 
-    if (res?.data) {
-      setRoles(res.data);
-    }
-  }, []);
+  const listParams = useMemo(() => ({
+    current: paginationState.current,
+    pageSize: paginationState.pageSize,
+    ...(debouncedSearchText ? { search: debouncedSearchText } : {}),
+    ...(filterRole ? { roleName: filterRole } : {}),
+    ...(filterStatus !== null ? { isActive: filterStatus === 'true' } : {}),
+  }), [debouncedSearchText, filterRole, filterStatus, paginationState.current, paginationState.pageSize]);
 
-  const fetchUsers = useCallback(async () => {
-    setLoading(true);
-    const currentSession = await getSession();
-
-    const res = await sendRequest<IBackendRes<UserListResponse>>({
-      url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/users`,
-      method: 'GET',
-      queryParams: {
-        current,
-        pageSize,
-        ...(searchText ? { search: searchText } : {}),
-        ...(filterRole ? { roleName: filterRole } : {}),
-        ...(filterStatus !== null ? { isActive: filterStatus === 'true' } : {}),
-      },
-      headers: { Authorization: `Bearer ${getAccessToken(currentSession)}` },
-    });
-
-    setLoading(false);
-    if (res?.data) {
-      const data = res.data;
-      setUsers(data.results);
-      setMeta((prev) => ({
-        ...prev,
-        pages: data.totalPages,
-        total: data.totalItems || data.totalPages * pageSize,
-      }));
-      setSummary(data.summary ?? {
-        total: data.totalItems || 0,
-        active: data.results.filter((user) => user.isActive).length,
-        admin: data.results.filter((user) => {
-          const roleName = typeof user.role === 'string' ? user.role : user.role?.name || user.roleName;
-          return roleName === 'ADMIN' || roleName === 'SUPER_ADMIN';
-        }).length,
-      });
-    }
-  }, [current, filterRole, filterStatus, pageSize, searchText]);
+  const refreshUsers = useCallback(async () => {
+    await fetchUsers(listParams);
+  }, [fetchUsers, listParams]);
 
   useEffect(() => {
-    fetchUsers();
-  }, [fetchUsers]);
+    void refreshUsers();
+  }, [refreshUsers]);
 
   useEffect(() => {
-    fetchRoles();
+    void fetchRoles();
   }, [fetchRoles]);
 
-  const stats = useMemo(() => summary, [summary]);
+  const handleCreateUser = async (payload: CreateUserPayload): Promise<boolean> => {
+    const result = await addUser(payload);
+    if (!result.success) {
+      notification.error({
+        title: t('messages.error'),
+        description: result.message,
+      });
+      return false;
+    }
+
+    await refreshUsers();
+    return true;
+  };
+
+  const handleUpdateUser = async (
+    userRef: string,
+    payload: UpdateUserPayload,
+  ): Promise<boolean> => {
+    const result = await editUser(userRef, payload);
+    if (!result.success) {
+      notification.error({
+        title: t('messages.error'),
+        description: result.message,
+      });
+      return false;
+    }
+
+    await refreshUsers();
+    return true;
+  };
 
   const confirmDeactivate = async (userRef: string, reason: string) => {
-    const currentSession = await getSession();
-    const accessToken = getAccessToken(currentSession);
-    if (!accessToken) {
+    const result = await deactivate(userRef, reason);
+    if (!result.success) {
       notification.error({
-        title: t('messages.missingTokenTitle'),
-        description: t('messages.missingTokenDescription'),
+        title: t('messages.error'),
+        description: result.message,
       });
       return;
     }
 
-    const res = await sendRequest<IBackendRes<{ message?: string }>>({
-      url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/users/${userRef}`,
-      method: 'DELETE',
-      body: { reason },
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-
-    if (res?.data) {
-      notification.success({ title: t('messages.deleteSuccess') });
-      fetchUsers();
-    } else {
-      notification.error({
-        title: t('messages.error'),
-        description: res.message,
-      });
-    }
+    notification.success({ title: t('messages.deleteSuccess') });
+    setSelectedRowKeys((prev) => prev.filter((key) => key !== userRef));
+    await refreshUsers();
   };
 
   const openDeactivateConfirm = (record: UserRow) => {
@@ -213,27 +203,25 @@ const UserTable = () => {
           throw new Error('Deactivation reason is required');
         }
 
-        await confirmDeactivate(record._id || record.username, trimmedReason);
+        await confirmDeactivate(record._id, trimmedReason);
       },
     });
   };
 
   const confirmBulkDeactivate = async (reason: string) => {
-    const currentSession = await getSession();
-    const res = await sendRequest<IBackendRes<{ deactivatedCount: number }>>({
-      url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/users/bulk-deactivate`,
-      method: 'POST',
-      body: { userRefs: selectedRowKeys.map(String), reason },
-      headers: { Authorization: `Bearer ${getAccessToken(currentSession)}` },
-    });
-
-    if (res?.data) {
-      notification.success({ title: t('messages.bulkSuccess'), description: res.message });
-      setSelectedRowKeys([]);
-      fetchUsers();
-    } else {
-      notification.error({ title: t('messages.error'), description: res.message });
+    const userRefs = selectedRowKeys.map(String);
+    const result = await bulkDeactivate(userRefs, reason);
+    if (!result.success) {
+      notification.error({
+        title: t('messages.error'),
+        description: result.message,
+      });
+      return;
     }
+
+    notification.success({ title: t('messages.bulkSuccess'), description: result.message });
+    setSelectedRowKeys([]);
+    await refreshUsers();
   };
 
   const openBulkDeactivateConfirm = () => {
@@ -269,22 +257,22 @@ const UserTable = () => {
     });
   };
 
-  const columns = [
+  const columns: ColumnsType<UserRow> = [
     {
       title: t('table.member'),
       dataIndex: 'name',
       key: 'name',
-      render: (text: string, record: UserRow) => (
+      render: (name: string, record) => (
         <Space>
           <Avatar
             src={record.image}
             style={{ backgroundColor: token.colorPrimary }}
             icon={<UserOutlined />}
           >
-            {text?.charAt(0).toUpperCase()}
+            {name?.charAt(0).toUpperCase()}
           </Avatar>
           <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <span style={{ fontWeight: 600 }}>{text}</span>
+            <span style={{ fontWeight: 600 }}>{name || record.username}</span>
             <span style={{ fontSize: 12, color: token.colorTextSecondary }}>{record.email}</span>
           </div>
         </Space>
@@ -294,16 +282,15 @@ const UserTable = () => {
       title: t('table.phone'),
       dataIndex: 'phone',
       key: 'phone',
-      render: (phone: string) => phone || <span style={{ color: token.colorTextPlaceholder }}>--</span>,
+      render: (phone?: string | null) => phone || <span style={{ color: token.colorTextPlaceholder }}>--</span>,
     },
     {
       title: t('table.role'),
-      dataIndex: 'role',
       key: 'role',
-      render: (role: UserRow['role'], record: UserRow) => {
-        const name = typeof role === 'string' ? role : role?.name || record.roleName || 'N/A';
+      render: (_, record) => {
+        const name = getRoleName(record);
         return (
-          <Tag color={roleColorMap[name] || 'default'} style={{ borderRadius: 12, padding: '0 10px' }}>
+          <Tag color={roleColorMap[name] || 'default'} style={{ borderRadius: 8, padding: '0 10px' }}>
             {name}
           </Tag>
         );
@@ -323,8 +310,9 @@ const UserTable = () => {
     {
       title: t('table.actions'),
       key: 'action',
-      render: (_: unknown, record: UserRow) => (
-        <Space size="middle">
+      width: 120,
+      render: (_, record) => (
+        <Space size="small">
           <Tooltip title={t('actions.edit')}>
             <Button
               type="text"
@@ -340,7 +328,7 @@ const UserTable = () => {
               type="text"
               danger
               icon={<DeleteOutlined />}
-              disabled={!record.isActive}
+              disabled={!record.isActive || record.username === currentUsername}
               onClick={() => openDeactivateConfirm(record)}
             />
           </Tooltip>
@@ -349,73 +337,42 @@ const UserTable = () => {
     },
   ];
 
-  const handleOnChange = (pagination: { current?: number; pageSize?: number }) => {
-    setMeta((prev) => ({
-      ...prev,
+  const handleTableChange = (pagination: { current?: number; pageSize?: number }) => {
+    setSelectedRowKeys([]);
+    setPaginationState((prev) => ({
       current: pagination.current || 1,
       pageSize: pagination.pageSize || prev.pageSize,
     }));
   };
 
-  return (
-    <div style={{
-      backgroundColor: 'transparent',
-      transition: 'all 0.3s ease',
-    }}>
-      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-        <Col xs={24} sm={8}>
-          <Card variant="borderless" hoverable style={{ borderRadius: 12, background: isDark ? '#1e293b' : token.colorBgContainer }}>
-            <Statistic
-              title={<Text type="secondary" style={{ color: isDark ? '#94a3b8' : undefined }}>{t('stats.total')}</Text>}
-              value={stats.total}
-              prefix={<TeamOutlined style={{ color: isDark ? '#38bdf8' : token.colorPrimary }} />}
-              styles={{ content: { color: isDark ? '#f8fafc' : undefined } }}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={8}>
-          <Card variant="borderless" hoverable style={{ borderRadius: 12, background: isDark ? '#1e293b' : token.colorBgContainer }}>
-            <Statistic
-              title={<Text type="secondary" style={{ color: isDark ? '#94a3b8' : undefined }}>{t('stats.active')}</Text>}
-              value={stats.active}
-              styles={{ content: { color: '#52c41a' } }}
-              prefix={<CheckCircleOutlined style={{ color: '#52c41a' }} />}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={8}>
-          <Card variant="borderless" hoverable style={{ borderRadius: 12, background: isDark ? '#1e293b' : token.colorBgContainer }}>
-            <Statistic
-              title={<Text type="secondary" style={{ color: isDark ? '#94a3b8' : undefined }}>{t('stats.admin')}</Text>}
-              value={stats.admin}
-              styles={{ content: { color: '#cf1322' } }}
-              prefix={<UserOutlined style={{ color: '#cf1322' }} />}
-            />
-          </Card>
-        </Col>
-      </Row>
+  const handleFilterChange = (callback: () => void) => {
+    setSelectedRowKeys([]);
+    setPaginationState((prev) => ({ ...prev, current: 1 }));
+    callback();
+  };
 
-      <Card
-        variant="borderless"
-        style={{
-          borderRadius: 12,
-          background: isDark ? '#1e293b' : token.colorBgContainer,
-          boxShadow: isDark ? '0 4px 20px rgba(0,0,0,0.5)' : '0 4px 20px rgba(0,0,0,0.03)',
-        }}
-        styles={{ body: { padding: 0 } }}
-      >
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          padding: '20px 24px',
-          borderBottom: `1px solid ${isDark ? '#334155' : '#f0f0f0'}`,
-        }}>
-          <PageHeader
-            title={t('title')}
-            icon={<UserOutlined style={{ color: isDark ? '#38bdf8' : token.colorPrimary }} />}
-            description={t('description')}
-          />
+  const tableEmptyText = error ? (
+    <Empty
+      description={
+        <Space orientation="vertical" size={8}>
+          <Text type="danger">{error}</Text>
+          <Button icon={<ReloadOutlined />} onClick={() => void refreshUsers()}>
+            Tải lại
+          </Button>
+        </Space>
+      }
+    />
+  ) : (
+    <Empty description="Không có người dùng phù hợp" />
+  );
+
+  return (
+    <div style={{ backgroundColor: 'transparent', transition: 'all 0.3s ease' }}>
+      <PageHeader
+        title={t('title')}
+        icon={<UserOutlined style={{ color: isDark ? '#38bdf8' : token.colorPrimary }} />}
+        description={t('description')}
+        extra={(
           <Button
             type="primary"
             size="large"
@@ -425,88 +382,140 @@ const UserTable = () => {
           >
             {t('actions.create')}
           </Button>
-        </div>
+        )}
+      />
 
+      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+        <Col xs={24} sm={8}>
+          <Card variant="borderless" hoverable style={{ borderRadius: 8, background: isDark ? '#1e293b' : token.colorBgContainer }}>
+            <Statistic
+              title={<Text type="secondary" style={{ color: isDark ? '#94a3b8' : undefined }}>{t('stats.total')}</Text>}
+              value={summary.total}
+              prefix={<TeamOutlined style={{ color: isDark ? '#38bdf8' : token.colorPrimary }} />}
+              styles={{ content: { color: isDark ? '#f8fafc' : undefined } }}
+            />
+          </Card>
+        </Col>
+        <Col xs={24} sm={8}>
+          <Card variant="borderless" hoverable style={{ borderRadius: 8, background: isDark ? '#1e293b' : token.colorBgContainer }}>
+            <Statistic
+              title={<Text type="secondary" style={{ color: isDark ? '#94a3b8' : undefined }}>{t('stats.active')}</Text>}
+              value={summary.active}
+              styles={{ content: { color: '#52c41a' } }}
+              prefix={<CheckCircleOutlined style={{ color: '#52c41a' }} />}
+            />
+          </Card>
+        </Col>
+        <Col xs={24} sm={8}>
+          <Card variant="borderless" hoverable style={{ borderRadius: 8, background: isDark ? '#1e293b' : token.colorBgContainer }}>
+            <Statistic
+              title={<Text type="secondary" style={{ color: isDark ? '#94a3b8' : undefined }}>{t('stats.admin')}</Text>}
+              value={summary.admin}
+              styles={{ content: { color: '#cf1322' } }}
+              prefix={<UserOutlined style={{ color: '#cf1322' }} />}
+            />
+          </Card>
+        </Col>
+      </Row>
+
+      {error ? (
+        <Alert
+          showIcon
+          type="error"
+          title="Không tải được danh sách người dùng"
+          description={error}
+          action={<Button size="small" onClick={() => void refreshUsers()}>Tải lại</Button>}
+          style={{ marginBottom: 16 }}
+        />
+      ) : null}
+
+      <Card
+        variant="borderless"
+        style={{
+          borderRadius: 8,
+          background: isDark ? '#1e293b' : token.colorBgContainer,
+          boxShadow: isDark ? '0 4px 20px rgba(0,0,0,0.5)' : '0 4px 20px rgba(0,0,0,0.03)',
+        }}
+        styles={{ body: { padding: 0 } }}
+      >
         <div style={{ padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
-          <Space size="middle">
+          <Space size="middle" wrap>
             <Input
+              value={searchText}
               placeholder={t('filters.searchPlaceholder')}
               prefix={<SearchOutlined style={{ color: token.colorTextPlaceholder }} />}
               allowClear
-              onChange={(event) => {
-                setMeta((prev) => ({ ...prev, current: 1 }));
-                setSearchText(event.target.value);
-              }}
+              onChange={(event) => handleFilterChange(() => setSearchText(event.target.value))}
               style={{ width: 300 }}
               size="large"
             />
             <Select
+              value={filterRole}
               placeholder={t('filters.rolePlaceholder')}
-              style={{ width: 150 }}
+              style={{ width: 180 }}
               allowClear
               size="large"
-              onChange={(value) => {
-                setMeta((prev) => ({ ...prev, current: 1 }));
-                setFilterRole(value ?? null);
-              }}
-            >
-              {roles.map((role) => (
-                <Option key={role._id || role.name} value={role.name}>{role.name}</Option>
-              ))}
-            </Select>
+              loading={rolesLoading}
+              onChange={(value) => handleFilterChange(() => setFilterRole(value ?? null))}
+              options={roles.map((role) => ({
+                value: role.name,
+                label: role.name,
+              }))}
+            />
             <Select
+              value={filterStatus}
               placeholder={t('filters.statusPlaceholder')}
-              style={{ width: 150 }}
+              style={{ width: 160 }}
               allowClear
               size="large"
-              onChange={(value) => {
-                setMeta((prev) => ({ ...prev, current: 1 }));
-                setFilterStatus(value ?? null);
-              }}
-            >
-              <Option value="true">{t('status.active')}</Option>
-              <Option value="false">{t('status.inactive')}</Option>
-            </Select>
+              onChange={(value) => handleFilterChange(() => setFilterStatus(value ?? null))}
+              options={[
+                { value: 'true', label: t('status.active') },
+                { value: 'false', label: t('status.inactive') },
+              ]}
+            />
           </Space>
 
-          {selectedRowKeys.length > 0 && (
+          {selectedRowKeys.length > 0 ? (
             <Space>
               <Text type="secondary">{t('selection', { count: selectedRowKeys.length })}</Text>
               <Button
                 danger
                 type="primary"
                 icon={<DeleteOutlined />}
+                loading={submitting}
                 style={{ borderRadius: 8 }}
                 onClick={openBulkDeactivateConfirm}
               >
                 {t('actions.bulkDelete')}
               </Button>
             </Space>
-          )}
+          ) : null}
         </div>
 
         <div className="premium-table">
-          <Table
-            rowKey={(record) => record._id || record.username}
+          <Table<UserRow>
+            rowKey="_id"
             loading={loading}
             dataSource={users}
             columns={columns}
             bordered={false}
-            onChange={handleOnChange}
+            onChange={handleTableChange}
             rowSelection={{
               selectedRowKeys,
               onChange: setSelectedRowKeys,
               getCheckboxProps: (record) => ({
-                disabled: !record.isActive,
+                disabled: !record.isActive || record.username === currentUsername,
               }),
             }}
             pagination={{
-              current: meta.current,
-              pageSize: meta.pageSize,
+              current: paginationState.current,
+              pageSize: paginationState.pageSize,
               showSizeChanger: true,
               total: meta.total,
               showTotal: (total, range) => t('pagination', { start: range[0], end: range[1], total }),
             }}
+            locale={{ emptyText: tableEmptyText }}
           />
         </div>
       </Card>
@@ -514,17 +523,21 @@ const UserTable = () => {
       <UserCreateModal
         isCreateModalOpen={isCreateModalOpen}
         setIsCreateModalOpen={setIsCreateModalOpen}
-        fetchUsers={fetchUsers}
-        session={session}
+        roles={roles}
+        rolesLoading={rolesLoading}
+        submitting={submitting}
+        onCreate={handleCreateUser}
       />
 
       <UserUpdateModal
         isUpdateModalOpen={isUpdateModalOpen}
         setIsUpdateModalOpen={setIsUpdateModalOpen}
-        fetchUsers={fetchUsers}
         dataUpdate={dataUpdate}
         setDataUpdate={setDataUpdate}
-        session={session}
+        roles={roles}
+        rolesLoading={rolesLoading}
+        submitting={submitting}
+        onUpdate={handleUpdateUser}
       />
 
       <style jsx global>{`

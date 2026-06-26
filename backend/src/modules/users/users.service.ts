@@ -16,6 +16,7 @@ import {
 import { hashPasswordHelper } from '@/helpers/util';
 import type { AuthenticatedUser } from '@/common/types/authenticated-user.type';
 import { Role } from '../roles/entities/role.entity';
+import { Partner, PartnerType } from '../partners/entities/partner.entity';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { User } from './entities/user.entity';
@@ -47,6 +48,8 @@ export class UsersService {
     private userRepository: Repository<User>,
     @InjectRepository(Role)
     private roleRepository: Repository<Role>,
+    @InjectRepository(Partner)
+    private partnerRepository: Repository<Partner>,
     private mailerService: MailerService,
   ) {}
 
@@ -96,6 +99,26 @@ export class UsersService {
     }
 
     return role.name;
+  }
+
+  private async ensureCustomerRoleName(): Promise<string> {
+    const roleName = 'CUSTOMER';
+    const existingRole = await this.roleRepository.findOne({
+      where: { name: roleName },
+    });
+
+    if (existingRole) {
+      return existingRole.name;
+    }
+
+    const role = this.roleRepository.create({
+      name: roleName,
+      description: 'B2B customer portal account',
+      isActive: true,
+    });
+    const savedRole = await this.roleRepository.save(role);
+
+    return savedRole.name;
   }
 
   private normalizeEmail(email: string) {
@@ -168,6 +191,101 @@ export class UsersService {
     }
 
     return username;
+  }
+
+  private async findOrCreateCustomerPartner(user: User): Promise<Partner> {
+    if (user.partnerId) {
+      const linkedPartner = await this.partnerRepository.findOne({
+        where: { _id: user.partnerId },
+      });
+
+      if (linkedPartner) {
+        return linkedPartner;
+      }
+    }
+
+    const existingBuyer = await this.partnerRepository.findOne({
+      where: {
+        email: user.email,
+        partnerType: PartnerType.CUSTOMER,
+      },
+      order: { createdAt: 'DESC' },
+    });
+
+    if (existingBuyer) {
+      return existingBuyer;
+    }
+
+    const partner = this.partnerRepository.create({
+      name: user.name || user.username,
+      partnerType: PartnerType.CUSTOMER,
+      contactName: user.name || user.username,
+      email: user.email,
+      phone: user.phone,
+      address: user.address,
+      defaultCurrency: 'USD',
+      isActive: true,
+    });
+
+    return this.partnerRepository.save(partner);
+  }
+
+  async ensureCustomerPortalAccount(user: User): Promise<User> {
+    if (!user) {
+      throw new NotFoundException(
+        'User is required to ensure a customer portal account',
+      );
+    }
+
+    const normalizedRole = user.roleName
+      ? normalizeRoleName(user.roleName)
+      : null;
+
+    // SAFETY: Never turn staff (ADMIN/MANAGER/...) into a CUSTOMER. Only
+    // CUSTOMER (or users without a role, e.g. fresh registration) qualify.
+    if (normalizedRole && normalizedRole !== 'CUSTOMER') {
+      return user;
+    }
+
+    // If the user is already a configured CUSTOMER_PORTAL account, do nothing.
+    if (
+      normalizedRole === 'CUSTOMER' &&
+      user.partnerId &&
+      user.accountType === 'CUSTOMER_PORTAL'
+    ) {
+      const current = await this.userRepository.findOne({
+        where: { _id: user._id },
+        relations: ['role', 'role.permissions', 'partner'],
+      });
+      return current || user;
+    }
+
+    const customerRoleName = await this.ensureCustomerRoleName();
+    const partner = await this.findOrCreateCustomerPartner(user);
+
+    if (user.roleName === customerRoleName && user.partnerId === partner._id) {
+      return user;
+    }
+
+    await this.userRepository.update(
+      { _id: user._id },
+      {
+        roleName: customerRoleName,
+        partnerId: partner._id,
+        accountType: 'CUSTOMER_PORTAL',
+      },
+    );
+
+    const updatedUser = await this.userRepository.findOne({
+      where: { _id: user._id },
+      relations: ['role', 'role.permissions', 'partner'],
+    });
+
+    if (!updatedUser) {
+      throw new NotFoundException(`User not found: ${user._id}`);
+    }
+
+    return updatedUser;
   }
 
   private sanitizeUser(user: User | null): SafeUser | null {
@@ -545,17 +663,22 @@ export class UsersService {
     const safeUsername = await this.createAvailableUsername(
       username || normalizedEmail.split('@')[0] || name,
     );
+    const customerRoleName = await this.ensureCustomerRoleName();
 
     const user = this.userRepository.create({
       name,
       username: safeUsername,
       email: normalizedEmail,
       password: hashPassword,
+      roleName: customerRoleName,
       isActive: false,
       codeId,
       codeExpired: dayjs().add(5, 'minutes').toDate(),
     });
-    const savedUser = await this.userRepository.save(user);
+    const savedUserWithoutPartner = await this.userRepository.save(user);
+    const savedUser = await this.ensureCustomerPortalAccount(
+      savedUserWithoutPartner,
+    );
 
     try {
       await this.mailerService.sendMail({

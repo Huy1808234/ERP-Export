@@ -1530,6 +1530,7 @@ const PartnerTable = ({ linkedPartnerRef, linkedPartnerType }: PartnerTableProps
           <Form.Item label={t('table.partnerType')} name="partnerType">
             <Select
               allowClear
+              disabled={!!linkedPartnerTypeFilter}
               placeholder={t('table.allTypes')}
               options={[
                 { value: 'CUSTOMER', label: `${t('types.customer')} (Buyer)` },

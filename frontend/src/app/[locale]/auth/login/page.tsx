@@ -1,8 +1,9 @@
 import Login from "@/components/auth/login";
 import { auth } from "@/auth";
-import { isStaff } from "@/utils/auth-utils";
+import { isDashboardUser } from "@/utils/auth-utils";
 import { getPostLoginRedirectPath } from "@/utils/auth-redirect";
 import { redirect } from "next/navigation";
+import { getAccessRoleName } from "@/lib/access-control";
 
 type LoginPageProps = {
     params: Promise<{ locale: string }>;
@@ -21,7 +22,8 @@ export default async function LoginPage({ params, searchParams }: LoginPageProps
         redirect(getPostLoginRedirectPath({
             callbackUrl: getFirstSearchParam(query.callbackUrl),
             locale,
-            isStaffUser: isStaff(session.user),
+            isStaffUser: isDashboardUser(session.user),
+            roleName: getAccessRoleName(session.user),
         }));
     }
 

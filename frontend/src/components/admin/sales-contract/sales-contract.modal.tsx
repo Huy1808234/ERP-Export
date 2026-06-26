@@ -203,7 +203,8 @@ const SalesContractModal: React.FC<Props> = ({ open, onCancel, onSuccess }) => {
       const currentSession = await getSession();
       const payload = {
         ...values,
-        deliveryDate: values.deliveryDate ? values.deliveryDate.toISOString() : null,
+        deliveryDate: values.deliveryDate ? values.deliveryDate.format('YYYY-MM-DD') : null,
+        validUntil: values.validUntil ? values.validUntil.format('YYYY-MM-DD') : null,
         items: validItems.map(i => ({
           productId: i.productId,
           quantity: i.quantity,
@@ -295,7 +296,7 @@ const SalesContractModal: React.FC<Props> = ({ open, onCancel, onSuccess }) => {
         </Row>
 
         <Row gutter={16}>
-          <Col span={12}>
+          <Col span={8}>
             <Form.Item name="paymentTerms" label={t('modal.paymentTerms')}>
               <Select placeholder={t('modal.paymentTermsPlaceholder')}>
                 <Option value="T/T">T/T</Option>
@@ -305,9 +306,14 @@ const SalesContractModal: React.FC<Props> = ({ open, onCancel, onSuccess }) => {
               </Select>
             </Form.Item>
           </Col>
-          <Col span={12}>
+          <Col span={8}>
             <Form.Item name="deliveryDate" label={t('modal.deliveryDate')}>
               <DatePicker style={{ width: '100%' }} placeholder={t('modal.deliveryDatePlaceholder')} />
+            </Form.Item>
+          </Col>
+          <Col span={8}>
+            <Form.Item name="validUntil" label={t('modal.validUntil') || 'Ngày hết hạn'}>
+              <DatePicker style={{ width: '100%' }} placeholder={t('modal.validUntilPlaceholder') || 'Chọn ngày hết hạn'} />
             </Form.Item>
           </Col>
         </Row>

@@ -39,6 +39,23 @@ type InventorySortDirection = 'ASC' | 'DESC';
 
 const INVENTORY_AVAILABLE_STOCK_EXPRESSION =
   '(COALESCE(product."currentStock", 0) - COALESCE(product."reservedStock", 0))';
+const INVENTORY_QUARANTINE_STOCK_EXPRESSION = `(
+  SELECT COALESCE(SUM(quarantine_source.quantity), 0)
+  FROM (
+    SELECT quarantine_ledger."remainingQuantity" AS quantity
+    FROM inventory_ledger quarantine_ledger
+    WHERE quarantine_ledger."productId" = product._id
+      AND quarantine_ledger."isQuarantine" = true
+      AND quarantine_ledger."remainingQuantity" > 0
+    UNION ALL
+    SELECT quality_check."quarantineQuantity" AS quantity
+    FROM quality_checks quality_check
+    WHERE quality_check."productId" = product._id
+      AND quality_check."quarantineQuantity" > 0
+      AND quality_check."exceptionStatus" IN ('QUARANTINED', 'RETURN_CREATED', 'CLAIM_OPEN')
+      AND quality_check."claimStatus" NOT IN ('RESOLVED', 'CANCELLED')
+  ) quarantine_source
+)`;
 
 const INVENTORY_STOCK_SORT_COLUMNS: Record<string, string> = {
   sku: 'product.sku',
@@ -384,6 +401,8 @@ export class InventoryController {
     const pageSize = +query.pageSize || 10;
     const skip = (current - 1) * pageSize;
     const search = typeof query.search === 'string' ? query.search.trim() : '';
+    const stockStatus =
+      typeof query.stockStatus === 'string' ? query.stockStatus.trim() : '';
     const rawSort =
       typeof query.sort === 'string' && query.sort.trim()
         ? query.sort.trim()
@@ -398,7 +417,9 @@ export class InventoryController {
         : INVENTORY_STOCK_SORT_COLUMNS[sortField] ||
           INVENTORY_AVAILABLE_STOCK_EXPRESSION;
 
-    const qb = this.productRepository.createQueryBuilder('product');
+    const qb = this.productRepository
+      .createQueryBuilder('product')
+      .addSelect(INVENTORY_QUARANTINE_STOCK_EXPRESSION, 'quarantineStock');
 
     if (search) {
       qb.andWhere(
@@ -415,12 +436,23 @@ export class InventoryController {
       );
     }
 
+    if (stockStatus === 'QUARANTINE') {
+      qb.andWhere(`${INVENTORY_QUARANTINE_STOCK_EXPRESSION} > 0`);
+    }
+
     qb.orderBy(sortColumn, sortDirection)
       .addOrderBy('product.sku', 'ASC')
       .skip(skip)
       .take(pageSize);
 
-    const [results, total] = await qb.getManyAndCount();
+    const total = await qb.clone().getCount();
+    const { entities, raw } = await qb.getRawAndEntities();
+    const results = entities.map((product, index) => ({
+      ...product,
+      quarantineStock: Number(
+        raw[index]?.quarantineStock ?? raw[index]?.quarantinestock ?? 0,
+      ),
+    }));
 
     // Tính toán sơ bộ cho Dashboard Kho
     const summary = await this.productRepository
@@ -432,6 +464,23 @@ export class InventoryController {
         'lowStockCount',
       )
       .getRawOne();
+    const [quarantineSummary] = await this.ledgerRepository.query(`
+      SELECT
+        COALESCE(SUM(quarantine_source.quantity), 0) AS "quarantineStock",
+        COUNT(DISTINCT quarantine_source."productId") AS "quarantineItemCount"
+      FROM (
+        SELECT ledger."productId", ledger."remainingQuantity" AS quantity
+        FROM inventory_ledger ledger
+        WHERE ledger."isQuarantine" = true
+          AND ledger."remainingQuantity" > 0
+        UNION ALL
+        SELECT quality_check."productId", quality_check."quarantineQuantity" AS quantity
+        FROM quality_checks quality_check
+        WHERE quality_check."quarantineQuantity" > 0
+          AND quality_check."exceptionStatus" IN ('QUARANTINED', 'RETURN_CREATED', 'CLAIM_OPEN')
+          AND quality_check."claimStatus" NOT IN ('RESOLVED', 'CANCELLED')
+      ) quarantine_source
+    `);
 
     return maskCostFields(
       {
@@ -446,6 +495,10 @@ export class InventoryController {
           totalStock: Number(summary.totalStock || 0),
           totalItems: Number(summary.totalItems || 0),
           lowStockCount: Number(summary.lowStockCount || 0),
+          quarantineStock: Number(quarantineSummary?.quarantineStock || 0),
+          quarantineItemCount: Number(
+            quarantineSummary?.quarantineItemCount || 0,
+          ),
         },
       },
       user,

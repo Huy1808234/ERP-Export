@@ -30,7 +30,7 @@ import { getSession } from 'next-auth/react';
 import { useTheme } from '@/context/theme.context';
 
 import { sendRequest } from '@/lib/api-client';
-import { SHIPMENT_STATUS_CONFIG, SHIPMENT_STATUS_KEYS } from '@/constants/o2c';
+import { SHIPMENT_STATUS_CONFIG, SHIPMENT_STATUS_KEYS, SHIPMENT_STATUS_TRANSITIONS } from '@/constants/o2c';
 import type { IContainer, IShipment, ShipmentStatus } from '@/types/o2c';
 import { formatDate } from '@/utils/format';
 import { getAccessToken } from '@/lib/auth-token';
@@ -60,11 +60,14 @@ const ShipmentDetailDrawer = ({ shipmentId, open, onClose, onSuccess }: IProps) 
   const tDetail = useTranslations('ShipmentDetail');
 
   const shipmentStatusOptions = useMemo(() => {
+    if (!data?.status) return [];
+    const allowedTransitions = SHIPMENT_STATUS_TRANSITIONS[data.status] || [];
     return SHIPMENT_STATUS_KEYS.map(key => ({
       value: key,
-      label: tStatus(key)
+      label: tStatus(key),
+      disabled: key !== data.status && !allowedTransitions.includes(key),
     }));
-  }, [tStatus]);
+  }, [tStatus, data?.status]);
 
   const handlePrint = useReactToPrint({
     contentRef: printRef,

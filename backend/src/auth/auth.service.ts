@@ -160,31 +160,44 @@ export class AuthService {
     return Boolean(await comparePasswordHelper(refreshToken, refreshTokenHash));
   }
 
-  private async issueTokenPair(user: User) {
-    const { accessToken, accessTokenExpiresAt } = this.signAccessToken(user);
-    const { refreshToken, refreshTokenExpiresAt } = this.signRefreshToken(user);
+  /**
+   * Only invokes `ensureCustomerPortalAccount` for users that are either
+   * already a CUSTOMER or are explicitly registering a portal account.
+   * Staff/admin logins must not be mutated into customers.
+   */
+  private async issueTokenPair(
+    user: User,
+    options: { forPortalRegistration?: boolean } = {},
+  ) {
+    const portalReadyUser = options.forPortalRegistration
+      ? await this.usersService.ensureCustomerPortalAccount(user)
+      : user;
+    const { accessToken, accessTokenExpiresAt } =
+      this.signAccessToken(portalReadyUser);
+    const { refreshToken, refreshTokenExpiresAt } =
+      this.signRefreshToken(portalReadyUser);
     const refreshTokenHash = await this.hashRefreshToken(refreshToken);
 
     await this.usersService.updateRefreshToken(
-      user.username,
+      portalReadyUser.username,
       refreshTokenHash,
       refreshTokenExpiresAt,
     );
 
     return {
       user: {
-        _id: user._id,
-        username: user.username,
-        name: user.name,
-        roleName: user.roleName,
-        role: user.role
+        _id: portalReadyUser._id,
+        username: portalReadyUser.username,
+        name: portalReadyUser.name,
+        roleName: portalReadyUser.roleName,
+        role: portalReadyUser.role
           ? {
-              _id: user.role._id,
-              name: user.role.name,
+              _id: portalReadyUser.role._id,
+              name: portalReadyUser.role.name,
             }
           : null,
-        partnerId: user.partnerId,
-        email: user.email,
+        partnerId: portalReadyUser.partnerId,
+        email: portalReadyUser.email,
       },
       access_token: accessToken,
       access_token_expires_at: accessTokenExpiresAt,
@@ -245,6 +258,13 @@ export class AuthService {
 
   async handleRegister(registerDto: CreateAuthDto) {
     return this.usersService.handleRegister(registerDto);
+  }
+
+  async registerPortalAccount(registerDto: CreateAuthDto) {
+    const result = await this.usersService.handleRegister(registerDto);
+    const user = await this.usersService.findByUsername(result.username);
+    if (!user) return result;
+    return this.issueTokenPair(user, { forPortalRegistration: true });
   }
 
   async checkCode(data: CodeAuthDto) {

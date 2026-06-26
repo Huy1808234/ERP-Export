@@ -28,7 +28,7 @@ const AntdStatic = () => {
   useEffect(() => {
     message = appMessage;
 
-    // Wrap notification to support legacy 'title' property by mapping it to 'message'.
+    // Wrap notification to support legacy 'message' property by mapping it to 'title'.
     notification = new Proxy(appNotification, {
       get(target, prop) {
         const originalMethod = target[prop as keyof typeof appNotification];
@@ -57,7 +57,7 @@ const AntdStatic = () => {
       lastForbiddenNoticeAtRef.current = now;
       const detail = (event as CustomEvent<{ message?: string }>).detail;
 
-      appNotification.warning({
+      notification.warning({
         message: 'Không có quyền truy cập',
         description: detail?.message || 'Tài khoản của bạn chưa được cấp quyền cho thao tác này.',
         placement: 'topRight',

@@ -37,6 +37,7 @@ interface IInventoryItem {
   englishName?: string;
   currentStock: number;
   reservedStock: number;
+  quarantineStock?: number;
   minimumStock: number;
   unitOfMeasure: string;
 }
@@ -45,6 +46,8 @@ interface IInventorySummary {
   totalStock: number;
   totalItems: number;
   lowStockCount: number;
+  quarantineStock: number;
+  quarantineItemCount: number;
 }
 
 interface IInventoryLedger {
@@ -88,6 +91,7 @@ type InventorySortField =
   | 'updatedAt';
 type InventoryTableSorter = Parameters<NonNullable<TableProps<IInventoryItem>['onChange']>>[2];
 type LedgerDateRange = [Dayjs, Dayjs] | null;
+type InventoryStockStatus = 'QUARANTINE';
 
 interface InventorySortConfig {
   field: InventorySortField;
@@ -187,11 +191,18 @@ const InventoryPage = () => {
 
   // --- States ---
   const [data, setData] = useState<IInventoryItem[]>([]);
-  const [summary, setSummary] = useState<IInventorySummary>({ totalStock: 0, totalItems: 0, lowStockCount: 0 });
+  const [summary, setSummary] = useState<IInventorySummary>({
+    totalStock: 0,
+    totalItems: 0,
+    lowStockCount: 0,
+    quarantineStock: 0,
+    quarantineItemCount: 0,
+  });
   const [loading, setLoading] = useState(true);
   const [meta, setMeta] = useState({ current: 1, pageSize: 10, total: 0 });
   const { current, pageSize } = meta;
   const [searchText, setSearchText] = useState("");
+  const [stockStatus, setStockStatus] = useState<InventoryStockStatus | undefined>();
   const [sortConfig, setSortConfig] = useState<InventorySortConfig>(DEFAULT_INVENTORY_SORT);
 
   // Ledger State
@@ -298,6 +309,7 @@ const InventoryPage = () => {
           pageSize,
           sort: getInventorySortParam(sortConfig),
           search: searchText || undefined,
+          stockStatus,
         },
         headers: { Authorization: `Bearer ${accessToken}` },
       });
@@ -311,7 +323,7 @@ const InventoryPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [current, pageSize, searchText, sortConfig, accessToken]);
+  }, [current, pageSize, searchText, sortConfig, stockStatus, accessToken]);
 
   useEffect(() => {
     fetchInventory();
@@ -354,6 +366,11 @@ const InventoryPage = () => {
         <Space orientation="vertical" size={0}>
           <Text strong>{record.englishName || text}</Text>
           <Text type="secondary" style={{ fontSize: 12 }}>SKU: {record.sku}</Text>
+          {Number(record.quarantineStock || 0) > 0 ? (
+            <Tag color="orange" style={{ width: 'fit-content' }}>
+              {t('stockStatus.quarantine')}: {formatNumber(record.quarantineStock || 0)}
+            </Tag>
+          ) : null}
         </Space>
       ),
     },
@@ -599,7 +616,7 @@ const InventoryPage = () => {
 
       {/* Stats Cards */}
       <Row gutter={16} style={{ marginBottom: '24px' }}>
-        <Col span={8}>
+        <Col xs={24} md={12} xl={6}>
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
             <Card variant="borderless" style={{ borderRadius: 20, boxShadow: '0 10px 25px -5px rgba(0,0,0,0.05)', border: '1px solid rgba(0,0,0,0.02)' }}>
               <Statistic 
@@ -613,7 +630,7 @@ const InventoryPage = () => {
             </Card>
           </motion.div>
         </Col>
-        <Col span={8}>
+        <Col xs={24} md={12} xl={6}>
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
             <Card variant="borderless" style={{ borderRadius: 20, boxShadow: '0 10px 25px -5px rgba(0,0,0,0.05)', border: '1px solid rgba(0,0,0,0.02)' }}>
               <Statistic 
@@ -626,7 +643,7 @@ const InventoryPage = () => {
             </Card>
           </motion.div>
         </Col>
-        <Col span={8}>
+        <Col xs={24} md={12} xl={6}>
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
             <Card variant="borderless" style={{ borderRadius: 20, boxShadow: '0 10px 25px -5px rgba(0,0,0,0.05)', border: '1px solid rgba(0,0,0,0.02)' }}>
               <Statistic 
@@ -636,6 +653,22 @@ const InventoryPage = () => {
                 prefix={<AppstoreOutlined style={{ marginRight: 8 }} />} 
               />
               <div style={{ marginTop: 8, fontSize: 12, color: token.colorTextDescription }}>{t('stats.productCatalogDescription')}</div>
+            </Card>
+          </motion.div>
+        </Col>
+        <Col xs={24} md={12} xl={6}>
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
+            <Card variant="borderless" style={{ borderRadius: 20, boxShadow: '0 10px 25px -5px rgba(0,0,0,0.05)', border: '1px solid rgba(0,0,0,0.02)' }}>
+              <Statistic
+                title={<Text strong style={{ color: '#fa8c16' }}>{t('stats.quarantineStock')}</Text>}
+                value={summary.quarantineStock}
+                precision={0}
+                styles={{ content: { color: '#fa8c16', fontWeight: 900, fontSize: 32 } }}
+                prefix={<StopOutlined style={{ marginRight: 8 }} />}
+              />
+              <div style={{ marginTop: 8, fontSize: 12, color: token.colorTextDescription }}>
+                {t('stats.quarantineStockDescription', { count: summary.quarantineItemCount })}
+              </div>
             </Card>
           </motion.div>
         </Col>
@@ -651,18 +684,34 @@ const InventoryPage = () => {
         styles={{ body: { padding: 0 } }}
       >
         <div style={{ padding: '16px 24px', borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
-          <Input 
-            placeholder={t('filters.searchPlaceholder')} 
-            prefix={<SearchOutlined />} 
-            value={searchText}
-            onChange={(event) => {
-              setSearchText(event.target.value);
-              setMeta((prev) => ({ ...prev, current: 1 }));
-            }}
-            style={{ width: 300, borderRadius: 8 }}
-            size="large"
-            allowClear
-          />
+          <Space wrap>
+            <Input
+              placeholder={t('filters.searchPlaceholder')}
+              prefix={<SearchOutlined />}
+              value={searchText}
+              onChange={(event) => {
+                setSearchText(event.target.value);
+                setMeta((prev) => ({ ...prev, current: 1 }));
+              }}
+              style={{ width: 300, borderRadius: 8 }}
+              size="large"
+              allowClear
+            />
+            <Select<InventoryStockStatus>
+              placeholder={t('filters.statusPlaceholder')}
+              allowClear
+              size="large"
+              style={{ width: 220 }}
+              value={stockStatus}
+              options={[
+                { value: 'QUARANTINE', label: t('stockStatus.quarantine') },
+              ]}
+              onChange={(value) => {
+                setStockStatus(value);
+                setMeta((prev) => ({ ...prev, current: 1 }));
+              }}
+            />
+          </Space>
         </div>
         <Table 
           columns={columns} 

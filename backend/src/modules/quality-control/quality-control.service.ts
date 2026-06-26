@@ -321,6 +321,34 @@ export class QualityControlService {
 
       const purchaseOrderId =
         data.purchaseOrderId ?? gr?.purchaseOrderId ?? null;
+      const activeDuplicateQuery = manager
+        .getRepository(QualityCheck)
+        .createQueryBuilder('qc')
+        .where('qc."exceptionStatus" != :closed', {
+          closed: QCExceptionStatus.CLOSED,
+        })
+        .andWhere('qc."claimStatus" NOT IN (:...closedClaimStatuses)', {
+          closedClaimStatuses: [QCClaimStatus.RESOLVED, QCClaimStatus.CANCELLED],
+        });
+
+      if (grItem) {
+        activeDuplicateQuery.andWhere('qc."goodsReceiptItemId" = :lineId', {
+          lineId: grItem._id,
+        });
+      } else if (purchaseOrderId) {
+        activeDuplicateQuery
+          .andWhere('qc."purchaseOrderId" = :purchaseOrderId', {
+            purchaseOrderId,
+          })
+          .andWhere('qc."productId" = :productId', { productId });
+      }
+
+      if ((grItem || purchaseOrderId) && (await activeDuplicateQuery.getCount()) > 0) {
+        throw new BadRequestException(
+          'An active QC check already exists for this receipt line',
+        );
+      }
+
       const receivedQuantity = toNumber(
         data.receivedQuantity,
         toNumber(grItem?.quantityReceived),
@@ -387,7 +415,11 @@ export class QualityControlService {
         await manager.save(grItem);
       }
 
-      if (hasException && rejectedQuantity > 0) {
+      if (
+        data.result === QCResult.FAILED &&
+        hasException &&
+        rejectedQuantity > 0
+      ) {
         const returnCount = await manager.count(PurchaseReturn);
         const purchaseReturn = manager.create(PurchaseReturn, {
           returnNumber: `RET-${dateKey()}-${String(returnCount + 1).padStart(4, '0')}`,

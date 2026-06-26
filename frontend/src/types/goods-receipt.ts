@@ -1,4 +1,4 @@
-export type GRNStatus = 'DRAFT' | 'COMPLETED' | 'CANCELLED';
+export type GRNStatus = 'DRAFT' | 'PENDING_QC' | 'COMPLETED' | 'CANCELLED';
 
 export interface IGRNLine {
   _id: string;
@@ -13,6 +13,7 @@ export interface IGRNLine {
   quantityReceived: number;
   quantityRejected: number;
   rejectionReason?: string | null;
+  hasActiveQualityCheck?: boolean;
   lotNumber?: string | null;
   qualityStatus?: 'PASS' | 'DAMAGED' | 'WRONG_SPEC' | 'QUARANTINE' | string;
   lineNote?: string | null;

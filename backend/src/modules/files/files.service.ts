@@ -73,6 +73,13 @@ export class FilesService {
     return asset;
   }
 
+  async findByLinkedDocument(recordId: string): Promise<FileAsset[]> {
+    return this.fileAssetRepository.find({
+      where: { linkedDocument_id: recordId },
+      order: { createdAt: 'DESC' },
+    });
+  }
+
   async linkToDocument(
     recordId: string,
     input: LinkFileAssetInput,

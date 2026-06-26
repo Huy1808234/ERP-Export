@@ -21,6 +21,11 @@ export class CreateCommercialInvoiceFromShipmentDto {
   taxRatePercent?: number;
 
   @IsOptional()
+  @IsNumber()
+  @Min(0)
+  exchangeRate?: number;
+
+  @IsOptional()
   @IsString()
   note?: string;
 }

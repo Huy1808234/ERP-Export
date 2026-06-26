@@ -10,6 +10,7 @@ import { useSession } from 'next-auth/react';
 import { useTranslations } from 'next-intl';
 import { formatDate } from '@/utils/format';
 import { getAccessToken } from '@/lib/auth-token';
+import type { IPOLine, POStatus } from '@/types/purchase-order';
 
 const { Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -18,9 +19,11 @@ interface IPurchaseOrderListItem {
   _id: string;
   poNumber?: string;
   orderDate?: string;
+  status?: POStatus;
   vendor?: {
     name?: string;
   };
+  items?: IPOLine[];
 }
 
 type PurchaseOrderListResponse = IModelPaginate<IPurchaseOrderListItem> & {
@@ -28,6 +31,24 @@ type PurchaseOrderListResponse = IModelPaginate<IPurchaseOrderListItem> & {
 };
 
 type DateRangeValue = [Dayjs | null, Dayjs | null] | null;
+
+const RECEIPT_ELIGIBLE_PO_STATUSES: POStatus[] = ['SENT', 'PARTIAL_RECEIPT'];
+
+const getRemainingQuantity = (po: IPurchaseOrderListItem): number => {
+  return (po.items || []).reduce((sum, item) => {
+    const orderedQuantity = Number(item.quantity || 0);
+    const receivedQuantity = Number(item.receivedQuantity || 0);
+    return sum + Math.max(orderedQuantity - receivedQuantity, 0);
+  }, 0);
+};
+
+const isReceivablePurchaseOrder = (po: IPurchaseOrderListItem): boolean => {
+  return Boolean(
+    po.status &&
+    RECEIPT_ELIGIBLE_PO_STATUSES.includes(po.status) &&
+    getRemainingQuantity(po) > 0,
+  );
+};
 
 interface IProps {
   isOpen: boolean;
@@ -55,6 +76,7 @@ const POSelectModal = (props: IProps) => {
         method: 'GET',
         queryParams: {
           pageSize: 50,
+          status: RECEIPT_ELIGIBLE_PO_STATUSES.join(','),
           ...(search ? { poNumber: `/${search}/i` } : {}),
         },
         headers: { Authorization: `Bearer ${accessToken}` },
@@ -62,7 +84,7 @@ const POSelectModal = (props: IProps) => {
 
       if (res?.data) {
         const list = res.data.results || res.data.result || [];
-        setPos(list);
+        setPos(list.filter(isReceivablePurchaseOrder));
       }
     } finally {
       setLoading(false);
@@ -116,6 +138,12 @@ const POSelectModal = (props: IProps) => {
       dataIndex: 'orderDate',
       key: 'orderDate',
       render: (date?: string) => (date ? formatDate(date) : '-'),
+    },
+    {
+      title: t('modal.form.remainingQty'),
+      key: 'remainingQuantity',
+      align: 'right',
+      render: (_, record) => <Text strong>{getRemainingQuantity(record)}</Text>,
     },
     {
       title: t('poSelect.columns.actions'),

@@ -2,11 +2,14 @@ import {
   Body,
   Controller,
   Get,
+  Header,
   Param,
   Patch,
   Post,
   Query,
+  Res,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import {
   ResponseMessage,
   User,
@@ -19,6 +22,12 @@ import {
   CreateCommercialInvoiceFromShipmentDto,
   IssueCommercialInvoiceDto,
 } from './dto/create-commercial-invoice.dto';
+import {
+  generateCommercialInvoicePdf,
+  buildInvoicePdfData,
+  CompanyInfo,
+} from './commercial-invoice-pdf.service';
+import { SettingsService } from '@/modules/settings/settings.service';
 
 type PermissionLike =
   | string
@@ -35,6 +44,7 @@ type CommercialInvoiceRequestUser = {
 export class CommercialInvoicesController {
   constructor(
     private readonly commercialInvoicesService: CommercialInvoicesService,
+    private readonly settingsService: SettingsService,
   ) {}
 
   private readonly commercialInvoicePriceFields = [
@@ -115,5 +125,36 @@ export class CommercialInvoicesController {
       user,
     );
     return maskCostFields(result, user, this.commercialInvoicePriceFields);
+  }
+
+  @Get(':_id/export-pdf')
+  @RequirePermissions('read:export_document')
+  @Header('Content-Type', 'application/pdf')
+  async exportPdf(
+    @Param('_id') recordId: string,
+    @Res() res: Response,
+  ) {
+    const invoice = await this.commercialInvoicesService.findOne(recordId);
+    
+    const seller: CompanyInfo = {
+      name: 'ANTIGRAVITY EXPORT CO., LTD',
+      address: '123 Export Street, Dist 1, HCMC, Vietnam',
+      bankInfo: `Bank Name: VIETCOMBANK\nBeneficiary: CÔNG TY TNHH XUẤT NHẬP KHẨU ANTIGRAVITY\nAccount Number: 0123456789\nSwift Code: BFTVVNVX`,
+      phone: '+84 28 1234 5678',
+      email: 'export@antigravity.com',
+    };
+
+    const pdfData = buildInvoicePdfData(
+      invoice,
+      invoice.salesContract,
+      invoice.shipment,
+      seller,
+    );
+
+    const pdfBuffer = await generateCommercialInvoicePdf(pdfData);
+    
+    const filename = `CI-${invoice.invoiceNumber}.pdf`.replace(/\//g, '-');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.end(pdfBuffer);
   }
 }

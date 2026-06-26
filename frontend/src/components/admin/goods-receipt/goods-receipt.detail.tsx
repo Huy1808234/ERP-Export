@@ -97,7 +97,7 @@ const GoodsReceiptDetailModal = (props: IProps) => {
     const receivedQty = items.reduce((sum, item) => sum + Number(item.quantityReceived || 0), 0);
     const rejectedQty = items.reduce((sum, item) => sum + Number(item.quantityRejected || 0), 0);
     const acceptedQty = Math.max(receivedQty - rejectedQty, 0);
-    const variance = Math.max(orderedQty - receivedQty, 0);
+    const variance = Math.max(orderedQty - acceptedQty, 0);
 
     return { totalLines, orderedQty, receivedQty, rejectedQty, acceptedQty, variance };
   }, [data?.items]);

@@ -78,11 +78,11 @@ export class ContractSignatureInvitation {
   @Column({ type: 'varchar' })
   tokenHash: string;
 
-  @Column({ type: 'varchar' })
-  otpHash: string;
+  @Column({ type: 'varchar', nullable: true })
+  otpHash: string | null;
 
-  @Column({ type: 'timestamp' })
-  otpExpiresAt: Date;
+  @Column({ type: 'timestamp', nullable: true })
+  otpExpiresAt: Date | null;
 
   @Column({ type: 'integer', default: 0 })
   otpAttemptCount: number;

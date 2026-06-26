@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useEffect, useState, useMemo } from 'react';
-import { App, Button, Space, Table, Tag, Input, Typography, Card, Tooltip } from 'antd';
-import { SearchOutlined, EyeOutlined, PlusOutlined, LoginOutlined, RollbackOutlined } from '@ant-design/icons';
+import { App, Button, Space, Table, Tag, Input, Typography, Card, Tooltip, Select } from 'antd';
+import { SearchOutlined, EyeOutlined, PlusOutlined, LoginOutlined, RollbackOutlined, ExperimentOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { useTranslations } from 'next-intl';
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -13,6 +13,7 @@ import { IGoodsReceipt, GRNStatus } from '@/types/goods-receipt';
 import { formatDate } from '@/utils/format';
 import GoodsReceiptModal from './goods-receipt.modal';
 import GoodsReceiptDetailModal from './goods-receipt.detail';
+import QcInspectionModal from './qc-inspection.modal';
 import POSelectModal from './po-select.modal';
 import { useSearchParams } from 'next/navigation';
 import { sendRequest } from '@/lib/api-client';
@@ -32,6 +33,7 @@ const GoodsReceiptTable = () => {
   const [isGrnModalOpen, setIsGrnModalOpen] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [isPoSelectOpen, setIsPoSelectOpen] = useState(false);
+  const [isQcModalOpen, setIsQcModalOpen] = useState(false);
   
   const [selectedPoId, setSelectedPoId] = useState<string | null>(null);
   const [selectedGrn, setSelectedGrn] = useState<IGoodsReceipt | null>(null);
@@ -41,6 +43,7 @@ const GoodsReceiptTable = () => {
     current: 1,
     pageSize: 10,
     grnNumber: '',
+    status: undefined as GRNStatus | undefined,
   });
 
   useEffect(() => {
@@ -74,6 +77,21 @@ const GoodsReceiptTable = () => {
       setQueryParams(prev => ({ ...prev, grnNumber: value, current: 1 }));
     }, 500),
     []
+  );
+
+  const hasPendingQc = (record: IGoodsReceipt): boolean => (
+    record.status !== 'CANCELLED' &&
+    (record.items ?? []).some((item) => (
+      !item.hasActiveQualityCheck &&
+      (
+        Number(item.quantityRejected || 0) > 0 ||
+        Boolean(item.qualityStatus && item.qualityStatus !== 'PASS')
+      )
+    ))
+  );
+
+  const getDisplayStatus = (record: IGoodsReceipt): GRNStatus => (
+    hasPendingQc(record) ? 'PENDING_QC' : record.status
   );
 
   const getReverseErrorTitle = (error: unknown): string => {
@@ -156,8 +174,9 @@ const GoodsReceiptTable = () => {
       title: t('table.columns.status'),
       dataIndex: 'status',
       key: 'status',
-      render: (status: GRNStatus) => {
-        const color = status === 'COMPLETED' ? 'green' : status === 'CANCELLED' ? 'red' : 'processing';
+      render: (_status: GRNStatus, record: IGoodsReceipt) => {
+        const status = getDisplayStatus(record);
+        const color = status === 'COMPLETED' ? 'green' : status === 'CANCELLED' ? 'red' : status === 'PENDING_QC' ? 'orange' : 'processing';
         return <Tag color={color}>{status ? t(`status.${status}`) : 'N/A'}</Tag>;
       },
     },
@@ -194,6 +213,18 @@ const GoodsReceiptTable = () => {
               />
             </Tooltip>
           ) : null}
+          {hasPendingQc(record) ? (
+            <Tooltip title={t('tooltips.inspectQc')}>
+              <Button
+                type="text"
+                icon={<ExperimentOutlined style={{ color: '#fa8c16' }} />}
+                onClick={() => {
+                  setSelectedGrn(record);
+                  setIsQcModalOpen(true);
+                }}
+              />
+            </Tooltip>
+          ) : null}
         </Space>
       ),
     },
@@ -214,6 +245,20 @@ const GoodsReceiptTable = () => {
             style={{ width: 300 }}
             allowClear
             onChange={(e) => debouncedSearch(e.target.value)}
+          />
+          <Select<GRNStatus>
+            placeholder={t('filters.statusPlaceholder')}
+            allowClear
+            style={{ width: 180 }}
+            value={queryParams.status}
+            options={[
+              { value: 'PENDING_QC', label: t('status.PENDING_QC') },
+              { value: 'COMPLETED', label: t('status.COMPLETED') },
+              { value: 'CANCELLED', label: t('status.CANCELLED') },
+            ]}
+            onChange={(status) => {
+              setQueryParams((prev) => ({ ...prev, status, current: 1 }));
+            }}
           />
         </Space>
         <Button 
@@ -271,6 +316,12 @@ const GoodsReceiptTable = () => {
         isOpen={isDetailModalOpen}
         setIsOpen={setIsDetailModalOpen}
         data={selectedGrn}
+      />
+      <QcInspectionModal
+        isOpen={isQcModalOpen}
+        setIsOpen={setIsQcModalOpen}
+        goodsReceipt={selectedGrn}
+        onSuccess={() => fetchGRNs(queryParams)}
       />
     </Card>
   );

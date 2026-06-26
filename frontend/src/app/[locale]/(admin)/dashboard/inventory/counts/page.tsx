@@ -36,6 +36,7 @@ import AdminPageScroll from '@/components/layout/admin.page-scroll';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { sendRequest } from '@/lib/api-client';
 import { getAccessToken } from '@/lib/auth-token';
+import { getAccessRoleName } from '@/lib/access-control';
 import { canReadCostFields } from '@/lib/field-access';
 import { formatCurrency, formatVND } from '@/utils/format';
 
@@ -137,11 +138,7 @@ const InventoryCountsPage = () => {
   const valuationSectionRef = useRef<HTMLDivElement>(null);
   const accessToken = getAccessToken(session);
   const canViewCost = canReadCostFields(session?.user);
-  const currentRoleName = String(
-    typeof (session?.user as any)?.role === 'string'
-      ? (session?.user as any)?.role
-      : session?.user?.role?.name || '',
-  ).toUpperCase();
+  const currentRoleName = getAccessRoleName(session?.user);
   const canCreateOrSubmitCount = ['ADMIN', 'WAREHOUSE'].includes(currentRoleName);
   const { message } = App.useApp();
 

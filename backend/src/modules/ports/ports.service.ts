@@ -11,12 +11,14 @@ import { CreatePortDto } from './dto/create-port.dto';
 import { QueryPortDto } from './dto/query-port.dto';
 import { UpdatePortDto } from './dto/update-port.dto';
 import { Port, PortType } from './entities/port.entity';
+import { normalizeRoleName } from '@/common/auth/role-catalog';
 import { normalizeCountryCode } from '@/common/geo.util';
 import { CountriesService } from '../countries/countries.service';
 import { Country } from '../countries/entities/country.entity';
 
 type RequestUser = {
   username?: string;
+  roleName?: string | null;
 };
 
 type PortListResponse = {
@@ -156,7 +158,13 @@ export class PortsService implements OnModuleInit {
     return this.portRepository.save(port);
   }
 
-  async findAll(query: QueryPortDto): Promise<PortListResponse> {
+  async findAll(
+    query: QueryPortDto,
+    user?: RequestUser,
+  ): Promise<PortListResponse> {
+    const isCustomer = normalizeRoleName(user?.roleName) === 'CUSTOMER';
+    const effectiveIsActive = isCustomer ? true : query.isActive;
+    const effectiveType = isCustomer ? PortType.SEA : query.type;
     const current = Math.max(1, query.current || 1);
     const pageSize = Math.min(100, Math.max(1, query.pageSize || 20));
     const builder = this.portRepository
@@ -167,13 +175,17 @@ export class PortsService implements OnModuleInit {
       .skip((current - 1) * pageSize)
       .take(pageSize);
 
-    if (query.isActive !== undefined) {
+    if (isCustomer) {
+      builder.andWhere('port.deletedAt IS NULL');
+    }
+
+    if (effectiveIsActive !== undefined) {
       builder.andWhere('port.isActive = :isActive', {
-        isActive: query.isActive,
+        isActive: effectiveIsActive,
       });
     }
 
-    if (query.isActive === true) {
+    if (effectiveIsActive === true) {
       builder.innerJoin(
         Country,
         'country',
@@ -188,8 +200,8 @@ export class PortsService implements OnModuleInit {
       });
     }
 
-    if (query.type) {
-      builder.andWhere('port.type = :type', { type: query.type });
+    if (effectiveType) {
+      builder.andWhere('port.type = :type', { type: effectiveType });
     }
 
     if (query.search) {

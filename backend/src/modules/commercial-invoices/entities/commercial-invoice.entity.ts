@@ -190,6 +190,12 @@ export class CommercialInvoice {
   @Column({ type: 'text', nullable: true })
   note: string | null;
 
+  @Column({ type: 'boolean', default: false })
+  isPaid: boolean;
+
+  @Column({ type: 'timestamp', nullable: true })
+  paidAt: Date | null;
+
   @OneToMany(() => CommercialInvoiceItem, (item) => item.commercialInvoice, {
     cascade: true,
   })

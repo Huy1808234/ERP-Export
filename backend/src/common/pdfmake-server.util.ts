@@ -47,6 +47,8 @@ pdfMake.setUrlAccessPolicy(() => false);
 export function renderPdfBuffer(
   docDefinition: PdfMakeDocDefinition,
 ): Promise<Buffer> {
+  docDefinition.defaultStyle = docDefinition.defaultStyle || {};
+  docDefinition.defaultStyle.font = docDefinition.defaultStyle.font || 'Helvetica';
   return pdfMake.createPdf(docDefinition).getBuffer();
 }
 
@@ -54,5 +56,7 @@ export function writePdfFile(
   docDefinition: PdfMakeDocDefinition,
   filePath: string,
 ): Promise<void> {
+  docDefinition.defaultStyle = docDefinition.defaultStyle || {};
+  docDefinition.defaultStyle.font = docDefinition.defaultStyle.font || 'Helvetica';
   return pdfMake.createPdf(docDefinition).write(filePath);
 }

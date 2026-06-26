@@ -464,7 +464,10 @@ export class CommercialInvoicesService {
       relations: [
         'buyer',
         'salesContract',
+        'salesContract.buyer',
         'shipment',
+        'shipment.polPort',
+        'shipment.podPort',
         'shipment.containers',
         'items',
         'items.product',
@@ -513,7 +516,7 @@ export class CommercialInvoicesService {
       const taxAmount = subtotal.mul(taxRate).div(100).toDecimalPlaces(2);
       const total = subtotal.plus(taxAmount).toDecimalPlaces(2);
       const exchangeRate = new Decimal(
-        shipment.salesContract.exchangeRate || 1,
+        dto.exchangeRate ?? shipment.salesContract.exchangeRate ?? 1,
       );
       const username = this.getActorUsername(user);
 

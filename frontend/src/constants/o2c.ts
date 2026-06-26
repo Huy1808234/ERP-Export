@@ -21,6 +21,15 @@ export const SHIPMENT_STATUS_CONFIG: Record<ShipmentStatus, { color: string }> =
 
 export const SHIPMENT_STATUS_KEYS = Object.keys(SHIPMENT_STATUS_CONFIG) as ShipmentStatus[];
 
+export const SHIPMENT_STATUS_TRANSITIONS: Record<ShipmentStatus, ShipmentStatus[]> = {
+  BOOKED: ['LOADING'],
+  LOADING: ['CUSTOMS_CLEARED', 'ON_BOARD'],
+  CUSTOMS_CLEARED: ['ON_BOARD'],
+  ON_BOARD: ['ARRIVED'],
+  ARRIVED: ['CLOSED'],
+  CLOSED: [],
+};
+
 export const INCOTERMS_KEYS = ['EXW', 'FOB', 'CIF', 'CFR', 'DAP', 'DDP'] as const;
 export type IncotermKey = typeof INCOTERMS_KEYS[number];
 

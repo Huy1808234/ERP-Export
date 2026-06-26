@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { sendRequest } from "@/lib/api-client";
-import { IGoodsReceipt } from "@/types/goods-receipt";
+import { GRNStatus, IGoodsReceipt } from "@/types/goods-receipt";
 import { IPaginationMeta } from "@/types/purchase-order";
 import { notification } from '@/providers/antd-static';
 import { getAccessToken } from '@/lib/auth-token';
@@ -11,6 +11,7 @@ interface FetchParams {
   pageSize: number;
   grnNumber?: string;
   poNumber?: string;
+  status?: GRNStatus;
 }
 
 export const useGoodsReceipts = () => {
@@ -29,6 +30,7 @@ export const useGoodsReceipts = () => {
           current: params.current,
           pageSize: params.pageSize,
           ...(params.grnNumber ? { grnNumber: `/${params.grnNumber}/i` } : {}),
+          ...(params.status ? { status: params.status } : {}),
           populate: 'purchaseOrder,receivedBy',
         },
         headers: { Authorization: `Bearer ${getAccessToken(session)}` },

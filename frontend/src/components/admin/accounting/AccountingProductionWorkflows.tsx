@@ -18,7 +18,7 @@ import {
   Tag,
   Typography,
   Alert,
-  message,
+  App,
 } from 'antd';
 import {
   CalculatorOutlined,
@@ -221,6 +221,7 @@ type WorkflowTabKey = 'period' | 'tax' | 'fx' | 'audit';
 const AccountingProductionWorkflows: React.FC<AccountingProductionWorkflowsProps> = ({ accessToken }) => {
   const t = useTranslations('Accounting');
   const locale = useLocale();
+  const { message } = App.useApp();
   const [loading, setLoading] = useState(false);
   const [activeWorkflowTab, setActiveWorkflowTab] = useState<WorkflowTabKey>('period');
   const [periods, setPeriods] = useState<PeriodRow[]>([]);

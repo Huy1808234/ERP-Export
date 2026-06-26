@@ -1,5 +1,6 @@
 import {
   IsArray,
+  ArrayNotEmpty,
   IsDateString,
   IsIn,
   IsNotEmpty,
@@ -32,15 +33,18 @@ class GoodsReceiptItemDto {
   productId: string;
 
   @IsNumber()
+  @Type(() => Number)
   @Min(0)
   quantityOrdered: number;
 
   @IsNumber()
+  @Type(() => Number)
   @Min(0)
   quantityReceived: number;
 
   @IsOptional()
   @IsNumber()
+  @Type(() => Number)
   @Min(0)
   quantityRejected?: number;
 
@@ -95,6 +99,7 @@ export class CreateGoodsReceiptDto {
   note?: string;
 
   @IsArray()
+  @ArrayNotEmpty()
   @ValidateNested({ each: true })
   @Type(() => GoodsReceiptItemDto)
   items: GoodsReceiptItemDto[];

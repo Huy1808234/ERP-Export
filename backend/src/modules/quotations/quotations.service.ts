@@ -3,6 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import {
@@ -25,6 +26,8 @@ import { ApprovalMatrixService } from '../approval-matrix/approval-matrix.servic
 import { ApprovalDocumentType } from '../approval-matrix/entities/approval-rule.entity';
 import { PortsService } from '../ports/ports.service';
 import { Partner } from '@/modules/partners/entities/partner.entity';
+
+const QUOTATION_PORTAL_PUBLISHED_EVENT = 'quotation.portal_published';
 
 type PricingSource =
   | 'PRICING_POLICY'
@@ -160,7 +163,22 @@ export class QuotationsService {
     private dataSource: DataSource,
     private approvalMatrixService: ApprovalMatrixService,
     private portsService: PortsService,
+    private eventEmitter: EventEmitter2,
   ) {}
+
+  private emitQuotationPublishedForPortal(
+    quotation: Quotation,
+    username?: string | null,
+  ): void {
+    this.eventEmitter.emit(QUOTATION_PORTAL_PUBLISHED_EVENT, {
+      quotation_id: quotation._id,
+      buyer_id: quotation.customerId,
+      quotationNumber: quotation.quotationNumber,
+      totalAmount: Number(quotation.totalAmount || 0),
+      currency: quotation.currency,
+      publishedByUsername: username || null,
+    });
+  }
 
   private validateQuotationForSend(quotation: Quotation) {
     const validation = validateIncotermLogisticsFee(quotation.incoterm, {

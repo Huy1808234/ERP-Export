@@ -6,9 +6,10 @@ import {
   Patch,
   Post,
   Query,
+  Req,
   Res,
 } from '@nestjs/common';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
 import { Roles, User } from '@/decorator/customize';
 import type {
   AuthenticatedUser,
@@ -16,17 +17,11 @@ import type {
 } from '@/common/types/authenticated-user.type';
 import { PortalService } from './portal.service';
 import { CreatePortalPaymentReceiptDto } from './dto/create-portal-payment-receipt.dto';
+import { CreatePortalInquiryDto } from './dto/create-portal-inquiry.dto';
 import { ReviewPortalPaymentReceiptDto } from './dto/review-portal-payment-receipt.dto';
 import { CreatePortalSupportTicketDto } from './dto/create-portal-support-ticket.dto';
 import { CreatePortalSupportMessageDto } from './dto/create-portal-support-message.dto';
 import { UpdatePortalSupportTicketStatusDto } from './dto/update-portal-support-ticket-status.dto';
-
-type CreatePortalInquiryBody = {
-  product_id: string;
-  quantity: number;
-  note?: string | null;
-  customerPhone?: string | null;
-};
 
 @Controller('portal')
 export class PortalController {
@@ -52,6 +47,11 @@ export class PortalController {
     return this.portalService.findPricing(user, query);
   }
 
+  @Get('products')
+  findProducts(@Query() query: QueryParams, @User() user?: AuthenticatedUser) {
+    return this.portalService.findProducts(user, query);
+  }
+
   @Get('inquiries')
   findInquiries(@User() user?: AuthenticatedUser) {
     return this.portalService.findInquiries(user);
@@ -59,10 +59,14 @@ export class PortalController {
 
   @Post('inquiries')
   createInquiry(
-    @Body() dto: CreatePortalInquiryBody,
+    @Body() dto: CreatePortalInquiryDto,
     @User() user?: AuthenticatedUser,
+    @Req() request?: Request,
   ) {
-    return this.portalService.createInquiry(dto, user);
+    return this.portalService.createInquiry(dto, user, {
+      username: user?.username || 'unknown',
+      ipAddress: request?.ip || request?.socket.remoteAddress || null,
+    });
   }
 
   @Get('finance/statement')
@@ -88,6 +92,14 @@ export class PortalController {
   @Get('finance/tt-receipts')
   findPaymentReceipts(@User() user?: AuthenticatedUser) {
     return this.portalService.findPaymentReceipts(user);
+  }
+
+  @Get('finance/tt-receipts/:_id')
+  findPaymentReceipt(
+    @Param('_id') recordId: string,
+    @User() user?: AuthenticatedUser,
+  ) {
+    return this.portalService.findPaymentReceiptById(recordId, user);
   }
 
   @Post('finance/tt-receipts')
@@ -150,6 +162,46 @@ export class PortalController {
     return this.portalService.updateSupportTicketStatus(recordId, dto, user);
   }
 
+  // --- ADMIN SUPPORT TICKETS API ---
+
+  @Get('admin/support/tickets')
+  @Roles('ADMIN', 'SALES', 'MANAGER', 'LOGISTICS')
+  adminFindSupportTickets(
+    @Query() query: QueryParams,
+    @User() user?: AuthenticatedUser,
+  ) {
+    return this.portalService.adminFindSupportTickets(query, user);
+  }
+
+  @Get('admin/support/tickets/:_id')
+  @Roles('ADMIN', 'SALES', 'MANAGER', 'LOGISTICS')
+  adminFindSupportTicket(
+    @Param('_id') recordId: string,
+    @User() user?: AuthenticatedUser,
+  ) {
+    return this.portalService.adminFindSupportTicket(recordId, user);
+  }
+
+  @Post('admin/support/tickets/:_id/messages')
+  @Roles('ADMIN', 'SALES', 'MANAGER', 'LOGISTICS')
+  adminAddSupportMessage(
+    @Param('_id') recordId: string,
+    @Body() dto: CreatePortalSupportMessageDto,
+    @User() user?: AuthenticatedUser,
+  ) {
+    return this.portalService.adminAddSupportMessage(recordId, dto, user);
+  }
+
+  @Patch('admin/support/tickets/:_id/status')
+  @Roles('ADMIN', 'SALES', 'MANAGER', 'LOGISTICS')
+  adminUpdateSupportTicketStatus(
+    @Param('_id') recordId: string,
+    @Body() dto: UpdatePortalSupportTicketStatusDto,
+    @User() user?: AuthenticatedUser,
+  ) {
+    return this.portalService.adminUpdateSupportTicketStatus(recordId, dto, user);
+  }
+
   @Get('notifications')
   findNotifications(
     @Query() query: QueryParams,
@@ -169,5 +221,56 @@ export class PortalController {
     @User() user?: AuthenticatedUser,
   ) {
     return this.portalService.markNotificationRead(recordId, user);
+  }
+
+  // Forced trigger for NestJS watcher
+  @Get('quotations/:_id')
+  findQuotation(@Param('_id') recordId: string, @User() user?: AuthenticatedUser) {
+    return this.portalService.findQuotation(recordId, user);
+  }
+
+  @Patch('quotations/:_id/accept')
+  acceptQuotation(@Param('_id') recordId: string, @User() user?: AuthenticatedUser) {
+    return this.portalService.acceptQuotation(recordId, user);
+  }
+
+  @Patch('quotations/:_id/reject')
+  rejectQuotation(
+    @Param('_id') recordId: string,
+    @Body('reason') reason: string,
+    @User() user?: AuthenticatedUser
+  ) {
+    return this.portalService.rejectQuotation(recordId, reason, user);
+  }
+
+  @Patch('proforma-invoices/:_id/accept')
+  acceptProformaInvoice(@Param('_id') recordId: string, @User() user?: AuthenticatedUser) {
+    return this.portalService.acceptProformaInvoice(recordId, user);
+  }
+
+  @Patch('proforma-invoices/:_id/reject')
+  rejectProformaInvoice(
+    @Param('_id') recordId: string,
+    @Body('reason') reason: string,
+    @User() user?: AuthenticatedUser
+  ) {
+    return this.portalService.rejectProformaInvoice(recordId, reason, user);
+  }
+
+  @Get('quotations/:_id/pdf')
+  async downloadQuotationPdf(
+    @Param('_id') recordId: string,
+    @User() user: AuthenticatedUser | undefined,
+    @Res() res: Response
+  ) {
+    const file = await this.portalService.exportQuotationPdf(recordId, user);
+    const quotation = await this.portalService.findQuotation(recordId, user);
+    const filename = `Quotation_${quotation.quotationNumber || recordId}.pdf`;
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': file.length,
+    });
+    res.end(file);
   }
 }

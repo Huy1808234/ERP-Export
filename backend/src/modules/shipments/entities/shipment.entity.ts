@@ -187,4 +187,16 @@ export class Shipment {
 
   @DeleteDateColumn({ nullable: true })
   deletedAt: Date | null;
+
+  /**
+   * Audit trail for tracking changes to this shipment.
+   * Records all significant actions: creation, updates, status changes, etc.
+   */
+  @Column({ type: 'jsonb', nullable: true, select: false })
+  auditTrail: Array<{
+    action: string;
+    actor: string;
+    at: string;
+    changes?: Record<string, { from: unknown; to: unknown }>;
+  }>;
 }

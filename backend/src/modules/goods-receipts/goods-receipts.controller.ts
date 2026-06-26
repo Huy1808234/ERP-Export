@@ -20,6 +20,7 @@ type GoodsReceiptQuery = {
   grnNumber?: string;
   purchaseOrderId?: string;
   receivedByUsername?: string;
+  status?: string;
 };
 
 @Controller('goods-receipts')

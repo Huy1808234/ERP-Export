@@ -70,47 +70,10 @@ export const Header = ({ session: serverSession }: { session: any }) => {
     },
     { type: 'divider' as const },
     {
-      key: 'portal-overview',
+      key: 'system-dashboard',
       icon: <DashboardOutlined />,
-      label: 'Tổng quan Portal',
-      onClick: () => router.push('/portal'),
-    },
-    {
-      key: 'portal-orders',
-      icon: <ShoppingOutlined />,
-      label: 'Đơn hàng & Hợp đồng',
-      onClick: () => router.push('/portal/orders'),
-    },
-    {
-      key: 'portal-inquiries',
-      icon: <QuestionCircleOutlined />,
-      label: 'Yêu cầu báo giá',
-      onClick: () => router.push('/portal/inquiries'),
-    },
-    {
-      key: 'portal-finance',
-      icon: <CreditCardOutlined />,
-      label: 'Tài chính & Công nợ',
-      onClick: () => router.push('/portal/finance'),
-    },
-    {
-      key: 'portal-pricing',
-      icon: <TagsOutlined />,
-      label: 'Bảng giá & Catalog',
-      onClick: () => router.push('/portal/pricing'),
-    },
-    { type: 'divider' as const },
-    {
-      key: 'profile',
-      icon: <UserOutlined />,
-      label: 'Hồ sơ cá nhân',
-      onClick: () => router.push('/portal/profile'),
-    },
-    {
-      key: 'settings',
-      icon: <SettingOutlined />,
-      label: 'Cài đặt',
-      onClick: () => router.push('/portal/settings'),
+      label: <Text strong style={{ color: '#1890ff' }}>{isStaffUser ? 'Hệ thống Quản trị (Admin)' : 'Customer Portal'}</Text>,
+      onClick: () => router.push(isStaffUser ? '/dashboard' : '/dashboard/portal'),
     },
     { type: 'divider' as const },
     {
@@ -120,15 +83,6 @@ export const Header = ({ session: serverSession }: { session: any }) => {
       onClick: () => { signOut({ callbackUrl: `/${locale}` }); },
     },
   ];
-
-  if (isStaffUser) {
-    userMenuItems.splice(2, 0, {
-      key: 'admin-dashboard',
-      icon: <AppstoreOutlined />,
-      label: <Text strong style={{ color: '#1890ff' }}>Hệ thống Quản trị (Admin)</Text>,
-      onClick: () => router.push('/dashboard'),
-    });
-  }
 
   return (
     <motion.div
