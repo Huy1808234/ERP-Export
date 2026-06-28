@@ -1,7 +1,7 @@
-import CustomerPortalPage from '@/components/admin/portal/customer-portal.page';
+import ShipmentTrackingPageContent from '@/components/guest/portal/shipments/ShipmentTrackingPageContent';
 
 const PortalShipmentsPage = () => {
-  return <CustomerPortalPage view="shipments" />;
+  return <ShipmentTrackingPageContent />;
 };
 
 export default PortalShipmentsPage;

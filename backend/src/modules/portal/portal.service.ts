@@ -169,6 +169,13 @@ type PortalPricingQuery = QueryParams & {
   category?: string;
 };
 
+type PortalShipmentQuery = QueryParams & {
+  current?: string;
+  pageSize?: string;
+  search?: string;
+  status?: string;
+};
+
 type PortalInquiryLineInput = {
   product_id: string;
   quantity: number;
@@ -1514,30 +1521,112 @@ export class PortalService {
     throw new NotFoundException('Commercial document not found');
   }
 
-  async findShipments(user?: AuthenticatedUser) {
+  async findShipments(user?: AuthenticatedUser, query: PortalShipmentQuery = {}) {
     const buyer = this.assertBuyer(user);
+    const current = Math.max(Number(query.current || 1), 1);
+    const pageSize = Math.min(Math.max(Number(query.pageSize || 10), 1), 50);
+    const search = this.normalizeOptionalText(query.search);
+    const statusFilter = this.normalizeOptionalText(query.status);
+    const statuses = statusFilter
+      ? statusFilter
+          .split(',')
+          .map((value) => value.trim())
+          .filter((value): value is ShipmentStatus =>
+            Object.values(ShipmentStatus).includes(value as ShipmentStatus),
+          )
+      : [];
     const cacheKey = this.cache.makeKey(`portal:shipments:${buyer.partnerId}`, {
       username: buyer.username,
+      current,
+      pageSize,
+      search: search || '',
+      status: statuses.join(','),
     });
 
     return this.cache.getOrSet(
       cacheKey,
       PORTAL_SHIPMENTS_CACHE_TTL_SECONDS,
       async () => {
-        const shipments = await this.shipmentRepository
+        const qb = this.shipmentRepository
           .createQueryBuilder('shipment')
           .leftJoinAndSelect('shipment.salesContract', 'sales_contract')
           .leftJoinAndSelect('shipment.containers', 'containers')
           .where('"sales_contract"."buyerId" = :buyerId', {
             buyerId: buyer.partnerId,
           })
-          .orderBy('shipment.updatedAt', 'DESC')
-          .getMany();
+          .andWhere('shipment."deletedAt" IS NULL');
 
-        return shipments.map((shipment) => ({
-          ...shipment,
-          timeline: this.buildShipmentTimeline(shipment),
-        }));
+        if (statuses.length) {
+          qb.andWhere('shipment.status IN (:...statuses)', { statuses });
+        }
+
+        if (search) {
+          qb.andWhere(
+            new Brackets((subQb) => {
+              subQb
+                .where('shipment."shipmentNumber" ILIKE :search', {
+                  search: `%${search}%`,
+                })
+                .orWhere('shipment."bookingNumber" ILIKE :search', {
+                  search: `%${search}%`,
+                })
+                .orWhere('shipment."blNumber" ILIKE :search', {
+                  search: `%${search}%`,
+                })
+                .orWhere('shipment.pol ILIKE :search', {
+                  search: `%${search}%`,
+                })
+                .orWhere('shipment.pod ILIKE :search', {
+                  search: `%${search}%`,
+                })
+                .orWhere('sales_contract."contractNumber" ILIKE :search', {
+                  search: `%${search}%`,
+                });
+            }),
+          );
+        }
+
+        const [shipments, total] = await qb
+          .orderBy('shipment.updatedAt', 'DESC')
+          .skip((current - 1) * pageSize)
+          .take(pageSize)
+          .getManyAndCount();
+        const statusRows = await this.shipmentRepository
+          .createQueryBuilder('shipment')
+          .leftJoin('shipment.salesContract', 'sales_contract')
+          .select('shipment.status', 'status')
+          .addSelect('COUNT(DISTINCT shipment._id)', 'total')
+          .where('"sales_contract"."buyerId" = :buyerId', {
+            buyerId: buyer.partnerId,
+          })
+          .andWhere('shipment."deletedAt" IS NULL')
+          .groupBy('shipment.status')
+          .getRawMany<{ status: ShipmentStatus; total: string }>();
+        const statusCounts = Object.values(ShipmentStatus).reduce(
+          (acc, status) => {
+            const row = statusRows.find((item) => item.status === status);
+            acc[status] = row ? Number(row.total) : 0;
+            return acc;
+          },
+          {} as Record<ShipmentStatus, number>,
+        );
+
+        return {
+          results: shipments.map((shipment) => ({
+            ...shipment,
+            timeline: this.buildShipmentTimeline(shipment),
+          })),
+          meta: {
+            current,
+            pageSize,
+            pages: Math.ceil(total / pageSize),
+            total,
+          },
+          summary: {
+            total: Object.values(statusCounts).reduce((sum, count) => sum + count, 0),
+            statusCounts,
+          },
+        };
       },
     );
   }

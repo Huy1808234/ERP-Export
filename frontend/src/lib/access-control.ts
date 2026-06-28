@@ -108,6 +108,8 @@ export const DASHBOARD_ACCESS_RULES: DashboardAccessRule[] = [
   { path: '/dashboard/portal/products', label: 'Sản phẩm & bảng giá', roles: ['CUSTOMER'] },
   { path: '/dashboard/portal/finance', label: 'Tài chính & Công nợ', roles: ['CUSTOMER'] },
   { path: '/dashboard/portal/shipments', label: 'Tra cứu lô hàng', roles: ['CUSTOMER'] },
+  { path: '/dashboard/portal/settings', label: 'Cài đặt Portal', roles: ['CUSTOMER'] },
+  { path: '/dashboard/portal/tickets', label: 'Hỗ trợ Portal', roles: ['CUSTOMER'] },
   { path: '/dashboard/portal', label: 'Tổng quan Portal', roles: ['CUSTOMER'] },
   { path: '/dashboard', label: 'Tổng quan', roles: ALL_STAFF, exact: true },
 ];

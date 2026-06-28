@@ -30,10 +30,17 @@ export const getTickets = async (token: string): Promise<Ticket[]> => {
 };
 
 export const createTicket = async (token: string, data: CreateTicketDto): Promise<Ticket> => {
+  const payload: Record<string, unknown> = {
+    title: data.title,
+    description: data.description,
+    ...(data.priority ? { priority: data.priority } : {}),
+    ...(data.attachments ? { attachments: data.attachments } : {}),
+  };
+
   return sendRequest<Ticket>({
     url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/tickets`,
     method: 'POST',
-    body: data as any,
+    body: payload,
     headers: { Authorization: `Bearer ${token}` }
   });
 };

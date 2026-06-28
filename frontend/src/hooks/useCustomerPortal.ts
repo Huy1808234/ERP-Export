@@ -27,6 +27,7 @@ import {
   rejectCustomerProformaInvoice,
   requestCustomerContractSigning,
   type PortalContractSigningInvitation,
+  type PortalShipmentQuery,
 } from '@/services/customer-portal.service';
 import { portService, type IPort } from '@/services/port.service';
 import type { PortalProductQuery } from '@/services/customer-portal.service';
@@ -43,6 +44,7 @@ import type {
   PortalProfile,
   PortalInquiry,
   PortalShipment,
+  PortalShipmentList,
   PortalStatement,
   PortalQuotation,
 } from '@/types/customer-portal';
@@ -53,6 +55,45 @@ type PortalActionResult = {
 };
 
 const missingTokenMessage = 'Missing access token';
+
+const defaultPortalShipmentMeta = {
+  current: 1,
+  pageSize: 10,
+  pages: 0,
+  total: 0,
+};
+
+const createPortalShipmentSummary = (shipments: PortalShipment[]) => {
+  const statusCounts = shipments.reduce<Record<string, number>>((acc, shipment) => {
+    const status = shipment.status || 'BOOKED';
+    acc[status] = (acc[status] || 0) + 1;
+    return acc;
+  }, {});
+
+  return {
+    total: shipments.length,
+    statusCounts,
+  };
+};
+
+const normalizePortalShipmentList = (
+  value: PortalShipmentList | PortalShipment[],
+): PortalShipmentList => {
+  if (Array.isArray(value)) {
+    return {
+      results: value,
+      meta: {
+        current: 1,
+        pageSize: value.length || 10,
+        pages: value.length ? 1 : 0,
+        total: value.length,
+      },
+      summary: createPortalShipmentSummary(value),
+    };
+  }
+
+  return value;
+};
 
 const fallbackPortalCurrencies: PortalCurrency[] = [
   { _id: 'currency_usd', code: 'USD', name: 'US Dollar', symbol: '$', isActive: true },
@@ -79,7 +120,7 @@ export const useCustomerPortalOverview = () => {
       const [profileRes, ordersRes, shipmentsRes, statementRes, notificationsRes] = await Promise.all([
         getPortalProfile(accessToken),
         getPortalOrders(accessToken),
-        getPortalShipments(accessToken),
+        getPortalShipments(accessToken, { current: 1, pageSize: 5 }),
         getPortalStatement(accessToken),
         getPortalNotifications(accessToken),
       ]);
@@ -99,7 +140,7 @@ export const useCustomerPortalOverview = () => {
       setData({
         profile: profileRes.data,
         orders: ordersRes.data,
-        shipments: shipmentsRes.data,
+        shipments: normalizePortalShipmentList(shipmentsRes.data).results,
         statement: statementRes.data,
         notifications: notificationsRes.data,
       });
@@ -239,10 +280,14 @@ export const useCustomerPortalFinance = () => {
 export const useCustomerPortalShipments = () => {
   const { data: session } = useSession();
   const [shipments, setShipments] = useState<PortalShipment[]>([]);
+  const [meta, setMeta] = useState(defaultPortalShipmentMeta);
+  const [summary, setSummary] = useState(createPortalShipmentSummary([]));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchShipments = useCallback(async (): Promise<PortalActionResult> => {
+  const fetchShipments = useCallback(async (
+    query: PortalShipmentQuery = {},
+  ): Promise<PortalActionResult> => {
     const accessToken = getAccessToken(session);
     if (!accessToken) {
       setError(missingTokenMessage);
@@ -252,21 +297,24 @@ export const useCustomerPortalShipments = () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await getPortalShipments(accessToken);
+      const res = await getPortalShipments(accessToken, query);
       if (!res.data) {
         const message = res.message || 'Unable to load shipments';
         setError(message);
         return { success: false, message };
       }
 
-      setShipments(res.data);
+      const shipmentList = normalizePortalShipmentList(res.data);
+      setShipments(shipmentList.results);
+      setMeta(shipmentList.meta);
+      setSummary(shipmentList.summary || createPortalShipmentSummary(shipmentList.results));
       return { success: true };
     } finally {
       setLoading(false);
     }
   }, [session]);
 
-  return { shipments, loading, error, fetchShipments };
+  return { shipments, meta, summary, loading, error, fetchShipments };
 };
 
 export const useCustomerPortalProducts = () => {

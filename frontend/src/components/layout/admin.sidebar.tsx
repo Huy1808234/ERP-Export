@@ -169,7 +169,7 @@ const AdminSideBar = ({ session }: IProps) => {
     const userInitial = (userName || userEmail || 'A').charAt(0).toUpperCase();
     const roleName = getAccessRoleName(session?.user);
     const settingsHref = useMemo(() => {
-        if (roleName === 'CUSTOMER') return '/dashboard/portal';
+        if (roleName === 'CUSTOMER') return '/dashboard/portal/settings';
 
         const allowedSettingsRoutes = [
             '/dashboard/settings/system',
@@ -207,6 +207,7 @@ const AdminSideBar = ({ session }: IProps) => {
         if (pathname?.includes('/dashboard/portal/orders')) return 'portal-orders';
         if (pathname?.includes('/dashboard/portal/finance')) return 'portal-finance';
         if (pathname?.includes('/dashboard/portal/shipments')) return 'portal-shipments';
+        if (pathname?.includes('/dashboard/portal/settings')) return 'settings';
         if (pathname?.includes('/dashboard/portal')) return 'portal-overview';
         if (pathname?.includes('/dashboard/product')) return 'products';
         if (pathname?.includes('/dashboard/customers')) return 'customers';

@@ -1,7 +1,7 @@
-import CustomerPortalPage from '@/components/admin/portal/customer-portal.page';
+import PortalSettingsPageContent from '@/components/guest/portal/settings/PortalSettingsPageContent';
 
 const PortalSettingsPage = () => {
-  return <CustomerPortalPage view="settings" />;
+  return <PortalSettingsPageContent />;
 };
 
 export default PortalSettingsPage;

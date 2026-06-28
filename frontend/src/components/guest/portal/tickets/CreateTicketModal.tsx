@@ -1,23 +1,30 @@
-import React from 'react';
-import { Modal, Form, Input, Select, Button, Space, message } from 'antd';
+import { useState } from 'react';
+import { Modal, Form, Input, Select, Space, message } from 'antd';
 import { SendOutlined } from '@ant-design/icons';
-import { CreateTicketDto } from '@/services/ticket.service';
+import type { CreateTicketDto, Ticket } from '@/services/ticket.service';
 
 interface CreateTicketModalProps {
   open: boolean;
   onCancel: () => void;
-  onSubmit: (data: CreateTicketDto) => Promise<void>;
+  onSubmit: (data: CreateTicketDto) => Promise<Ticket>;
   locale: string;
 }
 
-export const CreateTicketModal: React.FC<CreateTicketModalProps> = ({
+const isFormValidationError = (error: unknown): error is { errorFields: unknown[] } => {
+  return typeof error === 'object'
+    && error !== null
+    && 'errorFields' in error
+    && Array.isArray((error as { errorFields?: unknown }).errorFields);
+};
+
+export const CreateTicketModal = ({
   open,
   onCancel,
   onSubmit,
   locale
-}) => {
-  const [form] = Form.useForm();
-  const [loading, setLoading] = React.useState(false);
+}: CreateTicketModalProps) => {
+  const [form] = Form.useForm<CreateTicketDto>();
+  const [loading, setLoading] = useState(false);
   const isVi = locale === 'vi';
 
   const handleOk = async () => {
@@ -29,8 +36,8 @@ export const CreateTicketModal: React.FC<CreateTicketModalProps> = ({
       form.resetFields();
       onCancel();
     } catch (error) {
-      if ((error as any).errorFields) {
-        return; // form validation error
+      if (isFormValidationError(error)) {
+        return;
       }
       message.error(isVi ? 'Không thể gửi yêu cầu hỗ trợ. Vui lòng thử lại.' : 'Failed to submit ticket. Please try again.');
     } finally {

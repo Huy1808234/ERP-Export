@@ -278,16 +278,42 @@ export type PortalShipment = {
   shipmentNumber?: string | null;
   blNumber?: string | null;
   status?: string | null;
+  bookingNumber?: string | null;
+  shippingLine?: string | null;
+  vesselName?: string | null;
+  voyageNumber?: string | null;
   etd?: string | null;
   eta?: string | null;
   pol?: string | null;
   pod?: string | null;
   carrier?: string | null;
+  containers?: Array<{
+    _id: string;
+    containerNumber?: string | null;
+    sealNumber?: string | null;
+    type?: string | null;
+    weightKg?: number | null;
+    cbm?: number | null;
+  }>;
   timeline?: PortalShipmentTimelineItem[];
   salesContract?: {
     _id: string;
     contractNumber?: string | null;
   } | null;
+};
+
+export type PortalShipmentList = {
+  results: PortalShipment[];
+  meta: {
+    current: number;
+    pageSize: number;
+    pages: number;
+    total: number;
+  };
+  summary?: {
+    total: number;
+    statusCounts: Record<string, number>;
+  };
 };
 
 export type PortalNotification = {

@@ -13,6 +13,7 @@ import type {
   PortalProfile,
   PortalQuotation,
   PortalShipment,
+  PortalShipmentList,
   PortalStatement,
 } from '@/types/customer-portal';
 
@@ -40,6 +41,13 @@ export type PortalProductQuery = {
   incoterm?: string;
 };
 
+export type PortalShipmentQuery = {
+  current?: number;
+  pageSize?: number;
+  search?: string;
+  status?: string;
+};
+
 export const getPortalProfile = async (
   accessToken: string,
 ): Promise<IBackendRes<PortalProfile>> => {
@@ -62,10 +70,12 @@ export const getPortalOrders = async (
 
 export const getPortalShipments = async (
   accessToken: string,
-): Promise<IBackendRes<PortalShipment[]>> => {
-  return sendRequest<IBackendRes<PortalShipment[]>>({
+  query: PortalShipmentQuery = {},
+): Promise<IBackendRes<PortalShipmentList | PortalShipment[]>> => {
+  return sendRequest<IBackendRes<PortalShipmentList | PortalShipment[]>>({
     url: portalUrl('/shipments'),
     method: 'GET',
+    queryParams: query,
     headers: getAuthHeaders(accessToken),
   });
 };

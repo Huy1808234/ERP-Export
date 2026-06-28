@@ -38,8 +38,8 @@ export class PortalController {
   }
 
   @Get('shipments')
-  findShipments(@User() user?: AuthenticatedUser) {
-    return this.portalService.findShipments(user);
+  findShipments(@Query() query: QueryParams, @User() user?: AuthenticatedUser) {
+    return this.portalService.findShipments(user, query);
   }
 
   @Get('pricing')
