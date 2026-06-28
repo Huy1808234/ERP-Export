@@ -6,6 +6,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import dayjs from 'dayjs';
 import { MailerService } from '@nestjs-modules/mailer';
+import { randomInt } from 'crypto';
 import { In, Repository } from 'typeorm';
 import { CodeAuthDto, ChangePasswordAuthDto } from '@/auth/dto/create-auth.dto';
 import { normalizeRoleName } from '@/common/auth/role-catalog';
@@ -121,8 +122,16 @@ export class UsersService {
     return savedRole.name;
   }
 
-  private normalizeEmail(email: string) {
+  private normalizeEmail(email: string): string {
     return email.trim().toLowerCase();
+  }
+
+  private normalizeVerificationCode(code: string): string {
+    return code.replace(/[\s\u200B-\u200D\uFEFF]+/g, '');
+  }
+
+  private createPasswordOtp(): string {
+    return randomInt(0, 1_000_000).toString().padStart(6, '0');
   }
 
   private normalizeQueryText(value: unknown) {
@@ -702,9 +711,10 @@ export class UsersService {
   }
 
   async handleActive(data: CodeAuthDto) {
+    const code = this.normalizeVerificationCode(data.code);
     const user = await this.userRepository.findOneBy({
       _id: data.accountRef,
-      codeId: data.code,
+      codeId: code,
     });
 
     if (!user) {
@@ -724,7 +734,9 @@ export class UsersService {
   }
 
   async retryActive(email: string) {
-    const user = await this.userRepository.findOneBy({ email });
+    const user = await this.userRepository.findOneBy({
+      email: this.normalizeEmail(email),
+    });
     if (!user) {
       throw new BadRequestException('Account does not exist');
     }
@@ -755,12 +767,14 @@ export class UsersService {
   }
 
   async forgotPassword(email: string) {
-    const user = await this.userRepository.findOneBy({ email });
+    const user = await this.userRepository.findOneBy({
+      email: this.normalizeEmail(email),
+    });
     if (!user) {
       throw new BadRequestException('Account does not exist');
     }
 
-    const codeId = createOpaqueCode('password');
+    const codeId = this.createPasswordOtp();
     await this.userRepository.update(
       { _id: user._id },
       {
@@ -782,10 +796,43 @@ export class UsersService {
     return { _id: user._id, username: user.username };
   }
 
+  async requestPasswordOtpForUsername(username: string) {
+    const user = await this.userRepository.findOneBy({ username });
+    if (!user) {
+      throw new BadRequestException('Account does not exist');
+    }
+
+    if (!user.email) {
+      throw new BadRequestException('Account email is not configured');
+    }
+
+    const codeId = this.createPasswordOtp();
+    await this.userRepository.update(
+      { _id: user._id },
+      {
+        codeId,
+        codeExpired: dayjs().add(5, 'minutes').toDate(),
+      },
+    );
+
+    void this.mailerService.sendMail({
+      to: user.email,
+      subject: 'Mini ERP password reset code',
+      template: 'forgot-password',
+      context: {
+        name: user?.name ?? user.username,
+        activationCode: codeId,
+      },
+    });
+
+    return { _id: user._id, username: user.username, email: user.email };
+  }
+
   async changePassword(data: ChangePasswordAuthDto) {
+    const code = this.normalizeVerificationCode(data.code);
     const user = await this.userRepository.findOneBy({
       _id: data.accountRef,
-      codeId: data.code,
+      codeId: code,
     });
 
     if (!user) {

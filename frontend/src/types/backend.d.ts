@@ -74,6 +74,7 @@ declare global {
         _id: string;
         username: string;
         name: string;
+        email?: string;
         roleName?: string | null;
         role?: {
             _id: string;

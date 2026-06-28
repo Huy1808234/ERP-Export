@@ -2,18 +2,18 @@
 
 import React from "react";
 import { HeroSection } from "@/components/guest/HeroSection";
-import ServicesSection from "@/components/guest/ServicesSection";
-import { AboutSection } from "@/components/guest/AboutSection";
-import ProductCatalog from "@/components/guest/ProductCatalog";
+import { CoreTechSection } from "@/components/guest/CoreTechSection";
+import { WorkflowSection } from "@/components/guest/WorkflowSection";
+import { ShowcaseSection } from "@/components/guest/ShowcaseSection";
 
 export default function Home() {
   return (
     <>
       <HeroSection />
       <div style={{ background: '#000814' }}>
-        <ServicesSection />
-        <ProductCatalog />
-        <AboutSection />
+        <CoreTechSection />
+        <WorkflowSection />
+        <ShowcaseSection />
       </div>
     </>
   );

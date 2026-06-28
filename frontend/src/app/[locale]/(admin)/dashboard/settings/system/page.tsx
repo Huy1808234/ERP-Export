@@ -40,16 +40,24 @@ import { useTranslations } from 'next-intl';
 import { useParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
+import type { IAuthSessionUser } from '@/types/next-auth';
 
 const { Text, Title, Paragraph } = Typography;
 
 type ForgotPasswordResponse = {
   _id: string;
   username: string;
+  email: string;
+};
+
+type CurrentUserProfileResponse = {
+  _id: string;
+  username: string;
+  email: string;
+  name?: string;
 };
 
 type PasswordFormValues = {
-  email: string;
   code: string;
   password: string;
   confirmPassword: string;
@@ -71,6 +79,9 @@ const THREE_WAY_MATCHING_PRICE_TOLERANCE_PERCENT_KEY = 'THREE_WAY_MATCHING_PRICE
 const sectionStyle: CSSProperties = {
   padding: '28px 32px',
 };
+
+const normalizeVerificationCode = (code: string): string =>
+  code.replace(/[\s\u200B-\u200D\uFEFF]+/g, '');
 
 function normalizedLocale(locale: string | string[] | undefined) {
   return Array.isArray(locale) ? locale[0] : locale || 'vi';
@@ -389,29 +400,61 @@ function MatchingSettingsPanel({ accessToken }: { accessToken?: string }) {
 
 function SecuritySettingsPanel({
   userEmail,
+  accessToken,
   locale,
 }: {
   userEmail: string;
+  accessToken?: string;
   locale: string | string[] | undefined;
 }) {
   const t = useTranslations('SystemSettings');
   const { notification } = App.useApp();
   const [passwordForm] = Form.useForm<PasswordFormValues>();
   const [resetUserId, setResetUserId] = useState('');
+  const [resolvedUserEmail, setResolvedUserEmail] = useState(userEmail);
+  const [loadingProfileEmail, setLoadingProfileEmail] = useState(false);
   const [passwordStep, setPasswordStep] = useState(0);
   const [sendingCode, setSendingCode] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
 
   useEffect(() => {
-    passwordForm.setFieldsValue({ email: userEmail });
-  }, [passwordForm, userEmail]);
+    setResolvedUserEmail(userEmail);
+  }, [userEmail]);
+
+  useEffect(() => {
+    if (!accessToken) {
+      return;
+    }
+
+    let cancelled = false;
+    setLoadingProfileEmail(true);
+
+    sendRequest<IBackendRes<CurrentUserProfileResponse>>({
+      url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/auth/profile`,
+      method: 'GET',
+      headers: { Authorization: `Bearer ${accessToken}` },
+    })
+      .then((res) => {
+        if (cancelled) return;
+
+        if (res?.data?.email) {
+          setResolvedUserEmail(res.data.email);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingProfileEmail(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken]);
 
   const handleSendResetCode = async () => {
-    const email = passwordForm.getFieldValue('email') || userEmail;
-    if (!email) {
+    if (!accessToken) {
       notification.warning({
         title: t('security.notifications.missingEmailTitle'),
-        description: t('security.notifications.missingEmailDescription'),
+        description: t('security.notifications.tryAgain'),
       });
       return;
     }
@@ -419,17 +462,18 @@ function SecuritySettingsPanel({
     setSendingCode(true);
     try {
       const res = await sendRequest<IBackendRes<ForgotPasswordResponse>>({
-        url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/auth/forgot-password`,
+        url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/auth/me/password-reset-code`,
         method: 'POST',
-        body: { email },
+        headers: { Authorization: `Bearer ${accessToken}` },
       });
 
       if (res?.data?._id) {
         setResetUserId(res.data._id);
+        setResolvedUserEmail(res.data.email);
         setPasswordStep(1);
         notification.success({
           title: t('security.notifications.codeSentTitle'),
-          description: t('security.notifications.codeSentDescription', { email }),
+          description: t('security.notifications.codeSentDescription', { email: res.data.email }),
         });
       } else {
         notification.error({
@@ -458,7 +502,7 @@ function SecuritySettingsPanel({
         method: 'POST',
         body: {
           accountRef: resetUserId,
-          code: values.code,
+          code: normalizeVerificationCode(values.code),
           password: values.password,
         },
       });
@@ -513,13 +557,12 @@ function SecuritySettingsPanel({
           >
             <Form.Item
               label={t('security.fields.email')}
-              name="email"
-              rules={[{ required: true, type: 'email', message: t('security.validation.email') }]}
             >
               <Input
                 prefix={<MailOutlined />}
-                disabled={Boolean(userEmail)}
-                placeholder="name@company.com"
+                disabled
+                value={resolvedUserEmail}
+                placeholder={loadingProfileEmail ? '...' : 'name@company.com'}
               />
             </Form.Item>
 
@@ -527,6 +570,7 @@ function SecuritySettingsPanel({
               icon={<MailOutlined />}
               loading={sendingCode}
               onClick={handleSendResetCode}
+              disabled={!accessToken}
               style={{ marginBottom: 24 }}
             >
               {t('security.actions.sendCode')}
@@ -535,9 +579,20 @@ function SecuritySettingsPanel({
             <Form.Item
               label={t('security.fields.code')}
               name="code"
-              rules={[{ required: true, message: t('security.validation.code') }]}
+              rules={[
+                {
+                  validator: (_, value?: string) =>
+                    /^\d{6}$/.test(normalizeVerificationCode(value || ''))
+                      ? Promise.resolve()
+                      : Promise.reject(new Error(t('security.validation.code'))),
+                },
+              ]}
             >
-              <Input placeholder={t('security.placeholders.code')} />
+              <Input
+                inputMode="numeric"
+                maxLength={6}
+                placeholder={t('security.placeholders.code')}
+              />
             </Form.Item>
 
             <Form.Item
@@ -692,7 +747,7 @@ export default function SystemSettingsPage() {
   const { token } = theme.useToken();
   const [activeTab, setActiveTab] = useState('account');
 
-  const currentUser = session?.user as any;
+  const currentUser = session?.user as IAuthSessionUser | undefined;
   const userEmail = currentUser?.email || '';
   const userName = currentUser?.name || userEmail.split('@')[0] || 'admin';
   const userRole = currentUser?.role?.name || 'ADMIN';
@@ -774,7 +829,13 @@ export default function SystemSettingsPage() {
             {
               key: 'security',
               label: <Space><LockOutlined />{t('tabs.security')}</Space>,
-              children: <SecuritySettingsPanel userEmail={userEmail} locale={locale} />,
+              children: (
+                <SecuritySettingsPanel
+                  userEmail={userEmail}
+                  accessToken={accessToken}
+                  locale={locale}
+                />
+              ),
             },
             {
               key: 'notifications',

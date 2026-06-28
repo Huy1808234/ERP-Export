@@ -3540,7 +3540,7 @@
       },
       "validation": {
         "email": "Please enter a valid email",
-        "code": "Please enter the verification code",
+        "code": "Please enter the 6-digit OTP",
         "password": "Please enter a new password",
         "passwordLength": "Password must be at least 6 characters",
         "confirmPassword": "Please confirm the new password",

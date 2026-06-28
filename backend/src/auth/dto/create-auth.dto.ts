@@ -50,6 +50,12 @@ export class ChangePasswordAuthDto {
   password: string;
 }
 
+export class ForgotPasswordAuthDto {
+  @IsNotEmpty({ message: 'Email is required' })
+  @IsEmail({}, { message: 'Email is invalid' })
+  email: string;
+}
+
 export class RefreshTokenAuthDto {
   @IsNotEmpty({ message: 'Refresh token is required' })
   @IsString()

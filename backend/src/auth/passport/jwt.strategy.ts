@@ -8,6 +8,7 @@ type JwtPayload = {
   _id?: string;
   username: string;
   sub?: string;
+  email?: string;
   roleName?: string | null;
   role?: AuthenticatedUser['role'];
   partnerId?: string | null;
@@ -27,6 +28,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     return {
       _id: payload._id,
       username: payload.username,
+      email: payload.email,
       roleName: payload.roleName,
       role: payload.role,
       partnerId: payload.partnerId,

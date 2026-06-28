@@ -202,120 +202,12 @@ const ProductCatalog = (): React.ReactElement => {
         </div>
 
         <Row gutter={[40, 40]}>
-          {loading ? (
-            Array(6).fill(0).map((_, i) => (
-              <Col xs={24} md={8} key={i}>
-                <Card style={{ borderRadius: '24px' }}>
-                  <Skeleton active paragraph={{ rows: 4 }} />
-                </Card>
-              </Col>
-            ))
-          ) : products.length > 0 ? (
-            products.map((product, index) => (
-              <Col xs={24} md={8} key={product._id}>
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  whileInView={{ opacity: 1, scale: 1 }}
-                  transition={{ duration: 0.6, delay: index * 0.1 }}
-                  viewport={{ once: true }}
-                >
-                  <Card
-                    hoverable
-                    variant="borderless"
-                    cover={
-                      <div style={{ position: "relative", overflow: "hidden", height: "300px", borderRadius: "24px 24px 0 0" }}>
-                        <img
-                          alt={product.vietnameseName}
-                          src={product.imageUrl || "https://images.unsplash.com/photo-1586201375761-83865001e31c?auto=format&fit=crop&q=80&w=800"}
-                          style={{ 
-                            width: "100%", 
-                            height: "100%", 
-                            objectFit: "cover",
-                            transition: "transform 0.6s cubic-bezier(0.33, 1, 0.68, 1)"
-                          }}
-                          className="product-image"
-                        />
-                        {(product.isBestseller || product.isNew) && (
-                          <div style={{
-                            position: "absolute",
-                            top: "20px",
-                            left: "20px",
-                            zIndex: 2
-                          }}>
-                            <Tag color={product.isBestseller ? "gold" : "blue"} style={{ borderRadius: "6px", fontWeight: 700, padding: "4px 12px", border: "none", boxShadow: "0 4px 10px rgba(0,0,0,0.3)" }}>
-                              {product.isBestseller ? "BÁN CHẠY" : "MỚI"}
-                            </Tag>
-                          </div>
-                        )}
-                        <div className="product-overlay">
-                          <Space>
-                            <Button shape="circle" icon={<EyeOutlined />} size="large" />
-                            <Button shape="circle" icon={<HeartOutlined />} size="large" />
-                          </Space>
-                        </div>
-                      </div>
-                    }
-                    style={{ 
-                      borderRadius: "24px",
-                      boxShadow: "0 20px 40px rgba(0,0,0,0.15)",
-                      border: "1px solid rgba(0,0,0,0.05)",
-                      background: "#fff"
-                    }}
-                    styles={{ body: { padding: "28px" } }}
-                  >
-                    <Space orientation="vertical" size={16} style={{ width: "100%" }}>
-                      <div>
-                        <Text type="secondary" style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "1.5px" }}>
-                          {product.category || "Chưa phân loại"}
-                        </Text>
-                        <Title level={4} style={{ margin: "4px 0 0 0", fontWeight: 800, color: "#0f172a", minHeight: "56px" }}>
-                          {product.vietnameseName}
-                        </Title>
-                      </div>
-                      
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "8px" }}>
-                        <div>
-                          <Text type="secondary" style={{ fontSize: "12px" }}>Giá tham chiếu</Text>
-                          <div style={{ fontSize: "24px", fontWeight: 900, color: "#1890ff" }}>
-                            {product.defaultExportPrice?.toLocaleString()} <span style={{ fontSize: "14px", color: "#94a3b8", fontWeight: 400 }}>{product.exportCurrency} / {product.unitOfMeasure}</span>
-                          </div>
-                        </div>
-                      </div>
- 
-                      <Button 
-                        type="primary" 
-                        ghost
-                        block 
-                        size="large" 
-                        icon={<ShoppingOutlined />}
-                        onClick={() => openRfqModal(product)}
-                        style={{ 
-                          height: "52px", 
-                          borderRadius: "12px", 
-                          fontWeight: 700,
-                          border: "2px solid #1890ff",
-                          marginTop: "4px",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          gap: "8px"
-                        }}
-                      >
-                        NHẬN BÁO GIÁ NGAY
-                      </Button>
-                    </Space>
-                  </Card>
-                </motion.div>
-              </Col>
-            ))
-          ) : (
-            <Col span={24}>
-              <div style={{ textAlign: 'center', padding: '100px', background: 'rgba(255,255,255,0.02)', borderRadius: '40px' }}>
-                <Title level={2} style={{ color: '#fff' }}>Không tìm thấy sản phẩm</Title>
-                <Text style={{ color: 'rgba(255,255,255,0.5)' }}>Vui lòng thử lại với danh mục hoặc từ khóa khác.</Text>
-              </div>
-            </Col>
-          )}
+          <Col span={24}>
+            <div style={{ textAlign: 'center', padding: '100px', background: 'rgba(255,255,255,0.02)', borderRadius: '40px' }}>
+              <Title level={2} style={{ color: '#fff' }}>Không tìm thấy sản phẩm</Title>
+              <Text style={{ color: 'rgba(255,255,255,0.5)' }}>Vui lòng thử lại với danh mục hoặc từ khóa khác.</Text>
+            </div>
+          </Col>
         </Row>
         
         <div style={{ textAlign: "center", marginTop: "80px" }}>

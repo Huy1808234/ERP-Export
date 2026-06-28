@@ -21,6 +21,9 @@ type ModalChangePasswordProps = {
   setIsModalOpen: (value: boolean) => void;
 };
 
+const normalizeVerificationCode = (code: string): string =>
+  code.replace(/[\s\u200B-\u200D\uFEFF]+/g, '');
+
 const modalStyles = {
   mask: {
     backdropFilter: 'blur(14px)',
@@ -61,7 +64,7 @@ const ModalChangePassword = ({ isModalOpen, setIsModalOpen }: ModalChangePasswor
     const res = await sendRequest<IBackendRes<{ _id: string }>>({
       url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/auth/forgot-password`,
       method: 'POST',
-      body: { email: values.email },
+      body: { email: values.email.trim() },
     });
     setLoading(false);
 
@@ -95,7 +98,7 @@ const ModalChangePassword = ({ isModalOpen, setIsModalOpen }: ModalChangePasswor
       url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/auth/change-password`,
       method: 'POST',
       body: {
-        code: values.code,
+        code: normalizeVerificationCode(values.code),
         accountRef,
         password: values.password,
       },
@@ -201,9 +204,15 @@ const ModalChangePassword = ({ isModalOpen, setIsModalOpen }: ModalChangePasswor
               <Form.Item
                 label="Mã xác minh"
                 name="code"
+                normalize={(value?: string) => normalizeVerificationCode(value || '').slice(0, 6)}
                 rules={[{ required: true, message: 'Vui lòng nhập mã xác minh.' }]}
               >
-                <Input prefix={<SafetyCertificateOutlined />} placeholder="Nhập mã trong email" />
+                <Input
+                  prefix={<SafetyCertificateOutlined />}
+                  inputMode="numeric"
+                  maxLength={6}
+                  placeholder="Nhập mã trong email"
+                />
               </Form.Item>
               <Form.Item
                 label="Mật khẩu mới"

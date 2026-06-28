@@ -74,42 +74,7 @@ export function AboutSection() {
                 </Title>
                 
                 <Space orientation="vertical" size="large" style={{ width: '100%' }}>
-                  {[
-                    { 
-                      icon: <GlobalOutlined />, 
-                      title: "Mạng lưới đại lý toàn cầu",
-                      desc: "Hợp tác với hơn 200 quốc gia, đảm bảo hàng hóa đi khắp thế giới." 
-                    },
-                    { 
-                      icon: <TeamOutlined />, 
-                      title: "Đội ngũ chuyên gia 24/7",
-                      desc: "Hỗ trợ tận tâm, giải quyết mọi vấn đề thủ tục nhanh chóng." 
-                    },
-                    { 
-                      icon: <CheckCircleOutlined />, 
-                      title: "An toàn tuyệt đối",
-                      desc: "Quy trình kiểm soát chất lượng nghiêm ngặt cho từng kiện hàng." 
-                    }
-                  ].map((item, i) => (
-                    <div key={i} style={{ display: 'flex', gap: '24px', marginBottom: '24px' }}>
-                      <div style={{ 
-                        color: '#1890ff', 
-                        fontSize: '28px',
-                        width: '56px',
-                        height: '56px',
-                        background: 'rgba(24, 144, 255, 0.1)',
-                        borderRadius: '16px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        flexShrink: 0
-                      }}>{item.icon}</div>
-                      <div>
-                        <Title level={4} style={{ color: "#fff", margin: "0 0 8px 0", fontWeight: 800 }}>{item.title}</Title>
-                        <Paragraph style={{ color: "rgba(255,255,255,0.6)", fontSize: "15px", margin: 0 }}>{item.desc}</Paragraph>
-                      </div>
-                    </div>
-                  ))}
+
 
                   <Button 
                     type="primary" 

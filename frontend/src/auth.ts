@@ -96,6 +96,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             _id: res.data?.user._id,
             username: res.data?.user.username,
             name: res.data?.user.name,
+            email: res.data?.user.email,
             roleName: res.data?.user.roleName,
             role: toSessionRole(res.data?.user.role),
             partnerId: res.data?.user.partnerId || undefined,

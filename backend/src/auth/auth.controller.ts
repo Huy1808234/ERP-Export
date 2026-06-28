@@ -5,6 +5,7 @@ import {
   Request,
   Get,
   Body,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { LocalAuthGuard } from './passport/local-auth.guard';
@@ -13,6 +14,7 @@ import {
   ChangePasswordAuthDto,
   CodeAuthDto,
   CreateAuthDto,
+  ForgotPasswordAuthDto,
   RefreshTokenAuthDto,
 } from './dto/create-auth.dto';
 import { MailerService } from '@nestjs-modules/mailer';
@@ -46,8 +48,12 @@ export class AuthController {
 
   //@UseGuards(JwtAuthGuard)
   @Get('profile')
-  getProfile(@Request() req) {
-    return req.user;
+  getProfile(@User() user: AuthenticatedUser) {
+    if (!user.username) {
+      throw new UnauthorizedException('User session is invalid');
+    }
+
+    return this.authService.getCurrentProfile(user.username);
   }
 
   @Post('register')
@@ -70,8 +76,17 @@ export class AuthController {
 
   @Post('forgot-password')
   @Public()
-  forgotPassword(@Body('email') email: string) {
-    return this.authService.forgotPassword(email);
+  forgotPassword(@Body() forgotPasswordDto: ForgotPasswordAuthDto) {
+    return this.authService.forgotPassword(forgotPasswordDto.email);
+  }
+
+  @Post('me/password-reset-code')
+  requestCurrentUserPasswordResetCode(@User() user: AuthenticatedUser) {
+    if (!user.username) {
+      throw new UnauthorizedException('User session is invalid');
+    }
+
+    return this.authService.requestCurrentUserPasswordOtp(user.username);
   }
 
   @Post('change-password')

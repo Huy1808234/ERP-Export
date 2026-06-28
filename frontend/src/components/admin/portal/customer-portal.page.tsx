@@ -81,7 +81,14 @@ import type {
   PortalStatementLine,
 } from '@/types/customer-portal';
 
-type CustomerPortalView = 'overview' | 'products' | 'orders' | 'finance' | 'shipments';
+type CustomerPortalView =
+  | 'overview'
+  | 'products'
+  | 'orders'
+  | 'finance'
+  | 'shipments'
+  | 'settings'
+  | 'tickets';
 
 type CustomerPortalPageProps = {
   view: CustomerPortalView;
@@ -2168,6 +2175,8 @@ const CustomerPortalPage = ({ view }: CustomerPortalPageProps) => {
   if (view === 'orders') return <OrdersPage />;
   if (view === 'finance') return <FinancePage />;
   if (view === 'shipments') return <ShipmentsPage />;
+  if (view === 'settings') return <OverviewPage />;
+  if (view === 'tickets') return <OverviewPage />;
   return <OverviewPage />;
 };
 

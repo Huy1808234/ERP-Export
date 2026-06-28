@@ -16,6 +16,7 @@ type AccessJwtPayload = {
   _id?: string;
   username: string;
   sub: string;
+  email?: string;
   roleName?: string | null;
   role?: AuthenticatedUser['role'];
   partnerId?: string | null;
@@ -88,6 +89,7 @@ export class AuthService {
       _id: user._id,
       username: user.username,
       sub: user.username,
+      email: user.email,
       roleName: user.roleName,
       role: user.role
         ? {
@@ -256,6 +258,10 @@ export class AuthService {
     return { success: true };
   }
 
+  async getCurrentProfile(username: string) {
+    return this.usersService.findOne(username);
+  }
+
   async handleRegister(registerDto: CreateAuthDto) {
     return this.usersService.handleRegister(registerDto);
   }
@@ -277,6 +283,10 @@ export class AuthService {
 
   async forgotPassword(data: string) {
     return this.usersService.forgotPassword(data);
+  }
+
+  async requestCurrentUserPasswordOtp(username: string) {
+    return this.usersService.requestPasswordOtpForUsername(username);
   }
 
   async changePassword(data: ChangePasswordAuthDto) {
