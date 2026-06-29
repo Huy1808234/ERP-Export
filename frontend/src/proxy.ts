@@ -108,6 +108,15 @@ export default auth((req) => {
 
   const pathForAccessCheck = stripLocalePrefix(nextUrl.pathname);
   const roleName = getAccessRoleName(req.auth?.user);
+
+  if (roleName === 'CUSTOMER' && pathForAccessCheck === '/dashboard') {
+    const customerHomeUrl = req.nextUrl.clone();
+    customerHomeUrl.pathname = `/${pathLocale}`;
+    customerHomeUrl.search = '';
+
+    return NextResponse.redirect(customerHomeUrl);
+  }
+
   if (
     pathForAccessCheck.startsWith('/dashboard')
     && pathForAccessCheck !== '/dashboard/access-denied'

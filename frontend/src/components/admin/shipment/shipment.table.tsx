@@ -1,60 +1,164 @@
 'use client'
 
-import { 
-  Input, Popconfirm, Space, Table, Tag, theme, Typography, 
-  Card, Row, Col, Statistic, Button, Badge, Drawer, Form, Select, Tooltip 
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  Col,
+  Drawer,
+  Empty,
+  Form,
+  Input,
+  Pagination,
+  Popconfirm,
+  Row,
+  Select,
+  Skeleton,
+  Space,
+  Steps,
+  Tag,
+  Tooltip,
+  Typography,
+  theme,
 } from 'antd';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import {DeleteTwoTone, EyeTwoTone, TruckOutlined, SearchOutlined, FilterOutlined, ReloadOutlined, DeploymentUnitOutlined, CalendarOutlined, CheckCircleOutlined, FilePdfOutlined} from '@ant-design/icons';
+import {
+  CalendarOutlined,
+  CheckCircleOutlined,
+  ClockCircleOutlined,
+  ContainerOutlined,
+  DeleteTwoTone,
+  DeploymentUnitOutlined,
+  EnvironmentOutlined,
+  EyeTwoTone,
+  FilePdfOutlined,
+  FilterOutlined,
+  ReloadOutlined,
+  SearchOutlined,
+  TruckOutlined,
+} from '@ant-design/icons';
 import { useLocale, useTranslations } from 'next-intl';
 import { PageHeader } from '@/components/ui/PageHeader';
+import { useTheme } from '@/context/theme.context';
 
 import ShipmentDetailDrawer from './shipment.detail';
 import ShipmentDocCenter from './shipment.doc-center';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useShipments } from '@/hooks/useShipments';
-import { SHIPMENT_STATUS_CONFIG } from '@/constants/o2c';
+import { SHIPMENT_STATUS_CONFIG, SHIPMENT_STATUS_KEYS } from '@/constants/o2c';
 import type { IShipment, ShipmentStatus } from '@/types/o2c';
 
 import type { Session } from 'next-auth';
-import type { TableProps } from 'antd';
 
-const { Text } = Typography;
+const { Text, Title } = Typography;
 
 interface IProps {
   session: Session | null;
 }
+
+type ShipmentFilters = {
+  status?: ShipmentStatus;
+  pol?: string;
+  pod?: string;
+};
+
+type StepState = 'wait' | 'process' | 'finish';
+
+const SHIPMENT_FLOW: ShipmentStatus[] = [
+  'BOOKED',
+  'LOADING',
+  'CUSTOMS_CLEARED',
+  'ON_BOARD',
+  'ARRIVED',
+  'CLOSED',
+];
+
+const normalizeFilters = (values: ShipmentFilters): ShipmentFilters => ({
+  ...(values.status ? { status: values.status } : {}),
+  ...(values.pol?.trim() ? { pol: values.pol.trim() } : {}),
+  ...(values.pod?.trim() ? { pod: values.pod.trim() } : {}),
+});
+
+const getStepState = (status: ShipmentStatus, index: number): StepState => {
+  const currentIndex = SHIPMENT_FLOW.indexOf(status);
+  if (status === 'CLOSED' || index < currentIndex) return 'finish';
+  if (index === currentIndex) return 'process';
+  return 'wait';
+};
+
+const getShipmentProgress = (status: ShipmentStatus): number => {
+  const currentIndex = SHIPMENT_FLOW.indexOf(status);
+  if (currentIndex < 0) return 0;
+  return Math.round((currentIndex / (SHIPMENT_FLOW.length - 1)) * 100);
+};
 
 const ShipmentTable = ({ session }: IProps) => {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { token } = theme.useToken();
-  const isDark = (session?.user as any)?.theme === 'dark';
+  const { isDark } = useTheme();
   const tStatus = useTranslations('ShipmentStatus');
   const tTable = useTranslations('ShipmentTable');
   const tCommon = useTranslations('Common');
   const locale = useLocale();
   const dateLocale = locale === 'vi' ? 'vi-VN' : 'en-US';
 
-  // Pagination state derived from URL
-  const current = searchParams.get('current') ?? '1';
-  const pageSize = searchParams.get('pageSize') ?? '10';
+  const current = Number(searchParams.get('current') ?? '1');
+  const pageSize = Number(searchParams.get('pageSize') ?? '10');
 
-  // Search state
-  const [searchInput, setSearchInput] = useState<string>("");
+  const [searchInput, setSearchInput] = useState<string>('');
   const debouncedSearchText = useDebounce(searchInput, 500);
 
-  const { data, meta, stats, loading, fetchShipments, deleteShipment, issueStock } = useShipments();
+  const { data, meta, stats, loading, error, fetchShipments, deleteShipment, issueStock } = useShipments();
 
   const [detailOpen, setDetailOpen] = useState(false);
   const [selectedShipmentId, setSelectedShipmentId] = useState<string | null>(null);
   const [docCenterOpen, setDocCenterOpen] = useState(false);
 
   const [isFilterOpen, setIsFilterOpen] = useState(false);
-  const [filters, setFilters] = useState<any>({});
-  const [filterForm] = Form.useForm();
+  const [filters, setFilters] = useState<ShipmentFilters>({});
+  const [filterForm] = Form.useForm<ShipmentFilters>();
+
+  const activeFilterCount = Object.values(filters).filter(Boolean).length;
+  const activeStatus = filters.status ?? 'ALL';
+
+  const panelStyle = useMemo(() => ({
+    background: isDark ? '#0f172a' : token.colorBgContainer,
+    border: `1px solid ${isDark ? 'rgba(148, 163, 184, 0.16)' : token.colorBorderSecondary}`,
+    boxShadow: isDark ? '0 16px 40px rgba(0,0,0,0.28)' : '0 10px 30px rgba(15,23,42,0.06)',
+  }), [isDark, token.colorBgContainer, token.colorBorderSecondary]);
+
+  const textColor = isDark ? '#e5e7eb' : token.colorText;
+  const mutedTextColor = isDark ? '#94a3b8' : token.colorTextSecondary;
+  const cardHeaderBg = isDark ? 'rgba(15, 23, 42, 0.96)' : '#fff7ed';
+  const cardBodyBg = isDark ? '#0f172a' : '#ffffff';
+  const softPanelBg = isDark ? 'rgba(30, 41, 59, 0.62)' : '#fff7ed';
+  const routePanelBg = isDark ? 'rgba(15, 23, 42, 0.78)' : '#fffaf5';
+  const accentColor = '#ee4d2d';
+
+  const formatDate = useCallback((date?: string) => {
+    return date ? new Date(date).toLocaleDateString(dateLocale) : '-';
+  }, [dateLocale]);
+
+  const replacePagination = useCallback((nextCurrent: number, nextPageSize = pageSize) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('current', String(nextCurrent));
+    params.set('pageSize', String(nextPageSize));
+    router.replace(`${pathname}?${params.toString()}`);
+  }, [pageSize, pathname, router, searchParams]);
+
+  const reloadShipments = useCallback(() => {
+    fetchShipments({
+      current,
+      pageSize,
+      search: debouncedSearchText || undefined,
+      sort: '-createdAt',
+      ...filters,
+    });
+  }, [current, debouncedSearchText, fetchShipments, filters, pageSize]);
 
   useEffect(() => {
     const id = searchParams.get('id');
@@ -65,264 +169,411 @@ const ShipmentTable = ({ session }: IProps) => {
   }, [searchParams]);
 
   useEffect(() => {
-    fetchShipments({
-      current: Number(current),
-      pageSize: Number(pageSize),
-      search: debouncedSearchText || undefined,
-      sort: '-createdAt',
-      ...filters
-    });
-  }, [fetchShipments, current, pageSize, debouncedSearchText, filters]);
+    reloadShipments();
+  }, [reloadShipments]);
 
-  const handleDelete = useCallback((id: string) => {
-    deleteShipment(id, () => {
-      fetchShipments({
-        current: Number(current),
-        pageSize: Number(pageSize),
-        search: debouncedSearchText || undefined,
-        sort: '-createdAt',
-      });
-    });
-  }, [deleteShipment, fetchShipments, current, pageSize, debouncedSearchText]);
+  const handleDelete = useCallback((shipmentId: string) => {
+    deleteShipment(shipmentId, reloadShipments);
+  }, [deleteShipment, reloadShipments]);
 
-  const columns = useMemo<TableProps<IShipment>['columns']>(() => [
-    {
-      title: tTable('table.shipmentNumber'),
-      dataIndex: 'shipmentNumber',
-      key: 'shipmentNumber',
-      render: (text: string) => <b style={{ color: token.colorPrimary }}>{text}</b>,
-    },
-    {
-      title: tTable('table.reference'),
-      key: 'reference',
-      render: (_: any, record: IShipment) => (
-        <Space orientation="vertical" size={0}>
-          <Text type="secondary" style={{ fontSize: '12px' }}>
-            PI: {record.proformaInvoice?.piNumber || record.salesContract?.proformaInvoice?.piNumber || '-'}
-          </Text>
-          <Text strong style={{ fontSize: '12px' }}>HĐ: {record.salesContract?.contractNumber || '-'}</Text>
-        </Space>
-      )
-    },
-    {
-      title: tTable('table.forwarder'),
-      dataIndex: ['logisticsPartner', 'name'],
-      key: 'logisticsPartner',
-      render: (name: string | undefined) => name || '-',
-    },
-    {
-      title: tTable('table.bookingNumber'),
-      dataIndex: 'bookingNumber',
-      key: 'bookingNumber',
-      render: (booking: string | undefined) => booking ? <Tag color="purple">{booking}</Tag> : '-',
-    },
-    {
-      title: tTable('table.pol'),
-      dataIndex: 'pol',
-      key: 'pol',
-    },
-    {
-      title: tTable('table.pod'),
-      dataIndex: 'pod',
-      key: 'pod',
-    },
-    {
-      title: tTable('table.etd'),
-      dataIndex: 'etd',
-      key: 'etd',
-      render: (date: string | undefined) => date ? new Date(date).toLocaleDateString(dateLocale) : '-',
-    },
-    {
-      title: tTable('table.status'),
-      dataIndex: 'status',
-      key: 'status',
-      render: (status: ShipmentStatus) => (
-        <Tag color={SHIPMENT_STATUS_CONFIG[status].color}>
-          {tStatus(status)}
-        </Tag>
-      ),
-    },
-    {
-      title: tTable('table.actions'),
-      key: 'action',
-      width: 150,
-      render: (_value: unknown, record: IShipment) => (
-        <Space size="middle">
-          {!record.isStockIssued ? (
-            <Popconfirm
-              title={tTable('table.issueTitle')}
-              description={tTable('table.issueDesc')}
-              onConfirm={() => issueStock(record._id, () => fetchShipments({ current: 1, pageSize: 10 }))}
-              okText={tCommon('confirm')}
-              cancelText={tCommon('cancel')}
-            >
-              <Button 
-                type="primary" 
-                size="small" 
-                icon={<CheckCircleOutlined />}
-                style={{ background: '#10b981', borderColor: '#10b981' }}
-              >
-                {tTable('table.issueStock')}
-              </Button>
-            </Popconfirm>
-          ) : (
-            <Tag color="success" icon={<CheckCircleOutlined />}>{tTable('table.issued')}</Tag>
-          )}
-          
-          <Tooltip title={tTable('table.viewDetail')}>
-            <EyeTwoTone
-              style={{ cursor: 'pointer', fontSize: 18 }}
-              onClick={() => {
-                setSelectedShipmentId(record._id);
-                setDetailOpen(true);
-              }}
-            />
-          </Tooltip>
+  const handleIssueStock = useCallback((shipmentId: string) => {
+    issueStock(shipmentId, reloadShipments);
+  }, [issueStock, reloadShipments]);
 
-          <Tooltip title={tTable('table.docCenter')}>
-            <FilePdfOutlined 
-              style={{ cursor: 'pointer', fontSize: 18, color: '#f5222d' }}
-              onClick={() => {
-                setSelectedShipmentId(record._id);
-                setDocCenterOpen(true);
-              }}
-            />
-          </Tooltip>
+  const handleStatusFilter = useCallback((status?: ShipmentStatus) => {
+    const nextFilters = normalizeFilters({ ...filters, status });
+    setFilters(nextFilters);
+    filterForm.setFieldsValue({ status });
+    replacePagination(1);
+  }, [filterForm, filters, replacePagination]);
 
-          <Popconfirm
-            title={tTable('table.deleteTitle')}
-            description={tTable('table.deleteConfirm')}
-            onConfirm={() => handleDelete(record._id)}
-            okText={tCommon('confirm')}
-            cancelText={tCommon('cancel')}
-          >
-            <DeleteTwoTone twoToneColor="#eb2f96" style={{ cursor: 'pointer', fontSize: 18 }} />
-          </Popconfirm>
-        </Space>
-      ),
-    },
-  ], [dateLocale, handleDelete, issueStock, fetchShipments, token.colorPrimary, tStatus, tTable, tCommon]);
-
-  const onFilterFinish = (values: any) => {
-    setFilters(values);
+  const onFilterFinish = (values: ShipmentFilters) => {
+    const nextFilters = normalizeFilters(values);
+    setFilters(nextFilters);
+    filterForm.setFieldsValue(nextFilters);
     setIsFilterOpen(false);
+    replacePagination(1);
   };
 
   const handleResetFilters = () => {
     filterForm.resetFields();
     setFilters({});
     setIsFilterOpen(false);
+    replacePagination(1);
+  };
+
+  const openDetail = (shipmentId: string) => {
+    setSelectedShipmentId(shipmentId);
+    setDetailOpen(true);
+  };
+
+  const openDocCenter = (shipmentId: string) => {
+    setSelectedShipmentId(shipmentId);
+    setDocCenterOpen(true);
+  };
+
+  const renderStatusFilter = () => {
+    const options: Array<{ key: ShipmentStatus | 'ALL'; label: string }> = [
+      { key: 'ALL', label: tTable('table.allStatus') },
+      ...SHIPMENT_STATUS_KEYS.map((status) => ({ key: status, label: tStatus(status) })),
+    ];
+
+    return (
+      <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 2 }}>
+        {options.map((option) => {
+          const selected = activeStatus === option.key;
+          return (
+            <Button
+              key={option.key}
+              type={selected ? 'primary' : 'default'}
+              size="middle"
+              onClick={() => handleStatusFilter(option.key === 'ALL' ? undefined : option.key)}
+              style={{
+                borderRadius: 999,
+                fontWeight: 700,
+                whiteSpace: 'nowrap',
+                borderColor: selected ? accentColor : isDark ? 'rgba(148, 163, 184, 0.22)' : '#fed7aa',
+                background: selected ? accentColor : isDark ? 'rgba(15, 23, 42, 0.8)' : '#fff7ed',
+                color: selected ? '#fff' : mutedTextColor,
+              }}
+            >
+              {option.label}
+            </Button>
+          );
+        })}
+      </div>
+    );
+  };
+
+  const renderShipmentTimeline = (shipment: IShipment) => {
+    const currentIndex = Math.max(SHIPMENT_FLOW.indexOf(shipment.status), 0);
+
+    return (
+      <Steps
+        responsive
+        size="small"
+        current={currentIndex}
+        items={SHIPMENT_FLOW.map((status, index) => ({
+          title: (
+            <span style={{
+              color: getStepState(shipment.status, index) === 'wait' ? mutedTextColor : textColor,
+              fontWeight: getStepState(shipment.status, index) === 'process' ? 800 : 600,
+              fontSize: 12,
+            }}>
+              {tStatus(status)}
+            </span>
+          ),
+          content: index === currentIndex ? (
+            <span style={{ color: token.colorPrimary, fontSize: 11 }}>
+              {formatDate(status === 'ARRIVED' || status === 'CLOSED' ? shipment.eta : shipment.etd)}
+            </span>
+          ) : undefined,
+          status: getStepState(shipment.status, index),
+        }))}
+      />
+    );
+  };
+
+  const renderShipmentCard = (shipment: IShipment) => {
+    const statusColor = SHIPMENT_STATUS_CONFIG[shipment.status].color;
+    const progress = getShipmentProgress(shipment.status);
+    const piNumber = shipment.proformaInvoice?.piNumber || shipment.salesContract?.proformaInvoice?.piNumber || '-';
+    const contractNumber = shipment.salesContract?.contractNumber || '-';
+    const containerCount = shipment.containers?.length ?? 0;
+
+    return (
+      <Card
+        key={shipment._id}
+        variant="borderless"
+        style={{
+          ...panelStyle,
+          borderRadius: 14,
+          overflow: 'hidden',
+          background: cardBodyBg,
+          borderTop: `3px solid ${accentColor}`,
+        }}
+        styles={{ body: { padding: 0 } }}
+      >
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 16,
+          padding: '18px 20px',
+          borderBottom: `1px solid ${isDark ? 'rgba(148, 163, 184, 0.12)' : token.colorBorderSecondary}`,
+          background: cardHeaderBg,
+        }}>
+          <Space size={14} wrap>
+            <div style={{
+              width: 42,
+              height: 42,
+              borderRadius: 12,
+              display: 'grid',
+              placeItems: 'center',
+              color: token.colorPrimary,
+              background: isDark ? 'rgba(238, 77, 45, 0.16)' : '#ffedd5',
+            }}>
+              <TruckOutlined style={{ fontSize: 20, color: accentColor }} />
+            </div>
+            <div>
+              <Text style={{ color: mutedTextColor, fontSize: 12, fontWeight: 700, textTransform: 'uppercase' }}>
+                {tTable('table.shipmentNumber')}
+              </Text>
+              <div>
+                <Button type="link" onClick={() => openDetail(shipment._id)} style={{ padding: 0, height: 'auto', fontWeight: 900 }}>
+                  {shipment.shipmentNumber}
+                </Button>
+              </div>
+            </div>
+            <Tag color={statusColor} style={{ borderRadius: 999, fontWeight: 700, padding: '3px 10px' }}>
+              {tStatus(shipment.status)}
+            </Tag>
+            {shipment.isStockIssued ? (
+              <Tag color="success" icon={<CheckCircleOutlined />} style={{ borderRadius: 999, fontWeight: 700 }}>
+                {tTable('table.issued')}
+              </Tag>
+            ) : null}
+          </Space>
+
+          <Space size={10} wrap>
+            {!shipment.isStockIssued ? (
+              <Popconfirm
+                title={tTable('table.issueTitle')}
+                description={tTable('table.issueDesc')}
+                onConfirm={() => handleIssueStock(shipment._id)}
+                okText={tCommon('confirm')}
+                cancelText={tCommon('cancel')}
+              >
+                <Button type="primary" size="small" icon={<CheckCircleOutlined />} style={{ borderRadius: 8 }}>
+                  {tTable('table.issueStock')}
+                </Button>
+              </Popconfirm>
+            ) : null}
+            <Tooltip title={tTable('table.viewDetail')}>
+              <Button size="small" shape="circle" icon={<EyeTwoTone />} onClick={() => openDetail(shipment._id)} />
+            </Tooltip>
+            <Tooltip title={tTable('table.docCenter')}>
+              <Button size="small" shape="circle" icon={<FilePdfOutlined />} onClick={() => openDocCenter(shipment._id)} />
+            </Tooltip>
+            <Popconfirm
+              title={tTable('table.deleteTitle')}
+              description={tTable('table.deleteConfirm')}
+              onConfirm={() => handleDelete(shipment._id)}
+              okText={tCommon('confirm')}
+              cancelText={tCommon('cancel')}
+            >
+              <Button size="small" shape="circle" icon={<DeleteTwoTone twoToneColor="#eb2f96" />} />
+            </Popconfirm>
+          </Space>
+        </div>
+
+        <div style={{ padding: 20, background: cardBodyBg }}>
+          <Row gutter={[20, 20]} align="middle">
+            <Col xs={24} xl={7}>
+              <Space orientation="vertical" size={12} style={{ width: '100%' }}>
+                <div>
+                  <Text style={{ color: mutedTextColor, fontSize: 12, fontWeight: 700 }}>{tTable('table.reference')}</Text>
+                  <div style={{ marginTop: 4 }}>
+                    <Text style={{ color: mutedTextColor, fontSize: 12 }}>PI: {piNumber}</Text>
+                    <br />
+                    <Text strong style={{ color: textColor, fontSize: 13 }}>HD: {contractNumber}</Text>
+                  </div>
+                </div>
+                <div>
+                  <Text style={{ color: mutedTextColor, fontSize: 12, fontWeight: 700 }}>{tTable('table.forwarder')}</Text>
+                  <div style={{ color: textColor, fontWeight: 700, marginTop: 4 }}>
+                    {shipment.logisticsPartner?.name || '-'}
+                  </div>
+                </div>
+              </Space>
+            </Col>
+
+            <Col xs={24} xl={7}>
+              <div style={{
+                borderRadius: 14,
+                padding: 16,
+                background: routePanelBg,
+                border: `1px solid ${isDark ? 'rgba(148, 163, 184, 0.12)' : token.colorBorderSecondary}`,
+              }}>
+                <Space align="start" size={12}>
+                  <EnvironmentOutlined style={{ color: token.colorPrimary, fontSize: 18, marginTop: 3 }} />
+                  <div>
+                    <Text style={{ color: mutedTextColor, fontSize: 12, fontWeight: 700 }}>{tTable('table.pol')}</Text>
+                    <div style={{ color: textColor, fontWeight: 800 }}>{shipment.pol || '-'}</div>
+                    <div style={{ height: 20, borderLeft: `2px dashed ${token.colorPrimary}`, margin: '6px 0 6px 5px' }} />
+                    <Text style={{ color: mutedTextColor, fontSize: 12, fontWeight: 700 }}>{tTable('table.pod')}</Text>
+                    <div style={{ color: textColor, fontWeight: 800 }}>{shipment.pod || '-'}</div>
+                  </div>
+                </Space>
+              </div>
+            </Col>
+
+            <Col xs={24} xl={10}>
+              <Row gutter={[12, 12]}>
+                <Col xs={12} md={6}>
+                  <Text style={{ color: mutedTextColor, fontSize: 12 }}>{tTable('table.bookingNumber')}</Text>
+                  <div><Tag color="purple">{shipment.bookingNumber || '-'}</Tag></div>
+                </Col>
+                <Col xs={12} md={6}>
+                  <Text style={{ color: mutedTextColor, fontSize: 12 }}>Vessel</Text>
+                  <div style={{ color: textColor, fontWeight: 700 }}>{shipment.vesselName || '-'}</div>
+                </Col>
+                <Col xs={12} md={6}>
+                  <Text style={{ color: mutedTextColor, fontSize: 12 }}>{tTable('table.etd')}</Text>
+                  <div style={{ color: textColor, fontWeight: 700 }}>{formatDate(shipment.etd)}</div>
+                </Col>
+                <Col xs={12} md={6}>
+                  <Text style={{ color: mutedTextColor, fontSize: 12 }}>ETA</Text>
+                  <div style={{ color: textColor, fontWeight: 700 }}>{formatDate(shipment.eta)}</div>
+                </Col>
+                <Col span={24}>
+                  <Space size={8} wrap>
+                    <Tag icon={<ContainerOutlined />} color="blue">{containerCount} containers</Tag>
+                    <Tag icon={<ClockCircleOutlined />} color={progress >= 100 ? 'success' : 'processing'}>{progress}%</Tag>
+                  </Space>
+                </Col>
+              </Row>
+            </Col>
+          </Row>
+
+          <div style={{
+            marginTop: 20,
+            padding: '18px 16px',
+            borderRadius: 14,
+            background: softPanelBg,
+            border: `1px solid ${isDark ? 'rgba(148, 163, 184, 0.12)' : token.colorBorderSecondary}`,
+          }}>
+            {renderShipmentTimeline(shipment)}
+          </div>
+        </div>
+      </Card>
+    );
   };
 
   return (
     <div className="space-y-6">
-      {/* 1. Page Header */}
-      <PageHeader 
-        title={tTable('title')} 
-        icon={<TruckOutlined className="text-blue-500" />} 
-        description={tTable('description')} 
+      <PageHeader
+        title={tTable('title')}
+        icon={<TruckOutlined className="text-blue-500" />}
+        description={tTable('description')}
       />
 
-      {/* 2. Statistics Cards */}
-      <Row gutter={[20, 20]}>
+      <Row gutter={[16, 16]}>
         <Col xs={24} sm={12} lg={8}>
-          <Card variant="borderless" hoverable style={{ borderRadius: '12px', background: isDark ? '#1e293b' : token.colorBgContainer }}>
-            <Statistic
-              title={<Text type="secondary" style={{ fontSize: '12px', fontWeight: 600, color: '#94a3b8' }}>{tTable('stats.total')}</Text>}
-              value={stats.total}
-              styles={{ content: { color: isDark ? '#f8fafc' : '#1e293b', fontWeight: 900, fontSize: '24px' } }}
-              prefix={<DeploymentUnitOutlined style={{ color: '#3b82f6', marginRight: '8px' }} />}
-            />
+          <Card variant="borderless" style={{ ...panelStyle, borderRadius: 14 }}>
+            <Space size={14}>
+              <DeploymentUnitOutlined style={{ color: '#3b82f6', fontSize: 24 }} />
+              <div>
+                <Text style={{ color: mutedTextColor, fontSize: 12, fontWeight: 800, textTransform: 'uppercase' }}>
+                  {tTable('stats.total')}
+                </Text>
+                <Title level={3} style={{ color: textColor, margin: 0 }}>{stats.total}</Title>
+              </div>
+            </Space>
           </Card>
         </Col>
         <Col xs={24} sm={12} lg={8}>
-          <Card variant="borderless" hoverable style={{ borderRadius: '12px', background: isDark ? '#1e293b' : token.colorBgContainer }}>
-            <Statistic
-              title={<Text type="secondary" style={{ fontSize: '12px', fontWeight: 600, color: '#94a3b8' }}>{tTable('stats.inTransit')}</Text>}
-              value={stats.inTransit}
-              styles={{ content: { color: isDark ? '#f8fafc' : '#1e293b', fontWeight: 900, fontSize: '24px' } }}
-              prefix={<CalendarOutlined style={{ color: '#f59e0b', marginRight: '8px' }} />}
-            />
+          <Card variant="borderless" style={{ ...panelStyle, borderRadius: 14 }}>
+            <Space size={14}>
+              <CalendarOutlined style={{ color: '#f59e0b', fontSize: 24 }} />
+              <div>
+                <Text style={{ color: mutedTextColor, fontSize: 12, fontWeight: 800, textTransform: 'uppercase' }}>
+                  {tTable('stats.inTransit')}
+                </Text>
+                <Title level={3} style={{ color: textColor, margin: 0 }}>{stats.inTransit}</Title>
+              </div>
+            </Space>
           </Card>
         </Col>
         <Col xs={24} sm={12} lg={8}>
-          <Card variant="borderless" hoverable style={{ borderRadius: '12px', background: isDark ? '#1e293b' : token.colorBgContainer }}>
-            <Statistic
-              title={<Text type="secondary" style={{ fontSize: '12px', fontWeight: 600, color: '#94a3b8' }}>{tTable('stats.closed')}</Text>}
-              value={stats.closed}
-              styles={{ content: { color: isDark ? '#f8fafc' : '#1e293b', fontWeight: 900, fontSize: '24px' } }}
-              prefix={<CheckCircleOutlined style={{ color: '#10b981', marginRight: '8px' }} />}
-            />
+          <Card variant="borderless" style={{ ...panelStyle, borderRadius: 14 }}>
+            <Space size={14}>
+              <CheckCircleOutlined style={{ color: '#10b981', fontSize: 24 }} />
+              <div>
+                <Text style={{ color: mutedTextColor, fontSize: 12, fontWeight: 800, textTransform: 'uppercase' }}>
+                  {tTable('stats.closed')}
+                </Text>
+                <Title level={3} style={{ color: textColor, margin: 0 }}>{stats.closed}</Title>
+              </div>
+            </Space>
           </Card>
         </Col>
       </Row>
 
-      {/* 3. Integrated Table Section */}
-      <Card
-        variant="borderless"
-        style={{
-          borderRadius: '12px',
-          background: isDark ? '#1e293b' : token.colorBgContainer,
-          boxShadow: isDark ? '0 4px 20px rgba(0,0,0,0.5)' : '0 4px 20px rgba(0,0,0,0.03)'
-        }}
-        styles={{ body: { padding: 0 } }}
-      >
-        <div style={{ padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Space size="large">
+      <div style={{ ...panelStyle, borderRadius: 14, padding: 18 }}>
+        <Row gutter={[16, 16]} align="middle" justify="space-between">
+          <Col xs={24} lg={12}>
             <Input
               placeholder={tTable('table.searchPlaceholder')}
               value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
+              onChange={(event) => setSearchInput(event.target.value)}
               prefix={<SearchOutlined className="text-slate-400" />}
-              className="rounded-xl border-slate-200"
-              style={{ width: 320, height: 40 }}
+              style={{ maxWidth: 360, height: 40, borderRadius: 10 }}
               allowClear
             />
-          </Space>
-          <div className="flex items-center space-x-3">
-            <Badge count={Object.keys(filters).filter(k => filters[k]).length} size="small" offset={[2, 0]}>
-              <Button 
-                icon={<FilterOutlined />} 
-                className="rounded-xl h-10 border-slate-200 text-slate-500 hover:text-blue-500 hover:border-blue-500 transition-all"
-                onClick={() => setIsFilterOpen(true)}
-              >
-                {tTable('table.advancedFilter')}
-              </Button>
-            </Badge>
-            <Button 
-              icon={<ReloadOutlined />} 
-              shape="circle" 
-              className="border-slate-200 text-slate-400"
-              onClick={() => fetchShipments({ current: 1, pageSize: 10 })}
-            />
+          </Col>
+          <Col xs={24} lg={12}>
+            <Space style={{ width: '100%', justifyContent: 'flex-end' }} wrap>
+              <Badge count={activeFilterCount} size="small" offset={[2, 0]}>
+                <Button icon={<FilterOutlined />} onClick={() => setIsFilterOpen(true)} style={{ borderRadius: 10 }}>
+                  {tTable('table.advancedFilter')}
+                </Button>
+              </Badge>
+              <Tooltip title="Refresh">
+                <Button icon={<ReloadOutlined />} onClick={reloadShipments} style={{ borderRadius: 10 }} />
+              </Tooltip>
+            </Space>
+          </Col>
+          <Col span={24}>
+            {renderStatusFilter()}
+          </Col>
+        </Row>
+      </div>
+
+      {error ? (
+        <Alert type="error" showIcon message={error} />
+      ) : null}
+
+      <Space orientation="vertical" size={16} style={{ width: '100%' }}>
+        {loading && data.length === 0 ? (
+          Array.from({ length: 3 }).map((_, index) => (
+            <Card key={index} variant="borderless" style={{ ...panelStyle, borderRadius: 14 }}>
+              <Skeleton active paragraph={{ rows: 4 }} />
+            </Card>
+          ))
+        ) : null}
+
+        {!loading && data.length === 0 ? (
+          <div style={{ ...panelStyle, borderRadius: 14, padding: 48 }}>
+            <Empty />
           </div>
-        </div>
+        ) : null}
 
-        <div className="premium-table">
-          <Table
-            columns={columns}
-            dataSource={data}
-            rowKey={(record: any) => record._id || record.shipmentNumber}
-            loading={loading}
-            bordered={false}
-            pagination={{
-              current: Number(meta.current),
-              pageSize: Number(meta.pageSize),
-              total: meta.total,
-              showTotal: (total) => tTable('table.totalCount', { total }),
-              className: "px-6 py-4 border-t border-slate-50"
-            }}
-            onChange={(pagination) => {
-              const params = new URLSearchParams(searchParams.toString());
-              if (pagination?.current) params.set('current', pagination.current.toString());
-              if (pagination?.pageSize) params.set('pageSize', pagination.pageSize.toString());
-              router.replace(`${pathname}?${params.toString()}`);
-            }}
-          />
-        </div>
-      </Card>
+        {data.map(renderShipmentCard)}
+      </Space>
 
-      {/* 4. Advanced Filter Drawer */}
+      <div style={{
+        ...panelStyle,
+        borderRadius: 14,
+        padding: '14px 18px',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        gap: 16,
+        flexWrap: 'wrap',
+      }}>
+        <Text strong style={{ color: textColor }}>
+          {tTable('table.totalCount', { total: meta.total })}
+        </Text>
+        <Pagination
+          current={Number(meta.current)}
+          pageSize={Number(meta.pageSize)}
+          total={meta.total}
+          showSizeChanger
+          onChange={(nextCurrent, nextPageSize) => replacePagination(nextCurrent, nextPageSize)}
+        />
+      </div>
+
       <Drawer
         title={
           <Space>
@@ -333,6 +584,7 @@ const ShipmentTable = ({ session }: IProps) => {
         placement="right"
         onClose={() => setIsFilterOpen(false)}
         open={isFilterOpen}
+        forceRender
         size={400}
         extra={
           <Space>
@@ -348,11 +600,14 @@ const ShipmentTable = ({ session }: IProps) => {
           initialValues={filters}
         >
           <Form.Item label={tTable('table.status')} name="status">
-            <Select placeholder={tTable('table.allStatus')} allowClear>
-              {Object.keys(SHIPMENT_STATUS_CONFIG).map(key => (
-                <Select.Option key={key} value={key}>{tStatus(key as ShipmentStatus)}</Select.Option>
-              ))}
-            </Select>
+            <Select
+              placeholder={tTable('table.allStatus')}
+              allowClear
+              options={SHIPMENT_STATUS_KEYS.map((status) => ({
+                value: status,
+                label: tStatus(status),
+              }))}
+            />
           </Form.Item>
           <Form.Item label={tTable('table.pol')} name="pol">
             <Input placeholder={tTable('table.polPlaceholder')} />
@@ -370,12 +625,7 @@ const ShipmentTable = ({ session }: IProps) => {
           setDetailOpen(false);
           setSelectedShipmentId(null);
         }}
-        onSuccess={() => fetchShipments({
-          current: Number(current),
-          pageSize: Number(pageSize),
-          search: debouncedSearchText || undefined,
-          sort: '-createdAt',
-        })}
+        onSuccess={reloadShipments}
       />
 
       <ShipmentDocCenter

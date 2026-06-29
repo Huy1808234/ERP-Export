@@ -1,30 +1,25 @@
 "use client";
 
 import React from "react";
-import { Layout, Menu, Button, Row, Col, Typography, Space, theme, Dropdown, Avatar, Divider, type MenuProps } from "antd";
+import { Menu, Button, Row, Col, Typography, Dropdown, Avatar, type MenuProps } from "antd";
 import { 
   GlobalOutlined, 
   ArrowRightOutlined, 
   LoginOutlined, 
   DashboardOutlined, 
-  LogoutOutlined,
-  AppstoreOutlined,
-  UserOutlined,
-  ShoppingOutlined,
-  QuestionCircleOutlined,
-  CreditCardOutlined,
-  TagsOutlined,
-  SettingOutlined
+  LogoutOutlined
 } from "@ant-design/icons";
-import { Link, useRouter, usePathname } from "@/i18n/routing";
+import { Link, useRouter } from "@/i18n/routing";
 import { motion, useScroll, useTransform } from "framer-motion";
 import { useSession, signOut } from "next-auth/react";
+import type { Session } from "next-auth";
 import { useParams } from "next/navigation";
 import { isStaff } from "@/utils/auth-utils";
+import { CUSTOMER_PORTAL_ENTRY_PATH } from "@/utils/auth-redirect";
 
 const { Text, Title } = Typography;
 
-export const Header = ({ session: serverSession }: { session: any }) => {
+export const Header = ({ session: serverSession }: { session: Session | null }) => {
   const { data: clientSession } = useSession();
   const session = clientSession || serverSession;
   const router = useRouter();
@@ -32,9 +27,6 @@ export const Header = ({ session: serverSession }: { session: any }) => {
   const params = useParams();
   const locale = params?.locale ?? 'vi';
   
-  const pathname = usePathname();
-  const isPortalPage = pathname.includes('/portal');
-
   const height = useTransform(scrollY, [0, 100], [90, 70]);
   
   const backgroundColor = useTransform(
@@ -56,6 +48,7 @@ export const Header = ({ session: serverSession }: { session: any }) => {
   );
 
   const isStaffUser = isStaff(session?.user);
+  const guestLoginHref = `/auth/login?callbackUrl=${encodeURIComponent('/')}`;
 
   const userMenuItems: MenuProps['items'] = [
     {
@@ -73,7 +66,7 @@ export const Header = ({ session: serverSession }: { session: any }) => {
       key: 'system-dashboard',
       icon: <DashboardOutlined />,
       label: <Text strong style={{ color: '#1890ff' }}>{isStaffUser ? 'Hệ thống Quản trị (Admin)' : 'Customer Portal'}</Text>,
-      onClick: () => router.push(isStaffUser ? '/dashboard' : '/dashboard/portal'),
+      onClick: () => router.push(isStaffUser ? '/dashboard' : CUSTOMER_PORTAL_ENTRY_PATH),
     },
     { type: 'divider' as const },
     {
@@ -199,7 +192,7 @@ export const Header = ({ session: serverSession }: { session: any }) => {
                   </motion.div>
                 </Dropdown>
               ) : (
-                <Link href="/auth/login">
+                <Link href={guestLoginHref}>
                   <Button 
                     type="text" 
                     icon={<LoginOutlined />}

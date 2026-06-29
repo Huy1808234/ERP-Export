@@ -1193,6 +1193,7 @@ const ShipmentDocCenter = ({ open, onClose, shipmentId, session }: IProps) => {
                 onOk={() => form.submit()}
                 confirmLoading={uploading}
                 destroyOnHidden
+                forceRender
                 width={760}
             >
                 <Form form={form} layout="vertical" onFinish={handleRegister}>

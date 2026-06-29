@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Modal, Form, Input, Button, Divider, Typography, message } from 'antd';
 import {
     UserOutlined,
@@ -26,25 +26,21 @@ interface AuthModalProps {
 export default function AuthModal({ open, onClose }: AuthModalProps) {
     const [view, setView] = useState<AuthView>('login');
     const [loading, setLoading] = useState(false);
-    const [loginForm] = Form.useForm();
-    const [registerForm] = Form.useForm();
-    const [verifyForm] = Form.useForm();
-    const [forgotForm] = Form.useForm();
-    const [resetForm] = Form.useForm();
-    const [userId, setUserId] = useState('');
+    const [form] = Form.useForm();
+    const [accountRef, setAccountRef] = useState('');
     const [userEmail, setUserEmail] = useState('');
 
     const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
 
     const handleClose = () => {
         setView('login');
-        loginForm.resetFields();
-        registerForm.resetFields();
-        verifyForm.resetFields();
-        forgotForm.resetFields();
-        resetForm.resetFields();
+        form.resetFields();
         onClose();
     };
+
+    useEffect(() => {
+        form.resetFields();
+    }, [form, view]);
 
     // ===== LOGIN =====
     const handleLogin = async (values: { username: string; password: string }) => {
@@ -82,7 +78,7 @@ export default function AuthModal({ open, onClose }: AuthModalProps) {
                 body: values,
             });
             if (res?.data) {
-                setUserId(res.data._id);
+                setAccountRef(res.data._id);
                 setUserEmail(values.email);
                 message.success('Đăng ký thành công! Kiểm tra email để lấy mã xác thực.');
                 setView('verify');
@@ -99,10 +95,10 @@ export default function AuthModal({ open, onClose }: AuthModalProps) {
     const handleVerify = async (values: { code: string }) => {
         setLoading(true);
         try {
-            const res = await sendRequest<IBackendRes<any>>({
+            const res = await sendRequest<IBackendRes<unknown>>({
                 url: `${backendUrl}/api/v1/auth/check-code`,
                 method: 'POST',
-                body: { accountRef: userId, code: values.code },
+                body: { accountRef, code: values.code },
             });
             if (res?.data || res?.statusCode === 201) {
                 message.success('Kích hoạt thành công! Vui lòng đăng nhập.');
@@ -126,7 +122,7 @@ export default function AuthModal({ open, onClose }: AuthModalProps) {
                 body: { email: values.email },
             });
             if (res?.data || res?.statusCode === 201) {
-                setUserId(res?.data?._id || '');
+                setAccountRef(res?.data?._id || '');
                 setUserEmail(values.email);
                 message.success('Mã xác nhận đã gửi vào email.');
                 setView('reset');
@@ -143,10 +139,10 @@ export default function AuthModal({ open, onClose }: AuthModalProps) {
     const handleReset = async (values: { code: string; password: string }) => {
         setLoading(true);
         try {
-            const res = await sendRequest<IBackendRes<any>>({
+            const res = await sendRequest<IBackendRes<unknown>>({
                 url: `${backendUrl}/api/v1/auth/change-password`,
                 method: 'POST',
-                body: { accountRef: userId, code: values.code, password: values.password },
+                body: { accountRef, code: values.code, password: values.password },
             });
             if (res?.data || res?.statusCode === 201) {
                 message.success('Đổi mật khẩu thành công!');
@@ -313,6 +309,7 @@ export default function AuthModal({ open, onClose }: AuthModalProps) {
                 onCancel={handleClose}
                 footer={null}
                 centered
+                forceRender
                 width={440}
                 className="auth-modal"
                 closeIcon={<span style={{ color: '#64748b', fontSize: 16 }}>✕</span>}
@@ -347,7 +344,7 @@ export default function AuthModal({ open, onClose }: AuthModalProps) {
                     {/* ===== LOGIN VIEW ===== */}
                     {view === 'login' && (
                         <div className="auth-input" style={{ position: 'relative', zIndex: 1 }}>
-                            <Form form={loginForm} onFinish={handleLogin} layout="vertical" size="large" requiredMark={false}>
+                            <Form form={form} onFinish={handleLogin} layout="vertical" size="large" requiredMark={false}>
                                 <Form.Item
                                     name="username"
                                     label="Email"
@@ -391,7 +388,7 @@ export default function AuthModal({ open, onClose }: AuthModalProps) {
                                 <Text style={{ color: '#64748b', fontSize: 14 }}>Chưa có tài khoản? </Text>
                                 <Button
                                     type="link"
-                                    onClick={() => { setView('register'); loginForm.resetFields(); }}
+                                    onClick={() => setView('register')}
                                     style={{ color: '#a78bfa', fontWeight: 700, padding: 0, fontSize: 14 }}
                                 >
                                     Đăng ký miễn phí
@@ -403,7 +400,7 @@ export default function AuthModal({ open, onClose }: AuthModalProps) {
                     {/* ===== REGISTER VIEW ===== */}
                     {view === 'register' && (
                         <div className="auth-input" style={{ position: 'relative', zIndex: 1 }}>
-                            <Form form={registerForm} onFinish={handleRegister} layout="vertical" size="large" requiredMark={false}>
+                            <Form form={form} onFinish={handleRegister} layout="vertical" size="large" requiredMark={false}>
                                 <Form.Item
                                     name="name"
                                     label="Họ và tên"
@@ -468,7 +465,7 @@ export default function AuthModal({ open, onClose }: AuthModalProps) {
                                 <Text style={{ color: '#64748b', fontSize: 14 }}>Đã có tài khoản? </Text>
                                 <Button
                                     type="link"
-                                    onClick={() => { setView('login'); registerForm.resetFields(); }}
+                                    onClick={() => setView('login')}
                                     style={{ color: '#a78bfa', fontWeight: 700, padding: 0, fontSize: 14 }}
                                 >
                                     Đăng nhập
@@ -480,7 +477,7 @@ export default function AuthModal({ open, onClose }: AuthModalProps) {
                     {/* ===== VERIFY VIEW ===== */}
                     {view === 'verify' && (
                         <div className="auth-input" style={{ position: 'relative', zIndex: 1 }}>
-                            <Form form={verifyForm} onFinish={handleVerify} layout="vertical" size="large" requiredMark={false}>
+                            <Form form={form} onFinish={handleVerify} layout="vertical" size="large" requiredMark={false}>
                                 <Form.Item
                                     name="code"
                                     label="Mã xác thực"
@@ -515,7 +512,7 @@ export default function AuthModal({ open, onClose }: AuthModalProps) {
                     {/* ===== FORGOT PASSWORD VIEW ===== */}
                     {view === 'forgot' && (
                         <div className="auth-input" style={{ position: 'relative', zIndex: 1 }}>
-                            <Form form={forgotForm} onFinish={handleForgot} layout="vertical" size="large" requiredMark={false}>
+                            <Form form={form} onFinish={handleForgot} layout="vertical" size="large" requiredMark={false}>
                                 <Form.Item
                                     name="email"
                                     label="Email đã đăng ký"
@@ -548,7 +545,7 @@ export default function AuthModal({ open, onClose }: AuthModalProps) {
                     {/* ===== RESET PASSWORD VIEW ===== */}
                     {view === 'reset' && (
                         <div className="auth-input" style={{ position: 'relative', zIndex: 1 }}>
-                            <Form form={resetForm} onFinish={handleReset} layout="vertical" size="large" requiredMark={false}>
+                            <Form form={form} onFinish={handleReset} layout="vertical" size="large" requiredMark={false}>
                                 <Form.Item
                                     name="code"
                                     label="Mã xác nhận"

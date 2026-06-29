@@ -1,5 +1,8 @@
+import { normalizeRoleName } from "@/lib/access-control";
+
 const SUPPORTED_LOCALES = new Set(["en", "vi"]);
 const REDIRECT_BASE_URL = "http://mini-erp.local";
+export const CUSTOMER_PORTAL_ENTRY_PATH = "/dashboard/portal/products";
 
 type PostLoginRedirectInput = {
   callbackUrl?: string | null;
@@ -34,6 +37,15 @@ const isDashboardPath = (pathname: string): boolean => {
 const isGuestHomePath = (pathname: string): boolean => {
   const pathWithoutLocale = stripLocalePrefix(pathname);
   return pathWithoutLocale === "/" || pathWithoutLocale === "/landing";
+};
+
+const isCustomerPortalPath = (pathname: string): boolean => {
+  const pathWithoutLocale = stripLocalePrefix(pathname);
+  return pathWithoutLocale === "/dashboard/portal" || pathWithoutLocale.startsWith("/dashboard/portal/");
+};
+
+const localizedPath = (locale: string, pathname: string): string => {
+  return `/${locale}${pathname === "/" ? "" : pathname}`;
 };
 
 const isLoginPath = (pathname: string): boolean => {
@@ -78,15 +90,43 @@ export const getPostLoginRedirectPath = ({
   roleName,
 }: PostLoginRedirectInput): string => {
   const safeLocale = normalizeLocale(locale);
+  const normalizedRoleName = normalizeRoleName(roleName);
   const safeCallbackPath = getSafeInternalRedirectPath(callbackUrl, locale);
+
+  if (normalizedRoleName === "CUSTOMER") {
+    if (safeCallbackPath) {
+      const callbackPathname = new URL(safeCallbackPath, REDIRECT_BASE_URL).pathname;
+
+      if (isGuestHomePath(callbackPathname)) {
+        return safeCallbackPath;
+      }
+
+      if (isCustomerPortalPath(callbackPathname)) {
+        return safeCallbackPath;
+      }
+
+      if (isDashboardPath(callbackPathname)) {
+        return localizedPath(safeLocale, "/");
+      }
+
+      return safeCallbackPath;
+    }
+
+    return localizedPath(safeLocale, "/");
+  }
+
   if (safeCallbackPath) {
     const callbackPathname = new URL(safeCallbackPath, REDIRECT_BASE_URL).pathname;
 
     if (isStaffUser) {
       if (isGuestHomePath(callbackPathname)) {
-        // If it's a customer, redirect to /dashboard/portal, otherwise /dashboard
-        return roleName === 'CUSTOMER' ? `/${safeLocale}/dashboard/portal` : `/${safeLocale}/dashboard`;
+        return localizedPath(safeLocale, "/dashboard");
       }
+
+      if (isCustomerPortalPath(callbackPathname)) {
+        return localizedPath(safeLocale, "/dashboard");
+      }
+
       return safeCallbackPath;
     }
 
@@ -94,7 +134,7 @@ export const getPostLoginRedirectPath = ({
   }
 
   if (isStaffUser) {
-    return roleName === 'CUSTOMER' ? `/${safeLocale}/dashboard/portal` : `/${safeLocale}/dashboard`;
+    return localizedPath(safeLocale, "/dashboard");
   }
 
   return `/${safeLocale}`;

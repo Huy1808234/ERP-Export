@@ -838,7 +838,6 @@ const SalesContractTable = () => {
           pi={{
             ...selectedRecord,
             piNumber: selectedRecord.contractNumber, 
-            id: undefined, 
             salesContractId: selectedRecord._id,
             customer: selectedRecord.buyer // Map buyer to customer for modal display
           }}

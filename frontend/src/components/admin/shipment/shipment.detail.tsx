@@ -44,14 +44,29 @@ interface IProps {
   onSuccess: () => void;
 }
 
+interface PartnerOption {
+  _id: string;
+  name: string;
+  partnerType: 'CUSTOMER' | 'SUPPLIER' | 'LOGISTICS' | string;
+}
+
+interface ShipmentCostFormValues {
+  logisticsPartnerId?: string;
+  freightCost?: number;
+  insuranceCost?: number;
+  localChargesVnd?: number;
+  truckingCostVnd?: number;
+  customsFeeVnd?: number;
+}
+
 const ShipmentDetailDrawer = ({ shipmentId, open, onClose, onSuccess }: IProps) => {
   const { notification } = App.useApp();
   const [data, setData] = useState<IShipment | null>(null);
   const [loading, setLoading] = useState(false);
-  const [partners, setPartners] = useState<any[]>([]);
+  const [partners, setPartners] = useState<PartnerOption[]>([]);
   const [containerModalOpen, setContainerModalOpen] = useState(false);
   const [form] = Form.useForm<IContainer>();
-  const [costForm] = Form.useForm();
+  const [costForm] = Form.useForm<ShipmentCostFormValues>();
   const [costModalOpen, setCostModalOpen] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
   const { isDark } = useTheme();
@@ -212,7 +227,7 @@ const ShipmentDetailDrawer = ({ shipmentId, open, onClose, onSuccess }: IProps) 
       const session = await getSession();
       const accessToken = getAccessToken(session);
       
-      const res = await sendRequest<IBackendRes<any>>({
+      const res = await sendRequest<IBackendRes<IModelPaginate<PartnerOption>>>({
         url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/partners?pageSize=100`,
         method: 'GET',
         headers: { Authorization: `Bearer ${accessToken}` },
@@ -231,7 +246,6 @@ const ShipmentDetailDrawer = ({ shipmentId, open, onClose, onSuccess }: IProps) 
     }
   }, [open, fetchPartners]);
 
-  // TECH LEAD FIX: Only set fields when the modal is actually open to avoid "form not connected" warning
   useEffect(() => {
     if (costModalOpen && data) {
       costForm.setFieldsValue({
@@ -245,7 +259,7 @@ const ShipmentDetailDrawer = ({ shipmentId, open, onClose, onSuccess }: IProps) 
     }
   }, [costModalOpen, data, costForm]);
 
-  const handleSaveCosts = useCallback(async (values: any) => {
+  const handleSaveCosts = useCallback(async (values: ShipmentCostFormValues) => {
     if (!shipmentId) return;
 
     try {
@@ -257,10 +271,11 @@ const ShipmentDetailDrawer = ({ shipmentId, open, onClose, onSuccess }: IProps) 
         return;
       }
 
+      const payload: Record<string, unknown> = { ...values };
       const res = await sendRequest<IBackendRes<IShipment>>({
         url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/shipments/${shipmentId}`,
         method: 'PATCH',
-        body: values,
+        body: payload,
         headers: { Authorization: `Bearer ${accessToken}` },
       });
 
@@ -474,6 +489,7 @@ const ShipmentDetailDrawer = ({ shipmentId, open, onClose, onSuccess }: IProps) 
         okText="Thêm mới"
         cancelText="Hủy"
         destroyOnHidden
+        forceRender
       >
         <Form form={form} layout="vertical" onFinish={handleSaveContainer}>
           <Form.Item name="containerNumber" label="Số Container" rules={[{ required: true, message: 'Nhập số Container' }]}>
@@ -506,6 +522,7 @@ const ShipmentDetailDrawer = ({ shipmentId, open, onClose, onSuccess }: IProps) 
         okText="Lưu chi phí"
         cancelText="Hủy"
         destroyOnHidden
+        forceRender
       >
         <Form form={costForm} layout="vertical" onFinish={handleSaveCosts}>
           <Form.Item name="logisticsPartnerId" label="Đơn vị vận tải (Forwarder)" rules={[{ required: true, message: 'Vui lòng chọn đơn vị vận tải' }]}>

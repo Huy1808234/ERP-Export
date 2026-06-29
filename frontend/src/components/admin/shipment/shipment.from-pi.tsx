@@ -19,25 +19,72 @@ import { useTranslations } from 'next-intl';
 import { getAccessToken } from '@/lib/auth-token';
 import PortSelect from '@/components/admin/ports/PortSelect';
 import { normalizeCountryCode } from '@/constants/geo';
+import type { Dayjs } from 'dayjs';
 
 const { Text } = Typography;
+
+interface ShipmentSourcePI {
+  _id?: string;
+  piNumber: string;
+  incoterm?: string;
+  portOfLoading?: string;
+  portOfLoading_port_id?: string | null;
+  portOfDischarge?: string;
+  portOfDischarge_port_id?: string | null;
+  salesContractId?: string;
+  salesContract?: {
+    pol?: string;
+    pol_port_id?: string | null;
+    pod?: string;
+    pod_port_id?: string | null;
+    buyer?: {
+      country?: string;
+    };
+  };
+  customer?: {
+    name?: string;
+    country?: string;
+  };
+}
+
+interface ForwarderOption {
+  _id: string;
+  name: string;
+}
+
+interface ShipmentFromPIFormValues {
+  logisticsPartnerId: string;
+  bookingNumber?: string;
+  pol?: string | null;
+  pol_port_id?: string | null;
+  pod?: string | null;
+  pod_port_id?: string | null;
+  vesselFlight?: string;
+  etd?: Dayjs;
+  eta?: Dayjs;
+}
+
+interface CreatedShipmentResponse {
+  _id: string;
+  shipmentNumber: string;
+}
 
 interface IProps {
   open: boolean;
   setOpen: (v: boolean) => void;
-  pi: any; // Proforma Invoice data
+  pi: ShipmentSourcePI | null;
 }
 
 const ShipmentFromPIModal = ({ open, setOpen, pi }: IProps) => {
   const { notification } = App.useApp();
   const { data: session } = useSession();
-  const [form] = Form.useForm();
+  const [form] = Form.useForm<ShipmentFromPIFormValues>();
   const watchedPol = Form.useWatch('pol', form);
   const watchedPod = Form.useWatch('pod', form);
   const tShipment = useTranslations('Shipment');
   const tInc = useTranslations('Incoterms');
   const [submitting, setSubmitting] = useState(false);
-  const [forwarders, setForwarders] = useState<any[]>([]);
+  const [forwarders, setForwarders] = useState<ForwarderOption[]>([]);
   const destinationCountryCode = useMemo(() => (
     normalizeCountryCode(pi?.customer?.country || pi?.salesContract?.buyer?.country)
   ), [pi]);
@@ -47,7 +94,7 @@ const ShipmentFromPIModal = ({ open, setOpen, pi }: IProps) => {
       const accessToken = getAccessToken(session);
       if (!accessToken) return;
 
-      const res = await sendRequest<IBackendRes<IModelPaginate<any>>>({
+      const res = await sendRequest<IBackendRes<IModelPaginate<ForwarderOption>>>({
         url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/partners`,
         method: 'GET',
         queryParams: { current: 1, pageSize: 100, partnerType: 'LOGISTICS' },
@@ -76,11 +123,11 @@ const ShipmentFromPIModal = ({ open, setOpen, pi }: IProps) => {
     setOpen(false);
   };
 
-  const onFinish = async (values: any) => {
+  const onFinish = async (values: ShipmentFromPIFormValues) => {
     setSubmitting(true);
     const accessToken = getAccessToken(session);
 
-    const res = await sendRequest<IBackendRes<any>>({
+    const res = await sendRequest<IBackendRes<CreatedShipmentResponse>>({
       url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/shipments`,
       method: 'POST',
       body: {
@@ -132,6 +179,7 @@ const ShipmentFromPIModal = ({ open, setOpen, pi }: IProps) => {
       cancelText={tShipment('createFromPI.cancel')}
       okButtonProps={{ style: { background: '#096dd9', borderColor: '#096dd9' } }}
       destroyOnHidden
+      forceRender
     >
       <div style={{
         background: '#e6f7ff',

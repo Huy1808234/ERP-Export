@@ -1,10 +1,9 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import { Row, Col, Typography, Button, Input, Card, Space, Statistic, Modal, Descriptions, Badge, Tag, Empty } from "antd";
+import { Row, Col, Typography, Button, Input, Card, Space, Modal, Descriptions, Badge, Tag, Empty } from "antd";
 import {
   SafetyCertificateOutlined,
-  RightOutlined,
   TruckOutlined,
   EnvironmentOutlined,
   CalendarOutlined,
@@ -18,6 +17,8 @@ import {
 import { motion, useScroll, useTransform } from "framer-motion";
 import { guestService, type PublicShipmentTrackingPayload, type PublicSummaryPayload } from "@/services/guest.service";
 import { useTranslations } from "next-intl";
+import { useRouter } from "@/i18n/routing";
+import { CUSTOMER_PORTAL_ENTRY_PATH } from "@/utils/auth-redirect";
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -116,6 +117,7 @@ const BRAND_LOGOS: Array<{ name: string; svg: React.ReactNode }> = [
 ];
 
 export function HeroSection() {
+  const router = useRouter();
   const [searchValue, setSearchValue] = useState("");
   const [loading, setLoading] = useState(false);
   const [trackingResult, setTrackingResult] = useState<PublicShipmentTrackingPayload | null>(null);
@@ -123,6 +125,7 @@ export function HeroSection() {
   const [stats, setStats] = useState<PublicSummaryPayload | null>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const tStatus = useTranslations('ShipmentStatus');
+  const customerLoginHref = `/auth/login?callbackUrl=${encodeURIComponent(CUSTOMER_PORTAL_ENTRY_PATH)}`;
 
   const heroRef = useRef<HTMLDivElement>(null);
 
@@ -353,6 +356,7 @@ export function HeroSection() {
                   <Button
                     type="primary"
                     size="large"
+                    onClick={() => router.push(customerLoginHref)}
                     style={{
                       height: 64,
                       padding: "0 36px",

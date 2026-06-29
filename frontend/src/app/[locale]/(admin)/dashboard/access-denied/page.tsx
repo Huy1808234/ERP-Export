@@ -4,6 +4,7 @@ import { Button, Result, Space, Typography } from 'antd';
 import { useParams, useSearchParams } from 'next/navigation';
 import { Link } from '@/i18n/routing';
 import { getDashboardAccessLabel, normalizeDashboardPath } from '@/lib/access-control';
+import { signOut } from 'next-auth/react';
 
 const { Text } = Typography;
 
@@ -33,9 +34,7 @@ export default function AccessDeniedPage() {
             <Link href="/dashboard">
               <Button type="primary">Về tổng quan</Button>
             </Link>
-            <Link href="/auth/login">
-              <Button>Đổi tài khoản</Button>
-            </Link>
+            <Button onClick={() => signOut({ callbackUrl: `/${locale}/auth/login` })}>Đổi tài khoản</Button>
           </Space>
         )}
       />

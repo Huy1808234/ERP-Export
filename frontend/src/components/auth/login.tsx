@@ -12,6 +12,7 @@ import ModalChangePassword from "./modal.change.password";
 import { useState } from "react";
 import { isStaff } from "@/utils/auth-utils";
 import { getPostLoginRedirectPath } from "@/utils/auth-redirect";
+import { getAccessRoleName } from "@/lib/access-control";
 
 const Login = () => {
   const t = useTranslations("Auth.login");
@@ -52,6 +53,7 @@ const Login = () => {
       callbackUrl: searchParams.get("callbackUrl"),
       locale,
       isStaffUser: res.user ? isStaff(res.user) : true,
+      roleName: getAccessRoleName(res.user),
     });
 
     window.location.assign(redirectPath);

@@ -11,15 +11,23 @@ interface FetchShipmentsParams {
   sort?: string;
 }
 
+type ShipmentStats = {
+  total: number;
+  inTransit: number;
+  closed: number;
+};
+
 export const useShipments = () => {
   const [data, setData] = useState<IShipment[]>([]);
   const [meta, setMeta] = useState<IPaginationMeta>({ current: 1, pageSize: 10, total: 0 });
   const [stats, setStats] = useState({ total: 0, inTransit: 0, closed: 0 });
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchShipments = useCallback(
     async (params: FetchShipmentsParams & Record<string, unknown>) => {
       setLoading(true);
+      setError(null);
       try {
         const { current, pageSize, sort, search, ...filters } = params;
 
@@ -45,7 +53,7 @@ export const useShipments = () => {
           }
 
           // Fetch Stats
-          const statsRes = await sendRequest<IBackendRes<any>>({
+          const statsRes = await sendRequest<IBackendRes<ShipmentStats>>({
             url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/shipments/stats`,
             method: 'GET',
           });
@@ -53,6 +61,7 @@ export const useShipments = () => {
             setStats(statsRes.data);
           }
       } catch {
+        setError('Khong the tai danh sach lo hang');
         notification.error({ title: 'Lỗi tải danh sách lô hàng' });
       } finally {
         setLoading(false);
@@ -119,5 +128,5 @@ export const useShipments = () => {
     []
   );
 
-  return { data, meta, stats, loading, fetchShipments, deleteShipment, issueStock };
+  return { data, meta, stats, loading, error, fetchShipments, deleteShipment, issueStock };
 };
