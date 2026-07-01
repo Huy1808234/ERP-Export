@@ -1369,7 +1369,7 @@ export function CommercialDocumentDetailDrawer({
       >
         <Alert
           type="info"
-          message={locale === 'vi' ? 'Hệ thống cần email của bạn để gửi mã xác thực OTP phục vụ quá trình ký số bảo mật.' : 'An email is required to send the OTP for secure signing.'}
+          title={locale === 'vi' ? 'Hệ thống cần email của bạn để gửi mã xác thực OTP phục vụ quá trình ký số bảo mật.' : 'An email is required to send the OTP for secure signing.'}
           style={{ marginBottom: 16 }}
         />
         <Input

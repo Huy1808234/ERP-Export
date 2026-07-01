@@ -5,6 +5,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  ValidateIf,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { IsEntityId } from '@/common/ids/entity-id.validator';
@@ -44,8 +45,9 @@ export class CreatePortalPaymentReceiptDto {
   @IsOptional()
   fileAsset_id?: string;
 
+  @ValidateIf((dto: CreatePortalPaymentReceiptDto) => !dto.transferReference)
   @IsString()
-  @IsOptional()
+  @IsNotEmpty()
   bankReference?: string;
 
   @IsString()

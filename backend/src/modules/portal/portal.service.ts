@@ -11,6 +11,7 @@ import {
   In,
   IsNull,
   MoreThan,
+  Not,
   ObjectLiteral,
   Repository,
   SelectQueryBuilder,
@@ -57,7 +58,10 @@ import {
 import { User as UserEntity } from '@/modules/users/entities/user.entity';
 import { AuditLog } from '@/modules/audit-logs/entities/audit-log.entity';
 import { CreatePortalInquiryDto } from './dto/create-portal-inquiry.dto';
-import { CreatePortalPaymentReceiptDto } from './dto/create-portal-payment-receipt.dto';
+import {
+  CreatePortalPaymentReceiptDto,
+  PortalPaymentSource,
+} from './dto/create-portal-payment-receipt.dto';
 import { ReviewPortalPaymentReceiptDto } from './dto/review-portal-payment-receipt.dto';
 import { CreatePortalSupportTicketDto } from './dto/create-portal-support-ticket.dto';
 import { CreatePortalSupportMessageDto } from './dto/create-portal-support-message.dto';
@@ -146,6 +150,7 @@ type PortalStatementLine = {
   paidAmountForeign: number;
   openAmountForeign: number;
   currency: string;
+  exchangeRate: number;
   amountVnd: number;
   paidAmountVnd: number;
   openAmountVnd: number;
@@ -1117,6 +1122,7 @@ export class PortalService {
         0,
       ).toNumber(),
       currency: row.currency,
+      exchangeRate: Number(row.exchangeRate || 1),
       amountVnd: amountVnd.toNumber(),
       paidAmountVnd: paidAmountVnd.toNumber(),
       openAmountVnd: Decimal.max(amountVnd.minus(paidAmountVnd), 0).toNumber(),
@@ -2090,6 +2096,40 @@ export class PortalService {
 
     let accountReceivable: AccountReceivable | null = null;
     let salesContractId = dto.salesContractId || null;
+    const receiptAmount = new Decimal(dto.amount || 0);
+    if (receiptAmount.lessThanOrEqualTo(0)) {
+      throw new BadRequestException('Receipt amount must be greater than zero');
+    }
+
+    const normalizedBankReference = (
+      dto.bankReference ||
+      dto.transferReference ||
+      ''
+    ).trim();
+    if (!normalizedBankReference) {
+      throw new BadRequestException(
+        'Bank reference is required for T/T receipt reconciliation',
+      );
+    }
+
+    const duplicateBankReference = await this.receiptRepository
+      .createQueryBuilder('receipt')
+      .where('receipt.buyerId = :buyerId', { buyerId: buyer.partnerId })
+      .andWhere('LOWER(receipt.bankReference) = :bankReference', {
+        bankReference: normalizedBankReference.toLowerCase(),
+      })
+      .andWhere('receipt.status IN (:...statuses)', {
+        statuses: [
+          PortalReceiptStatus.SUBMITTED,
+          PortalReceiptStatus.CONFIRMED,
+        ],
+      })
+      .getOne();
+    if (duplicateBankReference) {
+      throw new BadRequestException(
+        'A T/T receipt with this bank reference already exists',
+      );
+    }
 
     if (dto.accountReceivableId) {
       accountReceivable = await this.arRepository.findOne({
@@ -2098,6 +2138,50 @@ export class PortalService {
       if (!accountReceivable) {
         throw new BadRequestException(
           'Account receivable does not belong to this buyer account',
+        );
+      }
+      if (
+        [ARStatus.PAID, ARStatus.CANCELLED].includes(accountReceivable.status)
+      ) {
+        throw new BadRequestException(
+          'This account receivable is already closed',
+        );
+      }
+      const openAmount = new Decimal(
+        accountReceivable.amountForeign || 0,
+      ).minus(accountReceivable.paidAmountForeign || 0);
+      if (openAmount.lessThanOrEqualTo(0)) {
+        throw new BadRequestException(
+          'This account receivable has no open balance',
+        );
+      }
+      if (receiptAmount.greaterThan(openAmount)) {
+        throw new BadRequestException(
+          `Receipt amount exceeds open balance ${openAmount.toFixed(2)} ${accountReceivable.currency}`,
+        );
+      }
+
+      const invoiceCurrency = (
+        accountReceivable.currency || 'USD'
+      ).toUpperCase();
+      if (dto.currency && dto.currency.toUpperCase() !== invoiceCurrency) {
+        throw new BadRequestException(
+          `Receipt currency must match invoice currency ${invoiceCurrency}`,
+        );
+      }
+
+      const duplicatePendingReceipt = await this.receiptRepository.findOne({
+        where: {
+          buyerId: buyer.partnerId,
+          accountReceivableId: accountReceivable._id,
+          amount: receiptAmount.toNumber(),
+          currency: invoiceCurrency,
+          status: PortalReceiptStatus.SUBMITTED,
+        },
+      });
+      if (duplicatePendingReceipt) {
+        throw new BadRequestException(
+          'A submitted receipt for this invoice and amount is already waiting for review',
         );
       }
       salesContractId = accountReceivable.salesContractId || salesContractId;
@@ -2120,10 +2204,13 @@ export class PortalService {
     // SEPAY_WEBHOOK: auto-confirmed (bank verified)
     // CUSTOMER_QR_INITIATED: SUBMITTED (waiting for webhook)
     // CUSTOMER_PORTAL_UPLOAD: SUBMITTED (needs accountant review)
-    const source = dto.source || 'CUSTOMER_PORTAL_UPLOAD';
+    const source = dto.source || PortalPaymentSource.CUSTOMER_PORTAL_UPLOAD;
     let status: PortalReceiptStatus;
 
-    if (dto.autoApprove === true || source === 'SEPAY_WEBHOOK') {
+    if (
+      dto.autoApprove === true ||
+      source === PortalPaymentSource.SEPAY_WEBHOOK
+    ) {
       status = PortalReceiptStatus.CONFIRMED;
     } else {
       status = PortalReceiptStatus.SUBMITTED;
@@ -2135,12 +2222,12 @@ export class PortalService {
       accountReceivableId: accountReceivable?._id || null,
       salesContractId,
       receiptType: dto.receiptType,
-      amount: Number(dto.amount || 0),
-      currency: dto.currency || accountReceivable?.currency || 'USD',
+      amount: receiptAmount.toNumber(),
+      currency: accountReceivable?.currency || dto.currency || 'USD',
       exchangeRate: Number(
         dto.exchangeRate || accountReceivable?.exchangeRate || 1,
       ),
-      bankReference: dto.bankReference || dto.transferReference || null,
+      bankReference: normalizedBankReference,
       remittingBank: dto.remittingBank || dto.senderBankName || null,
       transactionDate: dto.transactionDate
         ? new Date(dto.transactionDate)
@@ -2150,7 +2237,8 @@ export class PortalService {
       status,
       submittedByUsername: buyer.username,
       submittedAt: now,
-      reviewedByUsername: status === PortalReceiptStatus.CONFIRMED ? 'system' : null,
+      reviewedByUsername:
+        status === PortalReceiptStatus.CONFIRMED ? 'system' : null,
       reviewedAt: status === PortalReceiptStatus.CONFIRMED ? now : null,
       rejectionReason: null,
       note: dto.note || null,
@@ -2242,6 +2330,44 @@ export class PortalService {
         'A sales contract is required before confirming this receipt',
       );
     }
+    if (!receipt.accountReceivableId || !receipt.accountReceivable) {
+      throw new BadRequestException(
+        'An invoice reference is required before confirming this receipt',
+      );
+    }
+    const accountReceivableId = receipt.accountReceivableId;
+
+    const receiptAmount = new Decimal(receipt.amount || 0);
+    if (receiptAmount.lessThanOrEqualTo(0)) {
+      throw new BadRequestException('Receipt amount must be greater than zero');
+    }
+
+    const openAmount = new Decimal(
+      receipt.accountReceivable.amountForeign || 0,
+    ).minus(receipt.accountReceivable.paidAmountForeign || 0);
+    if (
+      [ARStatus.PAID, ARStatus.CANCELLED].includes(
+        receipt.accountReceivable.status,
+      ) ||
+      openAmount.lessThanOrEqualTo(0)
+    ) {
+      throw new BadRequestException(
+        'This invoice is already closed and cannot accept more receipts',
+      );
+    }
+    if (receiptAmount.greaterThan(openAmount)) {
+      throw new BadRequestException(
+        `Receipt amount exceeds open balance ${openAmount.toFixed(2)} ${receipt.accountReceivable.currency}`,
+      );
+    }
+    if (
+      receipt.currency?.toUpperCase() !==
+      receipt.accountReceivable.currency?.toUpperCase()
+    ) {
+      throw new BadRequestException(
+        `Receipt currency must match invoice currency ${receipt.accountReceivable.currency}`,
+      );
+    }
 
     const transaction = await this.tradeFinanceService.createTransaction(
       {
@@ -2277,6 +2403,33 @@ export class PortalService {
       }),
     ];
     const saved = await this.receiptRepository.save(receipt);
+    if (receiptAmount.greaterThanOrEqualTo(openAmount)) {
+      const duplicateReceipts = await this.receiptRepository.find({
+        where: {
+          buyerId: saved.buyerId,
+          accountReceivableId,
+          status: PortalReceiptStatus.SUBMITTED,
+          _id: Not(saved._id),
+        },
+      });
+      if (duplicateReceipts.length) {
+        await this.receiptRepository.save(
+          duplicateReceipts.map((duplicateReceipt) => ({
+            ...duplicateReceipt,
+            status: PortalReceiptStatus.REJECTED,
+            reviewedByUsername: username,
+            reviewedAt: new Date(),
+            rejectionReason: `Invoice already reconciled by ${saved.receiptNumber}`,
+            auditTrail: [
+              ...(duplicateReceipt.auditTrail || []),
+              this.receiptAudit('REJECTED', username, {
+                note: `Invoice already reconciled by ${saved.receiptNumber}`,
+              }),
+            ],
+          })),
+        );
+      }
+    }
     await this.createNotification({
       buyerId: saved.buyerId,
       type: PortalNotificationType.FINANCE,

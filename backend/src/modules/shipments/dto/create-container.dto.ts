@@ -4,6 +4,7 @@ import {
   IsNumber,
   IsEnum,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 import { ContainerType } from '../entities/container.entity';
 
 export enum ContainerTypeEnum {
@@ -16,30 +17,39 @@ export enum ContainerTypeEnum {
 }
 
 export class CreateContainerDto {
+  @IsEnum(ContainerType)
+  @IsOptional()
+  type?: ContainerType;
+
   @IsEnum(ContainerTypeEnum)
-  containerType: ContainerTypeEnum;
+  @IsOptional()
+  containerType?: ContainerTypeEnum;
 
   @IsString()
   @IsOptional()
   containerNumber?: string;
 
   @IsNumber()
+  @Type(() => Number)
   @IsOptional()
-  quantity?: number;
+  weightKg?: number;
 
   @IsNumber()
+  @Type(() => Number)
   @IsOptional()
   grossWeightKg?: number;
 
   @IsNumber()
+  @Type(() => Number)
+  @IsOptional()
+  cbm?: number;
+
+  @IsNumber()
+  @Type(() => Number)
   @IsOptional()
   volumeCbm?: number;
 
   @IsString()
   @IsOptional()
   sealNumber?: string;
-
-  @IsString()
-  @IsOptional()
-  notes?: string;
 }

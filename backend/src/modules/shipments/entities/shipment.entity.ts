@@ -16,6 +16,7 @@ import { Container } from './container.entity';
 import { ColumnNumericTransformer } from '@/helpers/typeorm.util';
 import { createEntityId } from '@/common/ids/entity-id.util';
 import { Port } from '@/modules/ports/entities/port.entity';
+import { Partner } from '@/modules/partners/entities/partner.entity';
 
 export enum ShipmentStatus {
   BOOKED = 'BOOKED',
@@ -165,9 +166,9 @@ export class Shipment {
   @Column({ nullable: true })
   logisticsPartnerId: string;
 
-  @ManyToOne('Partner')
+  @ManyToOne(() => Partner)
   @JoinColumn({ name: 'logisticsPartnerId' })
-  logisticsPartner: any;
+  logisticsPartner: Partner;
 
   @Column()
   createdByUsername: string;

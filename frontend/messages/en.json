@@ -2542,7 +2542,50 @@
     "stats": {
       "total": "TOTAL SHIPMENTS",
       "inTransit": "IN TRANSIT",
-      "closed": "COMPLETED"
+      "closed": "COMPLETED",
+      "containers": "CONTAINERS",
+      "delayed": "DELAYED"
+    },
+    "dashboard": {
+      "activeOpen": "{count} active open",
+      "trackEtaEtd": "Track ETA/ETD",
+      "containersRecorded": "Recorded on shipments",
+      "transportCompleted": "Transport completed",
+      "delayedHelper": "ETD is overdue",
+      "delayedAlertTitle": "{count} shipments are overdue against ETD",
+      "delayedAlertDescription": "Check roll-over risk, update ETD, or re-plan loading.",
+      "dateUpdates": "Schedule Updates",
+      "etaUpdates": "ETA Updates",
+      "etdUpdates": "ETD Updates",
+      "booking": "Booking",
+      "bookingSummary": "Booking overview",
+      "totalBookingSignals": "{count} shipments",
+      "activeShipments": "{total} active shipments",
+      "originPort": "Origin Port",
+      "destinationPort": "Destination Port",
+      "currentMilestone": "Current",
+      "metricStatus": "Status",
+      "metricContainers": "Containers",
+      "metricDocuments": "Documents",
+      "refresh": "Refresh",
+      "bookingStatus": {
+        "newRequest": "New request",
+        "openRequest": "In progress",
+        "pendingApproval": "Pending approval",
+        "approved": "Approved",
+        "onHold": "On hold",
+        "confirmed": "Confirmed"
+      }
+    },
+    "empty": {
+      "noShipments": "No matching shipments yet",
+      "noTrackedShipment": "Select a shipment to view its route"
+    },
+    "loadingUnit": {
+      "containers": "{count} containers",
+      "lcl": "LCL {cbm} CBM / {weight} kg",
+      "none": "No loading unit",
+      "delayed": "ETD overdue by {days} days"
     },
     "table": {
       "shipmentNumber": "Shipment No.",
@@ -2560,6 +2603,8 @@
       "issueStock": "RELEASE STOCK",
       "issued": "ISSUED",
       "viewDetail": "View Details",
+      "trackShipment": "Track this shipment",
+      "trackingSelected": "Tracking",
       "docCenter": "Document Center (CI/PL)",
       "deleteTitle": "Delete Shipment",
       "deleteConfirm": "Are you sure you want to delete this shipment?",
@@ -4519,7 +4564,8 @@
       "subtotal": "Subtotal",
       "tax": "Tax",
       "total": "Total",
-      "totalVnd": "Total VND"
+      "totalVnd": "Total VND",
+      "exchangeRate": "Exchange Rate"
     },
     "status": {
       "DRAFT": "Draft",
@@ -4592,21 +4638,6 @@
       "grandTotal": "GRAND TOTAL",
       "bankInfo": "Bank Information",
       "selectBankAccount": "Select a bank account above"
-    },
-    "labels": {
-      "ar": "A/R",
-      "exportDoc": "Export Doc",
-      "status": "Status",
-      "buyer": "Buyer",
-      "shipment": "Shipment",
-      "contract": "Contract",
-      "invoiceDate": "Invoice date",
-      "dueDate": "Due date",
-      "subtotal": "Subtotal",
-      "tax": "Tax",
-      "total": "Total",
-      "totalVnd": "Total VND",
-      "exchangeRate": "Exchange Rate"
     }
   },
   "AdjustmentModal": {

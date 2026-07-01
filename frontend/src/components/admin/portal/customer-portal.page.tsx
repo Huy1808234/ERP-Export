@@ -24,6 +24,7 @@ import {
   Table,
   Tabs,
   Tag,
+  Tooltip,
   Typography,
   notification,
   theme,
@@ -1740,6 +1741,7 @@ const FinancePage = () => {
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<PortalStatementLine | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [expandedInvoiceKeys, setExpandedInvoiceKeys] = useState<string[]>([]);
 
   useEffect(() => {
     void fetchStatement();
@@ -1767,42 +1769,127 @@ const FinancePage = () => {
     );
   };
 
+  const renderFinanceStatusTag = (status?: string | null) => {
+    const normalized = status?.toUpperCase() || '-';
+    const config: Record<string, { color: string; background: string }> = {
+      PAID: { color: '#22c55e', background: 'rgba(34,197,94,.18)' },
+      CONFIRMED: { color: '#22c55e', background: 'rgba(34,197,94,.18)' },
+      UNPAID: { color: '#f59e0b', background: 'rgba(245,158,11,.18)' },
+      PARTIAL: { color: '#38bdf8', background: 'rgba(56,189,248,.16)' },
+      SUBMITTED: { color: '#f59e0b', background: 'rgba(245,158,11,.18)' },
+      OVERDUE: { color: '#f87171', background: 'rgba(248,113,113,.18)' },
+      REJECTED: { color: '#f87171', background: 'rgba(248,113,113,.18)' },
+      CANCELLED: { color: '#94a3b8', background: 'rgba(148,163,184,.16)' },
+    };
+    const meta = config[normalized] || { color: token.colorTextSecondary, background: token.colorFillSecondary };
+
+    return (
+      <Tag
+        style={{
+          marginInlineEnd: 0,
+          borderRadius: 6,
+          borderColor: `${meta.color}66`,
+          color: meta.color,
+          background: meta.background,
+          fontWeight: 700,
+        }}
+      >
+        {normalized}
+      </Tag>
+    );
+  };
+
+  const getReceiptsForInvoice = (invoice: PortalStatementLine): PortalPaymentReceipt[] => (
+    statement?.receipts.filter((receipt) => receipt.accountReceivableId === invoice._id) || []
+  );
+
+  const hasPendingReceipt = (invoice: PortalStatementLine): boolean => (
+    getReceiptsForInvoice(invoice).some((receipt) => receipt.status === 'SUBMITTED')
+  );
+
+  const isInvoicePayable = (invoice: PortalStatementLine): boolean => (
+    !['PAID', 'CANCELLED'].includes(invoice.status?.toUpperCase()) &&
+    Number(invoice.openAmountForeign || 0) > 0 &&
+    !hasPendingReceipt(invoice)
+  );
+
+  const expandInvoiceReceipts = (invoice: PortalStatementLine) => {
+    setExpandedInvoiceKeys((keys) => (
+      keys.includes(invoice._id) ? keys : [...keys, invoice._id]
+    ));
+  };
+
+  const renderCodeText = (
+    value: string | null | undefined,
+    options: { strong?: boolean; maxWidth?: number } = {},
+  ) => {
+    const displayValue = value || '-';
+
+    return (
+      <Tooltip title={displayValue}>
+        <Text
+          strong={options.strong}
+          style={{
+            display: 'inline-block',
+            maxWidth: options.maxWidth || 220,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            verticalAlign: 'bottom',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {displayValue}
+        </Text>
+      </Tooltip>
+    );
+  };
+
   const invoiceColumns: ColumnsType<PortalStatementLine> = [
     {
       title: copy.invoiceNumber,
       dataIndex: 'invoiceNumber',
+      width: 260,
       render: (value: string) => (
-        <Space>
+        <Space style={{ minWidth: 0, maxWidth: 240 }}>
           <FileTextOutlined style={{ color: token.colorPrimary }} />
-          <Text strong>{value}</Text>
+          {renderCodeText(value, { strong: true, maxWidth: 210 })}
         </Space>
       ),
     },
     {
       title: copy.status,
       dataIndex: 'status',
-      render: (value: string) => <Tag color={statusColor(value)}>{value}</Tag>,
+      width: 110,
+      render: (value: string) => renderFinanceStatusTag(value),
     },
     {
       title: locale === 'vi' ? 'Tuổi nợ' : 'Aging',
       key: 'aging',
+      width: 140,
       render: (_: unknown, record) => agingBucketBadge(record.agingBucket),
     },
     {
       title: copy.dueDate,
       dataIndex: 'dueDate',
+      width: 130,
       render: (value: string | null | undefined) => formatDate(value, locale),
     },
     {
       title: copy.amount,
+      align: 'right',
+      width: 140,
       render: (_value: unknown, record) => formatMoney(record.amountForeign, record.currency, locale),
     },
     {
       title: copy.paid,
+      align: 'right',
+      width: 140,
       render: (_value: unknown, record) => formatMoney(record.paidAmountForeign, record.currency, locale),
     },
     {
       title: copy.open,
+      align: 'right',
+      width: 140,
       render: (_value: unknown, record) => (
         <Text strong style={{ color: record.openAmountForeign > 0 ? '#ff4d4f' : '#52c41a' }}>
           {formatMoney(record.openAmountForeign, record.currency, locale)}
@@ -1813,30 +1900,50 @@ const FinancePage = () => {
     {
       title: locale === 'vi' ? 'Hợp đồng' : 'Contract',
       key: 'contract',
+      width: 180,
       render: (_: unknown, record) =>
         record.contractNumber ? (
-          <Space size={4}>
+          <Space size={4} style={{ minWidth: 0, maxWidth: 160 }}>
             <LinkOutlined style={{ color: token.colorPrimary }} />
-            <Text type="secondary" style={{ fontSize: 12 }}>{record.contractNumber}</Text>
+            {renderCodeText(record.contractNumber, { maxWidth: 132 })}
           </Space>
         ) : '-',
     },
     {
       title: locale === 'vi' ? 'Lô hàng' : 'Shipment',
       key: 'shipment',
+      width: 150,
       render: (_: unknown, record) =>
         record.shipmentNumber ? (
-          <Space size={4}>
+          <Space size={4} style={{ minWidth: 0, maxWidth: 132 }}>
             <TruckOutlined style={{ color: '#fa8c16' }} />
-            <Text type="secondary" style={{ fontSize: 12 }}>{record.shipmentNumber}</Text>
+            {renderCodeText(record.shipmentNumber, { maxWidth: 104 })}
           </Space>
         ) : '-',
+    },
+    {
+      title: 'T/T',
+      key: 'ttReceipts',
+      align: 'center',
+      width: 120,
+      render: (_: unknown, record) => {
+        const receipts = getReceiptsForInvoice(record);
+        const pendingCount = receipts.filter((receipt) => receipt.status === 'SUBMITTED').length;
+        if (!receipts.length) return <Text type="secondary">-</Text>;
+
+        return (
+          <Button size="small" onClick={() => expandInvoiceReceipts(record)}>
+            {receipts.length}{pendingCount ? ` / ${pendingCount} pending` : ''}
+          </Button>
+        );
+      },
     },
     // Actions
     {
       title: '',
       key: 'actions',
-      width: 120,
+      width: 190,
+      align: 'right',
       render: (_: unknown, record) => (
         <Space size={4}>
           {record.pdfUrl && (
@@ -1854,27 +1961,95 @@ const FinancePage = () => {
               PDF
             </Button>
           )}
-          <Button
-            type="link"
-            size="small"
-            icon={<UploadOutlined />}
-            onClick={() => {
-              setSelectedInvoice(record);
-              setPaymentModalOpen(true);
-            }}
-          >
-            {locale === 'vi' ? 'Thanh toán' : 'Pay'}
-          </Button>
+          {isInvoicePayable(record) ? (
+            <Button
+              type="primary"
+              size="small"
+              icon={<UploadOutlined />}
+              onClick={() => {
+                setSelectedInvoice(record);
+                setPaymentModalOpen(true);
+              }}
+            >
+              {locale === 'vi' ? 'Thanh toán' : 'Pay'}
+            </Button>
+          ) : getReceiptsForInvoice(record).length > 0 ? (
+            <Button size="small" onClick={() => expandInvoiceReceipts(record)}>
+              {locale === 'vi' ? 'Xem biên lai' : 'View receipts'}
+            </Button>
+          ) : (
+            <Button size="small" disabled>
+              {hasPendingReceipt(record)
+                ? (locale === 'vi' ? 'Chờ duyệt' : 'Pending')
+                : (locale === 'vi' ? 'Đã đóng' : 'Closed')}
+            </Button>
+          )}
         </Space>
       ),
     },
   ];
 
   const receiptColumns: ColumnsType<PortalPaymentReceipt> = [
-    { title: copy.receiptNumber, dataIndex: 'receiptNumber', render: (value: string | null | undefined, record) => value || record._id },
-    { title: copy.status, dataIndex: 'status', render: (value: string | null | undefined) => <Tag color={statusColor(value)}>{value || '-'}</Tag> },
-    { title: copy.amount, render: (_value: unknown, record) => formatMoney(record.amount, record.currency, locale) },
-    { title: copy.bankReference, dataIndex: 'bankReference', render: (value: string | null | undefined) => value || '-' },
+    {
+      title: locale === 'vi' ? 'Tham chiếu' : 'Reference',
+      render: (_value: unknown, record) => (
+        <Space orientation="vertical" size={0}>
+          <Text strong>{record.accountReceivable?.invoiceNumber || '-'}</Text>
+          <Text type="secondary" style={{ fontSize: 12 }}>{record.accountReceivableId || '-'}</Text>
+        </Space>
+      ),
+    },
+    {
+      title: copy.receiptNumber,
+      dataIndex: 'receiptNumber',
+      render: (value: string | null | undefined, record) => (
+        <Space orientation="vertical" size={0}>
+          <Text strong>{value || record._id}</Text>
+          {record.receiptType ? <Tag style={{ width: 'fit-content' }}>{record.receiptType}</Tag> : null}
+        </Space>
+      ),
+    },
+    {
+      title: copy.status,
+      dataIndex: 'status',
+      render: (value: string | null | undefined, record) => (
+        <Space orientation="vertical" size={2}>
+          {renderFinanceStatusTag(value)}
+          {record.rejectionReason ? (
+            <Text type="secondary" style={{ fontSize: 12 }}>{record.rejectionReason}</Text>
+          ) : null}
+        </Space>
+      ),
+    },
+    {
+      title: copy.amount,
+      align: 'right',
+      render: (_value: unknown, record) => {
+        const receiptAmount = Number(record.amount || 0);
+        const invoiceCurrency = record.accountReceivable?.currency;
+        const hasCurrencyMismatch = Boolean(invoiceCurrency && record.currency && invoiceCurrency !== record.currency);
+        return (
+          <Space orientation="vertical" size={0} style={{ textAlign: 'right' }}>
+            <Text strong type={receiptAmount <= 0 || hasCurrencyMismatch ? 'danger' : undefined}>
+              {formatMoney(record.amount, record.currency, locale)}
+            </Text>
+            {receiptAmount <= 0 ? (
+              <Text type="danger" style={{ fontSize: 12 }}>Invalid zero amount</Text>
+            ) : null}
+            {hasCurrencyMismatch ? (
+              <Text type="danger" style={{ fontSize: 12 }}>Invoice currency: {invoiceCurrency}</Text>
+            ) : null}
+          </Space>
+        );
+      },
+    },
+    {
+      title: copy.bankReference,
+      dataIndex: 'bankReference',
+      render: (value: string | null | undefined) => (
+        value ? <Text code>{value}</Text> : <Text type="danger">Required</Text>
+      ),
+    },
     { title: copy.submittedAt, dataIndex: 'submittedAt', render: (value: string | null | undefined) => formatDate(value, locale) },
   ];
 
@@ -1892,6 +2067,9 @@ const FinancePage = () => {
 
   // Determine currency for display
   const defaultCurrency = statement?.lines?.[0]?.currency || 'USD';
+  const unallocatedReceipts = statement?.receipts.filter((receipt) => !receipt.accountReceivableId) || [];
+  const hasOpenSummaryBalance = Number(statement?.summary.openForeign || 0) > 0;
+  const openSummaryColor = hasOpenSummaryBalance ? '#ff4d4f' : '#52c41a';
 
   return (
     <PortalShell
@@ -1994,6 +2172,36 @@ const FinancePage = () => {
             />
 
             {/* Invoices Table */}
+            {unallocatedReceipts.length > 0 ? (
+              <Card
+                variant="borderless"
+                style={{ borderLeft: '3px solid #faad14' }}
+              >
+                <Space orientation="vertical" size={8} style={{ width: '100%' }}>
+                  <Space>
+                    <ClockCircleOutlined style={{ color: '#faad14' }} />
+                    <Text strong>
+                      {locale === 'vi'
+                        ? 'Biên nhận cần gắn hóa đơn'
+                        : 'Receipts needing invoice allocation'}
+                    </Text>
+                  </Space>
+                  {unallocatedReceipts.slice(0, 3).map((receipt) => (
+                    <Space
+                      key={receipt._id}
+                      style={{ justifyContent: 'space-between', width: '100%' }}
+                    >
+                      <Space>
+                        <Text code>{receipt.receiptNumber || receipt._id}</Text>
+                        <Text type="secondary">{receipt.bankReference || 'Missing bank reference'}</Text>
+                      </Space>
+                      <Text strong>{formatMoney(receipt.amount, receipt.currency, locale)}</Text>
+                    </Space>
+                  ))}
+                </Space>
+              </Card>
+            ) : null}
+
             <Card
               title={<Space><FileDoneOutlined style={{ color: token.colorPrimary }} /><span style={{ fontWeight: 600 }}>{copy.invoices}</span></Space>}
               variant="borderless"
@@ -2005,6 +2213,22 @@ const FinancePage = () => {
                   columns={invoiceColumns}
                   dataSource={statement.lines}
                   pagination={{ pageSize: 8 }}
+                  expandable={{
+                    expandedRowKeys: expandedInvoiceKeys,
+                    onExpandedRowsChange: (keys) => setExpandedInvoiceKeys(keys.map(String)),
+                    rowExpandable: (record) => getReceiptsForInvoice(record).length > 0,
+                    expandedRowRender: (record) => (
+                      <div style={{ padding: '8px 0 8px 40px', borderLeft: `3px solid ${token.colorPrimary}` }}>
+                        <Table<PortalPaymentReceipt>
+                          rowKey="_id"
+                          size="small"
+                          columns={receiptColumns}
+                          dataSource={getReceiptsForInvoice(record)}
+                          pagination={false}
+                        />
+                      </div>
+                    ),
+                  }}
                   rowClassName={(_, index) => {
                     const line = statement.lines[index];
                     if (!line) return '';
@@ -2026,36 +2250,6 @@ const FinancePage = () => {
                         {isVietnameseText(locale)
                           ? 'Hóa đơn sẽ xuất hiện khi có Commercial Invoice được tạo cho đơn hàng của bạn.'
                           : 'Invoices will appear when Commercial Invoices are created for your orders.'}
-                      </Text>
-                    </Space>
-                  }
-                  image={Empty.PRESENTED_IMAGE_SIMPLE}
-                />
-              )}
-            </Card>
-
-            {/* T/T Receipts Table */}
-            <Card
-              title={<Space><DollarOutlined style={{ color: token.colorPrimary }} /><span style={{ fontWeight: 600 }}>{copy.receipts}</span></Space>}
-              variant="borderless"
-              styles={{ body: { padding: statement.receipts.length > 0 ? 0 : 24 } }}
-            >
-              {statement.receipts.length > 0 ? (
-                <Table
-                  rowKey="_id"
-                  columns={receiptColumns}
-                  dataSource={statement.receipts}
-                  pagination={{ pageSize: 8 }}
-                />
-              ) : (
-                <Empty
-                  description={
-                    <Space orientation="vertical" size={4}>
-                      <Text type="secondary">{isVietnameseText(locale) ? 'Chưa có biên nhận T/T nào' : 'No T/T receipts yet'}</Text>
-                      <Text type="secondary" style={{ fontSize: 12 }}>
-                        {isVietnameseText(locale)
-                          ? 'Biên nhận thanh toán sẽ xuất hiện khi bạn gửi biên nhận T/T từ trang Tài chính.'
-                          : 'Payment receipts will appear when you submit T/T receipts from the Finance section.'}
                       </Text>
                     </Space>
                   }

@@ -11,9 +11,11 @@ import {
 import { ShipmentsService, SHIPMENT_ROLES } from './shipments.service';
 import { CreateShipmentDto } from './dto/create-shipment.dto';
 import { UpdateShipmentDto } from './dto/update-shipment.dto';
+import { QueryShipmentDto } from './dto/query-shipment.dto';
+import { UpdateShipmentStatusDto } from './dto/update-shipment-status.dto';
+import { UpsertShipmentDocumentDto } from './dto/upsert-shipment-document.dto';
 import { ResponseMessage, User, Roles, Public } from '@/decorator/customize';
 import { User as UserEntity } from '@/modules/users/entities/user.entity';
-import { ShipmentStatus } from './entities/shipment.entity';
 import { CreateContainerDto } from './dto/create-container.dto';
 
 @Controller('shipments')
@@ -37,7 +39,7 @@ export class ShipmentsController {
   @Get()
   @Roles('ADMIN', 'MANAGER', 'LOGISTICS', 'SALES_EXPORT', 'ACCOUNTANT')
   @ResponseMessage('Fetch all shipments with pagination')
-  findAll(@Query() query: any) {
+  findAll(@Query() query: QueryShipmentDto) {
     return this.shipmentsService.findAll(query);
   }
 
@@ -61,8 +63,16 @@ export class ShipmentsController {
   update(
     @Param('_id') recordId: string,
     @Body() updateShipmentDto: UpdateShipmentDto,
+    @User() user: UserEntity,
   ) {
-    return this.shipmentsService.update(recordId, updateShipmentDto);
+    return this.shipmentsService.update(recordId, updateShipmentDto, user);
+  }
+
+  @Delete(':_id')
+  @Roles(...SHIPMENT_ROLES.UPDATE)
+  @ResponseMessage('Delete shipment successfully')
+  remove(@Param('_id') recordId: string, @User() user: UserEntity) {
+    return this.shipmentsService.remove(recordId, user.username);
   }
 
   // ===========================================================================
@@ -74,13 +84,14 @@ export class ShipmentsController {
   @ResponseMessage('Update shipment status')
   updateStatus(
     @Param('_id') recordId: string,
-    @Body('status') status: ShipmentStatus,
+    @Body() dto: UpdateShipmentStatusDto,
     @User() user: UserEntity,
   ) {
     return this.shipmentsService.updateStatus(
       recordId,
-      status,
+      dto.status,
       user.username,
+      dto.reason,
     );
   }
 
@@ -173,9 +184,10 @@ export class ShipmentsController {
   @ResponseMessage('Add document to shipment')
   addDocument(
     @Param('_id') shipmentId: string,
-    @Body() data: any,
+    @Body() data: UpsertShipmentDocumentDto,
+    @User() user: UserEntity,
   ) {
-    return this.shipmentsService.addDocument(shipmentId, data);
+    return this.shipmentsService.addDocument(shipmentId, data, user.username);
   }
 
   @Get(':_id/documents')
@@ -205,7 +217,7 @@ export class ShipmentsController {
    * Shows all changes made to the shipment over time.
    */
   @Get(':_id/audit-trail')
-  @Roles('ADMIN', 'MANAGER')
+  @Roles('ADMIN', 'MANAGER', 'LOGISTICS', 'SALES_EXPORT', 'ACCOUNTANT')
   @ResponseMessage('Get shipment audit trail')
   getAuditTrail(@Param('_id') recordId: string) {
     return this.shipmentsService.getAuditTrail(recordId);

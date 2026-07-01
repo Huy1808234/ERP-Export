@@ -1,6 +1,7 @@
 'use client'
 
 import {
+  Alert,
   Button,
   Descriptions,
   Drawer,
@@ -19,7 +20,6 @@ import {
   Row,
   Col,
   Card,
-  theme,
   App,
 } from 'antd';
 import { useTranslations } from 'next-intl';
@@ -59,13 +59,42 @@ interface ShipmentCostFormValues {
   customsFeeVnd?: number;
 }
 
+interface ShipmentContainerFormValues {
+  containerNumber?: string;
+  sealNumber?: string;
+  type: string;
+  weightKg?: number;
+  cbm?: number;
+}
+
+type ShipmentDocumentStatus = 'PENDING' | 'DONE' | 'NA';
+
+interface ShipmentDocumentRecord {
+  _id: string;
+  documentType: string;
+  documentNumber?: string | null;
+  issueDate?: string | null;
+  fileUrl?: string | null;
+  status: ShipmentDocumentStatus;
+}
+
+interface ShipmentAuditTrailEntry {
+  action: string;
+  actor: string;
+  at: string;
+  reason?: string;
+  changes?: Record<string, { from: unknown; to: unknown }>;
+}
+
 const ShipmentDetailDrawer = ({ shipmentId, open, onClose, onSuccess }: IProps) => {
   const { notification } = App.useApp();
   const [data, setData] = useState<IShipment | null>(null);
+  const [documents, setDocuments] = useState<ShipmentDocumentRecord[]>([]);
+  const [auditTrail, setAuditTrail] = useState<ShipmentAuditTrailEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [partners, setPartners] = useState<PartnerOption[]>([]);
   const [containerModalOpen, setContainerModalOpen] = useState(false);
-  const [form] = Form.useForm<IContainer>();
+  const [form] = Form.useForm<ShipmentContainerFormValues>();
   const [costForm] = Form.useForm<ShipmentCostFormValues>();
   const [costModalOpen, setCostModalOpen] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
@@ -80,9 +109,32 @@ const ShipmentDetailDrawer = ({ shipmentId, open, onClose, onSuccess }: IProps) 
     return SHIPMENT_STATUS_KEYS.map(key => ({
       value: key,
       label: tStatus(key),
-      disabled: key !== data.status && !allowedTransitions.includes(key),
+      disabled:
+        (key !== data.status && !allowedTransitions.includes(key)) ||
+        (key === 'LOADING' && !data.isStockIssued),
     }));
-  }, [tStatus, data?.status]);
+  }, [tStatus, data?.status, data?.isStockIssued]);
+
+  const readinessWarnings = useMemo(() => {
+    if (!data || data.status !== 'LOADING') return [];
+
+    const warnings: string[] = [];
+    if (!data.isStockIssued) warnings.push('chưa xuất kho');
+    if (!data.logisticsPartnerId) warnings.push('chưa chọn forwarder');
+    if (!data.bookingNumber) warnings.push('chưa có booking');
+    if (!data.pol) warnings.push('thiếu POL');
+    if (!data.pod) warnings.push('thiếu POD');
+    if (!data.etd) warnings.push('thiếu ETD');
+    if (!data.vesselName) warnings.push('thiếu tàu/chuyến');
+    if (!data.containers?.length) warnings.push('chưa có container/loading unit');
+
+    const incompleteContainers = (data.containers || []).filter(
+      (container) => container.type !== 'LCL' && (!container.containerNumber || !container.sealNumber),
+    );
+    if (incompleteContainers.length > 0) warnings.push('container FCL thiếu số cont hoặc seal');
+
+    return warnings;
+  }, [data]);
 
   const handlePrint = useReactToPrint({
     contentRef: printRef,
@@ -109,16 +161,34 @@ const ShipmentDetailDrawer = ({ shipmentId, open, onClose, onSuccess }: IProps) 
       });
 
       if (res?.data) setData(res.data);
-    } catch (error) {
+
+      const [documentsRes, auditRes] = await Promise.all([
+        sendRequest<IBackendRes<ShipmentDocumentRecord[]>>({
+          url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/shipments/${shipmentId}/documents`,
+          method: 'GET',
+          headers: { Authorization: `Bearer ${accessToken}` },
+        }),
+        sendRequest<IBackendRes<ShipmentAuditTrailEntry[]>>({
+          url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/shipments/${shipmentId}/audit-trail`,
+          method: 'GET',
+          headers: { Authorization: `Bearer ${accessToken}` },
+        }),
+      ]);
+
+      setDocuments(documentsRes?.data ?? []);
+      setAuditTrail(auditRes?.data ?? []);
+    } catch {
       notification.error({ title: 'Lỗi tải thông tin lô hàng' });
     } finally {
       setLoading(false);
     }
-  }, [shipmentId]);
+  }, [notification, shipmentId]);
 
   useEffect(() => {
     if (!open) {
       setData(null);
+      setDocuments([]);
+      setAuditTrail([]);
       return;
     }
 
@@ -147,17 +217,18 @@ const ShipmentDetailDrawer = ({ shipmentId, open, onClose, onSuccess }: IProps) 
       if (res?.data) {
         notification.success({ title: 'Cập nhật trạng thái thành công' });
         setData((prev) => (prev ? { ...prev, status } : prev));
+        fetchDetail();
         onSuccess();
       } else {
         notification.error({ title: 'Có lỗi xảy ra', description: res?.message });
       }
-    } catch (error) {
+    } catch {
       notification.error({ title: 'Lỗi cập nhật trạng thái' });
     }
-  }, [shipmentId, onSuccess]);
+  }, [shipmentId, onSuccess, fetchDetail, notification]);
 
-  const handleSaveContainer = useCallback(async (values: IContainer) => {
-    if (!data || !shipmentId) return;
+  const handleSaveContainer = useCallback(async (values: ShipmentContainerFormValues) => {
+    if (!shipmentId) return;
 
     try {
       const session = await getSession();
@@ -168,12 +239,16 @@ const ShipmentDetailDrawer = ({ shipmentId, open, onClose, onSuccess }: IProps) 
         return;
       }
 
-      const updatedContainers = [...(data.containers ?? []), values];
-
-      const res = await sendRequest<IBackendRes<IShipment>>({
-        url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/shipments/${shipmentId}`,
-        method: 'PATCH',
-        body: { containers: updatedContainers },
+      const res = await sendRequest<IBackendRes<IContainer>>({
+        url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/shipments/${shipmentId}/containers`,
+        method: 'POST',
+        body: {
+          containerNumber: values.containerNumber,
+          sealNumber: values.sealNumber,
+          type: values.type,
+          weightKg: values.weightKg ?? 0,
+          cbm: values.cbm ?? 0,
+        },
         headers: { Authorization: `Bearer ${accessToken}` },
       });
 
@@ -185,13 +260,13 @@ const ShipmentDetailDrawer = ({ shipmentId, open, onClose, onSuccess }: IProps) 
       } else {
         notification.error({ title: 'Có lỗi xảy ra', description: res?.message });
       }
-    } catch (error) {
+    } catch {
       notification.error({ title: 'Lỗi khi hạ container' });
     }
-  }, [data, shipmentId, fetchDetail, form]);
+  }, [shipmentId, fetchDetail, form, notification]);
 
-  const handleDeleteContainer = useCallback(async (containerNumber: string) => {
-    if (!data || !shipmentId) return;
+  const handleDeleteContainer = useCallback(async (containerId: string) => {
+    if (!shipmentId) return;
 
     try {
       const session = await getSession();
@@ -202,14 +277,9 @@ const ShipmentDetailDrawer = ({ shipmentId, open, onClose, onSuccess }: IProps) 
         return;
       }
 
-      const updatedContainers = (data.containers ?? []).filter(
-        (container) => container.containerNumber !== containerNumber
-      );
-
-      const res = await sendRequest<IBackendRes<IShipment>>({
-        url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/shipments/${shipmentId}`,
-        method: 'PATCH',
-        body: { containers: updatedContainers },
+      const res = await sendRequest<IBackendRes<{ deleted: boolean; containerId: string }>>({
+        url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/shipments/${shipmentId}/containers/${containerId}`,
+        method: 'DELETE',
         headers: { Authorization: `Bearer ${accessToken}` },
       });
 
@@ -217,10 +287,10 @@ const ShipmentDetailDrawer = ({ shipmentId, open, onClose, onSuccess }: IProps) 
         notification.success({ title: 'Xóa Container thành công' });
         fetchDetail();
       }
-    } catch (error) {
+    } catch {
       notification.error({ title: 'Lỗi xóa container' });
     }
-  }, [data, shipmentId, fetchDetail]);
+  }, [shipmentId, fetchDetail, notification]);
 
   const fetchPartners = useCallback(async () => {
     try {
@@ -286,21 +356,22 @@ const ShipmentDetailDrawer = ({ shipmentId, open, onClose, onSuccess }: IProps) 
       } else {
         notification.error({ title: 'Có lỗi xảy ra', description: res?.message });
       }
-    } catch (error) {
+    } catch {
       notification.error({ title: 'Lỗi cập nhật chi phí' });
     }
-  }, [shipmentId, fetchDetail]);
+  }, [shipmentId, fetchDetail, notification]);
 
   const columns = useMemo(() => [
-    { title: 'Số Container', dataIndex: 'containerNumber', key: 'containerNumber', render: (value: string) => <Text strong>{value}</Text> },
-    { title: 'Số Chì (Seal)', dataIndex: 'sealNumber', key: 'sealNumber' },
-    { title: 'Loại Cont', dataIndex: 'containerType', key: 'containerType', render: (value: string) => <Tag>{value}</Tag> },
-    { title: 'Ghi chú', dataIndex: 'notes', key: 'notes' },
+    { title: 'Số Container', dataIndex: 'containerNumber', key: 'containerNumber', render: (value?: string | null) => <Text strong>{value || '-'}</Text> },
+    { title: 'Số Chì (Seal)', dataIndex: 'sealNumber', key: 'sealNumber', render: (value?: string | null) => value || '-' },
+    { title: 'Loại Cont', dataIndex: 'type', key: 'type', render: (value: string) => <Tag>{value}</Tag> },
+    { title: 'Gross Weight', dataIndex: 'weightKg', key: 'weightKg', align: 'right' as const, render: (value?: number) => `${(value || 0).toLocaleString()} kg` },
+    { title: 'CBM', dataIndex: 'cbm', key: 'cbm', align: 'right' as const, render: (value?: number) => (value || 0).toLocaleString() },
     {
       title: 'Hành động',
       key: 'action',
       render: (_value: unknown, record: IContainer) => (
-        <Popconfirm title="Xóa container này?" onConfirm={() => handleDeleteContainer(record.containerNumber)}>
+        <Popconfirm title="Xóa container này?" onConfirm={() => handleDeleteContainer(record._id)}>
           <Button size="small" danger icon={<DeleteOutlined />} />
         </Popconfirm>
       ),
@@ -326,6 +397,8 @@ const ShipmentDetailDrawer = ({ shipmentId, open, onClose, onSuccess }: IProps) 
       onClose={() => {
         onClose();
         setData(null);
+        setDocuments([]);
+        setAuditTrail([]);
       }}
       size={800}
       styles={{ 
@@ -358,6 +431,17 @@ const ShipmentDetailDrawer = ({ shipmentId, open, onClose, onSuccess }: IProps) 
                 options={shipmentStatusOptions}
               />
             </div>
+
+            {readinessWarnings.length > 0 ? (
+              <Alert
+                className="no-print"
+                type="warning"
+                showIcon
+                style={{ marginBottom: 16 }}
+                title="Chưa đủ điều kiện lên tàu"
+                description={readinessWarnings.join(', ')}
+              />
+            ) : null}
 
             <Descriptions title="Thông tin vận chuyển" bordered column={2} styles={{ label: { width: '150px' } }}>
               <Descriptions.Item label="Từ PI">{data.salesContract?.proformaInvoice?.piNumber || data.proformaInvoice?.piNumber || '-'}</Descriptions.Item>
@@ -415,7 +499,7 @@ const ShipmentDetailDrawer = ({ shipmentId, open, onClose, onSuccess }: IProps) 
 
             <Table<IContainer>
               dataSource={data.containers ?? []}
-              rowKey="containerNumber"
+              rowKey="_id"
               pagination={false}
               bordered
               columns={columns}
@@ -440,7 +524,7 @@ const ShipmentDetailDrawer = ({ shipmentId, open, onClose, onSuccess }: IProps) 
                          <Text>{doc.label}</Text>
                           <Select 
                             size="small"
-                            defaultValue={data.documentChecklist?.[doc.key] || 'PENDING'}
+                            value={data.documentChecklist?.[doc.key] || 'PENDING'}
                             style={{ width: 120 }}
                             options={[
                               { value: 'PENDING', label: tDetail('docStatus.PENDING') },
@@ -454,19 +538,26 @@ const ShipmentDetailDrawer = ({ shipmentId, open, onClose, onSuccess }: IProps) 
                                const accessToken = getAccessToken(session);
                                if (!accessToken) return;
 
-                               const newChecklist = { ...(data.documentChecklist || {}), [doc.key]: val };
-                               const res = await sendRequest<IBackendRes<IShipment>>({
-                                 url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/shipments/${shipmentId}`,
-                                 method: 'PATCH',
-                                 body: { documentChecklist: newChecklist },
+                               const newChecklist = { ...(data.documentChecklist || {}), [doc.key]: val as ShipmentDocumentStatus };
+                               const res = await sendRequest<IBackendRes<ShipmentDocumentRecord>>({
+                                 url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/shipments/${shipmentId}/documents`,
+                                 method: 'POST',
+                                 body: {
+                                   documentType: doc.key,
+                                   status: val,
+                                 },
                                  headers: { Authorization: `Bearer ${accessToken}` },
                                });
 
                                if (res?.data) {
                                  notification.success({ title: `Cập nhật ${doc.label}`, description: 'Đã lưu trạng thái chứng từ' });
                                  setData(prev => (prev ? { ...prev, documentChecklist: newChecklist } : prev));
+                                 setDocuments(prev => {
+                                   const remaining = prev.filter(item => item.documentType !== res.data?.documentType);
+                                   return res.data ? [...remaining, res.data] : remaining;
+                                 });
                                }
-                             } catch (error) {
+                             } catch {
                                notification.error({ title: 'Lỗi cập nhật chứng từ' });
                              }
                            }}
@@ -477,6 +568,37 @@ const ShipmentDetailDrawer = ({ shipmentId, open, onClose, onSuccess }: IProps) 
                  ))}
                </Row>
             </div>
+
+            <Divider titlePlacement="left"><Text strong>Chứng từ đã ghi nhận</Text></Divider>
+            <Table<ShipmentDocumentRecord>
+              dataSource={documents}
+              rowKey="_id"
+              pagination={false}
+              size="small"
+              columns={[
+                { title: 'Loại chứng từ', dataIndex: 'documentType', key: 'documentType' },
+                { title: 'Số chứng từ', dataIndex: 'documentNumber', key: 'documentNumber', render: (value?: string | null) => value || '-' },
+                { title: 'Ngày phát hành', dataIndex: 'issueDate', key: 'issueDate', render: (value?: string | null) => formatDate(value || undefined) },
+                { title: 'Trạng thái', dataIndex: 'status', key: 'status', render: (value: ShipmentDocumentStatus) => <Tag color={value === 'DONE' ? 'success' : value === 'NA' ? 'default' : 'warning'}>{value}</Tag> },
+              ]}
+              locale={{ emptyText: 'Chưa có chứng từ nào được ghi nhận' }}
+              style={{ marginBottom: 24 }}
+            />
+
+            <Divider titlePlacement="left"><Text strong>Lịch sử thao tác</Text></Divider>
+            <Table<ShipmentAuditTrailEntry>
+              dataSource={auditTrail}
+              rowKey={(record) => `${record.action}-${record.at}`}
+              pagination={{ pageSize: 5 }}
+              size="small"
+              columns={[
+                { title: 'Thời gian', dataIndex: 'at', key: 'at', render: (value: string) => formatDate(value) },
+                { title: 'Hành động', dataIndex: 'action', key: 'action', render: (value: string) => <Tag color="blue">{value}</Tag> },
+                { title: 'Người thao tác', dataIndex: 'actor', key: 'actor' },
+                { title: 'Ghi chú', dataIndex: 'reason', key: 'reason', render: (value?: string) => value || '-' },
+              ]}
+              locale={{ emptyText: 'Chưa có lịch sử thao tác' }}
+            />
           </div>
         )}
       </Spin>
@@ -498,19 +620,30 @@ const ShipmentDetailDrawer = ({ shipmentId, open, onClose, onSuccess }: IProps) 
           <Form.Item name="sealNumber" label="Số Chì (Seal Number)">
             <Input placeholder="Vd: 98765432" />
           </Form.Item>
-          <Form.Item name="containerType" label="Loại Container" rules={[{ required: true }]} initialValue="20DC">
+          <Form.Item name="type" label="Loại Container" rules={[{ required: true }]} initialValue="20DC">
             <Select
               options={[
                 { value: '20DC', label: tDetail('contTypes.20DC') },
                 { value: '40DC', label: tDetail('contTypes.40DC') },
                 { value: '40HC', label: tDetail('contTypes.40HC') },
+                { value: '20RF', label: '20RF' },
+                { value: '40RF', label: '40RF' },
                 { value: 'LCL', label: tDetail('contTypes.LCL') },
               ]}
             />
           </Form.Item>
-          <Form.Item name="notes" label="Ghi chú">
-            <Input.TextArea rows={2} />
-          </Form.Item>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="weightKg" label="Gross Weight (kg)" initialValue={0}>
+                <InputNumber min={0} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="cbm" label="CBM" initialValue={0}>
+                <InputNumber min={0} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+          </Row>
         </Form>
       </Modal>
 

@@ -131,14 +131,14 @@ const QcInspectionModal = ({
       destroyOnHidden
     >
       {lineOptions.length === 0 ? (
-        <Alert type="success" showIcon message={t('empty')} />
+        <Alert type="success" showIcon title={t('empty')} />
       ) : (
         <Form<QcInspectionFormValues> form={form} layout="vertical">
           <Alert
             type="warning"
             showIcon
             style={{ marginBottom: 16 }}
-            message={t('warningTitle')}
+            title={t('warningTitle')}
             description={t('warningDescription')}
           />
 

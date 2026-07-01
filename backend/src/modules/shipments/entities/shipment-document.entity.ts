@@ -12,6 +12,7 @@ import { Shipment } from './shipment.entity';
 import { createEntityId } from '@/common/ids/entity-id.util';
 
 export enum DocumentType {
+  SALES_CONTRACT = 'SALES_CONTRACT',
   COMMERCIAL_INVOICE = 'COMMERCIAL_INVOICE',
   PACKING_LIST = 'PACKING_LIST',
   BILL_OF_LADING = 'BILL_OF_LADING',

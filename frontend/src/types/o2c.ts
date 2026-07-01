@@ -83,7 +83,7 @@ export interface IQuotation {
   };
   createdAt: string;
   items?: IQuotationLine[];
-  proformaInvoices?: any[];
+  proformaInvoices?: Record<string, unknown>[];
 }
 
 export interface IProformaInvoice extends Omit<IQuotation, 'status'> {
@@ -96,10 +96,12 @@ export interface IProformaInvoice extends Omit<IQuotation, 'status'> {
 }
 
 export interface IContainer {
+  _id: string;
   containerNumber: string;
   sealNumber?: string;
-  containerType: string;
-  notes?: string;
+  type: string;
+  weightKg: number;
+  cbm: number;
 }
 
 export interface ISalesContract {
@@ -128,7 +130,7 @@ export interface ISalesContract {
   validUntil?: string;
   paymentTerms?: string;
   notes?: string;
-  items?: any[];
+  items?: Record<string, unknown>[];
   proformaInvoiceId?: string;
   proformaInvoice?: { piNumber: string };
   createdAt: string;
@@ -146,6 +148,9 @@ export interface IShipment {
   logisticsPartner?: { name: string };
   bookingNumber?: string;
   vesselName?: string;
+  voyageNumber?: string;
+  shippingLine?: string;
+  blNumber?: string;
   pol?: string;
   pol_port_id?: string | null;
   pod?: string;

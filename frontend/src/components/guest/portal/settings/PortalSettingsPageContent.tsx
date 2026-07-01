@@ -531,7 +531,7 @@ export default function PortalSettingsPageContent() {
         <Alert
           showIcon
           type="error"
-          message="Không tải được dữ liệu cài đặt"
+          title="Không tải được dữ liệu cài đặt"
           description={errorMessage}
           action={<Button size="small" onClick={fetchProfiles}>Thử lại</Button>}
           style={{ marginBottom: 16 }}

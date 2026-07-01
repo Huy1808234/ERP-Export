@@ -2544,7 +2544,50 @@
     "stats": {
       "total": "TỔNG LÔ HÀNG",
       "inTransit": "ĐANG VẬN CHUYỂN",
-      "closed": "HOÀN TẤT"
+      "closed": "HOÀN TẤT",
+      "containers": "CONTAINER",
+      "delayed": "TRỄ TIẾN ĐỘ"
+    },
+    "dashboard": {
+      "activeOpen": "{count} lô đang mở",
+      "trackEtaEtd": "Theo dõi ETA/ETD",
+      "containersRecorded": "Đã ghi nhận trên lô",
+      "transportCompleted": "Đã hoàn tất vận chuyển",
+      "delayedHelper": "ETD đã quá hạn",
+      "delayedAlertTitle": "Có {count} lô hàng đang trễ ETD",
+      "delayedAlertDescription": "Cần kiểm tra rớt tàu, cập nhật ETD mới hoặc xử lý lại kế hoạch đóng hàng.",
+      "dateUpdates": "Cập nhật lịch tàu",
+      "etaUpdates": "Cập nhật ETA",
+      "etdUpdates": "Cập nhật ETD",
+      "booking": "Tổng quan booking",
+      "bookingSummary": "Tín hiệu booking",
+      "totalBookingSignals": "{count} lô hàng",
+      "activeShipments": "{total} lô hàng đang theo dõi",
+      "originPort": "Cảng đi",
+      "destinationPort": "Cảng đến",
+      "currentMilestone": "Hiện tại",
+      "metricStatus": "Trạng thái",
+      "metricContainers": "Container",
+      "metricDocuments": "Chứng từ",
+      "refresh": "Tải lại",
+      "bookingStatus": {
+        "newRequest": "Yêu cầu mới",
+        "openRequest": "Đang xử lý",
+        "pendingApproval": "Chờ duyệt",
+        "approved": "Đã duyệt",
+        "onHold": "Tạm giữ",
+        "confirmed": "Đã xác nhận"
+      }
+    },
+    "empty": {
+      "noShipments": "Chưa có lô hàng phù hợp",
+      "noTrackedShipment": "Chọn một lô hàng để xem hành trình"
+    },
+    "loadingUnit": {
+      "containers": "{count} container",
+      "lcl": "LCL {cbm} CBM / {weight} kg",
+      "none": "Chưa có loading unit",
+      "delayed": "Trễ ETD {days} ngày"
     },
     "table": {
       "shipmentNumber": "Số Lô Hàng",
@@ -2562,6 +2605,8 @@
       "issueStock": "XUẤT KHO",
       "issued": "ĐÃ XUẤT",
       "viewDetail": "Xem chi tiết",
+      "trackShipment": "Theo dõi lô hàng này",
+      "trackingSelected": "Đang theo dõi",
       "docCenter": "Bộ chứng từ (CI/PL)",
       "deleteTitle": "Xóa Lô Hàng",
       "deleteConfirm": "Bạn có chắc muốn xóa lô hàng này?",

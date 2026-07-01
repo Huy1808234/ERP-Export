@@ -1,22 +1,18 @@
 'use client'
 import React from 'react';
-import { Row, Col, Typography, Card, Space, theme, Timeline, Statistic } from 'antd';
+import { Row, Col, Typography, Card, Space, Statistic } from 'antd';
 import PageBanner from '@/components/guest/PageBanner';
 import { 
   SafetyCertificateOutlined, 
   GlobalOutlined, 
   RocketOutlined, 
-  TeamOutlined,
   CheckCircleFilled,
   HistoryOutlined
 } from '@ant-design/icons';
-import { motion } from 'framer-motion';
 
 const { Title, Text, Paragraph } = Typography;
 
 const AboutPage = () => {
-  const { token } = theme.useToken();
-
   const coreValues = [
     {
       title: 'Minh Bạch',
@@ -93,10 +89,18 @@ const AboutPage = () => {
             </Col>
             <Col xs={24} lg={12}>
               <div style={{ position: 'relative' }}>
-                <img 
-                  src="https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&q=80&w=1000" 
-                  alt="Logistics" 
-                  style={{ width: '100%', borderRadius: '24px', boxShadow: '0 20px 40px rgba(0,0,0,0.1)' }}
+                <div
+                  aria-label="Logistics"
+                  role="img"
+                  style={{
+                    width: '100%',
+                    minHeight: 420,
+                    borderRadius: '24px',
+                    boxShadow: '0 20px 40px rgba(0,0,0,0.1)',
+                    backgroundImage: 'url(https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&q=80&w=1000)',
+                    backgroundPosition: 'center',
+                    backgroundSize: 'cover',
+                  }}
                 />
                 <div style={{ 
                   position: 'absolute', 
@@ -129,7 +133,7 @@ const AboutPage = () => {
           <Row gutter={[32, 32]}>
             {coreValues.map(val => (
               <Col xs={24} md={8} key={val.title}>
-                <Card bordered={false} style={{ height: '100%', borderRadius: '16px', textAlign: 'center', padding: '24px' }}>
+                <Card variant="borderless" style={{ height: '100%', borderRadius: '16px', textAlign: 'center', padding: '24px' }}>
                   <div style={{ marginBottom: '24px' }}>{val.icon}</div>
                   <Title level={4}>{val.title}</Title>
                   <Text type="secondary">{val.desc}</Text>

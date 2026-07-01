@@ -445,7 +445,7 @@ export default function BuyerSigningPage() {
             type="info"
             icon={<MailOutlined />}
             showIcon
-            message={
+            title={
               <Space orientation="vertical" size={4}>
                 <Text strong>
                   {locale === 'vi'

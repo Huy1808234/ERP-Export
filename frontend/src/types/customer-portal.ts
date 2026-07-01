@@ -221,6 +221,10 @@ export type PortalStatementLine = {
   paidAmountForeign: number;
   openAmountForeign: number;
   currency: string;
+  exchangeRate?: number;
+  amountVnd?: number;
+  paidAmountVnd?: number;
+  openAmountVnd?: number;
   status: string;
   // Phase 1: Aging & Cross-linking
   agingBucket: 'CURRENT' | 'DUE_1_30' | 'DUE_31_60' | 'DUE_61_90' | 'OVERDUE_90';
@@ -239,8 +243,16 @@ export type PortalPaymentReceipt = {
   status?: string | null;
   amount?: number | null;
   currency?: string | null;
+  exchangeRate?: number | null;
+  accountReceivableId?: string | null;
   bankReference?: string | null;
   submittedAt?: string | null;
+  accountReceivable?: {
+    _id: string;
+    invoiceNumber?: string | null;
+    currency?: string | null;
+  } | null;
+  rejectionReason?: string | null;
 };
 
 export type PortalStatement = {

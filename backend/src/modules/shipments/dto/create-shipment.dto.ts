@@ -2,8 +2,8 @@ import {
   IsArray,
   IsDateString,
   IsEnum,
-  IsNotEmpty,
   IsNumber,
+  IsObject,
   IsOptional,
   IsString,
   ValidateNested,
@@ -25,26 +25,47 @@ const optionalText = ({
   return trimmed.length > 0 ? trimmed : null;
 };
 
-class ContainerDto {
+export type ShipmentDocumentChecklist = Record<
+  string,
+  'PENDING' | 'DONE' | 'NA'
+>;
+
+export class ShipmentContainerDto {
   @IsString()
   @IsOptional()
-  containerNumber: string;
+  containerNumber?: string;
 
   @IsString()
   @IsOptional()
-  sealNumber: string;
+  sealNumber?: string;
 
   @IsEnum(ContainerType)
   @IsOptional()
-  type: ContainerType;
+  type?: ContainerType;
+
+  @IsEnum(ContainerType)
+  @IsOptional()
+  containerType?: ContainerType;
 
   @IsNumber()
+  @Type(() => Number)
   @IsOptional()
-  weightKg: number;
+  weightKg?: number;
 
   @IsNumber()
+  @Type(() => Number)
   @IsOptional()
-  cbm: number;
+  grossWeightKg?: number;
+
+  @IsNumber()
+  @Type(() => Number)
+  @IsOptional()
+  cbm?: number;
+
+  @IsNumber()
+  @Type(() => Number)
+  @IsOptional()
+  volumeCbm?: number;
 }
 
 export class CreateShipmentDto {
@@ -111,28 +132,33 @@ export class CreateShipmentDto {
   @IsArray()
   @IsOptional()
   @ValidateNested({ each: true })
-  @Type(() => ContainerDto)
-  containers: ContainerDto[];
+  @Type(() => ShipmentContainerDto)
+  containers?: ShipmentContainerDto[];
 
   @IsNumber()
+  @Type(() => Number)
   @IsOptional()
-  freightCost: number;
+  freightCost?: number;
 
   @IsNumber()
+  @Type(() => Number)
   @IsOptional()
-  insuranceCost: number;
+  insuranceCost?: number;
 
   @IsNumber()
+  @Type(() => Number)
   @IsOptional()
-  localChargesVnd: number;
+  localChargesVnd?: number;
 
   @IsNumber()
+  @Type(() => Number)
   @IsOptional()
-  truckingCostVnd: number;
+  truckingCostVnd?: number;
 
   @IsNumber()
+  @Type(() => Number)
   @IsOptional()
-  customsFeeVnd: number;
+  customsFeeVnd?: number;
 
   @IsString()
   @IsOptional()
@@ -142,6 +168,7 @@ export class CreateShipmentDto {
   @IsOptional()
   status: ShipmentStatus;
 
+  @IsObject()
   @IsOptional()
-  documentChecklist: any;
+  documentChecklist?: ShipmentDocumentChecklist;
 }

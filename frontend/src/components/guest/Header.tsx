@@ -2,11 +2,11 @@
 
 import React from "react";
 import { Menu, Button, Row, Col, Typography, Dropdown, Avatar, type MenuProps } from "antd";
-import { 
-  GlobalOutlined, 
-  ArrowRightOutlined, 
-  LoginOutlined, 
-  DashboardOutlined, 
+import {
+  GlobalOutlined,
+  ArrowRightOutlined,
+  LoginOutlined,
+  DashboardOutlined,
   LogoutOutlined
 } from "@ant-design/icons";
 import { Link, useRouter } from "@/i18n/routing";
@@ -26,9 +26,9 @@ export const Header = ({ session: serverSession }: { session: Session | null }) 
   const { scrollY } = useScroll();
   const params = useParams();
   const locale = params?.locale ?? 'vi';
-  
+
   const height = useTransform(scrollY, [0, 100], [90, 70]);
-  
+
   const backgroundColor = useTransform(
     scrollY,
     [0, 100],
@@ -103,10 +103,10 @@ export const Header = ({ session: serverSession }: { session: Session | null }) 
             <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <motion.div
                 whileHover={{ rotate: 90, scale: 1.1 }}
-                style={{ 
-                  width: '38px', 
-                  height: '38px', 
-                  background: 'linear-gradient(135deg, #1890ff, #003eb3)', 
+                style={{
+                  width: '38px',
+                  height: '38px',
+                  background: 'linear-gradient(135deg, #1890ff, #003eb3)',
                   borderRadius: '10px',
                   display: 'flex',
                   alignItems: 'center',
@@ -116,10 +116,10 @@ export const Header = ({ session: serverSession }: { session: Session | null }) 
               >
                 <GlobalOutlined style={{ fontSize: '22px', color: '#fff' }} />
               </motion.div>
-              <Title level={4} style={{ 
-                color: '#fff', 
-                margin: 0, 
-                fontWeight: 900, 
+              <Title level={4} style={{
+                color: '#fff',
+                margin: 0,
+                fontWeight: 900,
                 letterSpacing: '-1.5px',
                 fontSize: '22px'
               }}>
@@ -127,16 +127,16 @@ export const Header = ({ session: serverSession }: { session: Session | null }) 
               </Title>
             </Link>
           </Col>
-          
+
           <Col flex="auto" className="hidden lg:block" style={{ paddingLeft: '60px' }}>
             <Menu
               theme="dark"
               mode="horizontal"
               selectable={false}
-              style={{ 
-                background: 'transparent', 
-                borderBottom: 'none', 
-                fontSize: '12px', 
+              style={{
+                background: 'transparent',
+                borderBottom: 'none',
+                fontSize: '12px',
                 fontWeight: 700,
                 letterSpacing: '1.2px',
                 textTransform: 'uppercase',
@@ -150,22 +150,22 @@ export const Header = ({ session: serverSession }: { session: Session | null }) 
               className="custom-nav-menu"
             />
           </Col>
- 
+
           <Col>
             <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
               {session ? (
-                <Dropdown 
-                  menu={{ items: userMenuItems }} 
-                  placement="bottomRight" 
+                <Dropdown
+                  menu={{ items: userMenuItems }}
+                  placement="bottomRight"
                   trigger={['click']}
                   styles={{ root: { width: '280px', paddingTop: '10px' } }}
                 >
-                  <motion.div 
+                  <motion.div
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    style={{ 
-                      display: 'flex', 
-                      alignItems: 'center', 
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
                       gap: '12px',
                       padding: '5px 16px 5px 5px',
                       background: 'rgba(255,255,255,0.1)',
@@ -173,10 +173,10 @@ export const Header = ({ session: serverSession }: { session: Session | null }) 
                       cursor: 'pointer',
                       border: '1px solid rgba(255,255,255,0.15)',
                       transition: 'all 0.3s'
-                    }} 
+                    }}
                   >
-                    <Avatar 
-                      style={{ 
+                    <Avatar
+                      style={{
                         backgroundColor: isStaffUser ? '#f59e0b' : '#1890ff',
                         fontWeight: 800,
                         fontSize: '12px',
@@ -193,10 +193,10 @@ export const Header = ({ session: serverSession }: { session: Session | null }) 
                 </Dropdown>
               ) : (
                 <Link href={guestLoginHref}>
-                  <Button 
-                    type="text" 
+                  <Button
+                    type="text"
                     icon={<LoginOutlined />}
-                    style={{ 
+                    style={{
                       color: '#fff',
                       fontWeight: 700,
                       fontSize: '12px',
@@ -207,10 +207,10 @@ export const Header = ({ session: serverSession }: { session: Session | null }) 
                   </Button>
                 </Link>
               )}
-              
-              <Button type="primary" size="large" style={{ 
-                height: '46px', 
-                padding: '0 28px', 
+
+              <Button type="primary" size="large" style={{
+                height: '46px',
+                padding: '0 28px',
                 borderRadius: '12px',
                 fontWeight: 800,
                 fontSize: '13px',

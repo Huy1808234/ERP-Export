@@ -74,6 +74,21 @@ type CancelFormValues = {
   reason: string;
 };
 
+type SystemSetting = {
+  key: string;
+  value?: string | number | boolean | null;
+};
+
+type CurrencyExchangeRate = {
+  rateType?: string | null;
+  rate?: number | null;
+};
+
+type CurrencyOption = {
+  code: string;
+  exchangeRates?: CurrencyExchangeRate[];
+};
+
 const statusColor: Record<CommercialInvoiceStatus, string> = {
   DRAFT: 'gold',
   ISSUED: 'green',
@@ -202,7 +217,7 @@ const CILivePreview = ({
           type="error"
           showIcon
           icon={<WarningOutlined />}
-          message={t('warnings.noItemsTitle')}
+          title={t('warnings.noItemsTitle')}
           description={t('warnings.noItemsDesc')}
         />
       )}
@@ -212,7 +227,7 @@ const CILivePreview = ({
           type="warning"
           showIcon
           icon={<AlertOutlined />}
-          message={t('warnings.shipmentNotShippedTitle')}
+          title={t('warnings.shipmentNotShippedTitle')}
           description={t('warnings.shipmentNotShippedDesc')}
         />
       )}
@@ -232,7 +247,7 @@ const CILivePreview = ({
               </Text>
             </Col>
             <Col>
-              <Space direction="vertical" size={0} align="end">
+              <Space orientation="vertical" size={0} align="end">
                 <Text style={{ color: '#fff', fontSize: 12 }}>No: [Auto-generated]</Text>
                 <Text style={{ color: '#94a3b8', fontSize: 11 }}>Date: [Today]</Text>
               </Space>
@@ -374,29 +389,29 @@ const CommercialInvoicesPage = () => {
     if (!accessToken) return;
     try {
       const [settingsRes, curRes] = await Promise.all([
-        sendRequest<IBackendRes<any>>({
+        sendRequest<IBackendRes<SystemSetting[]>>({
           url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/settings`,
           method: 'GET',
           headers: { Authorization: `Bearer ${accessToken}` },
         }),
-        sendRequest<IBackendRes<any>>({
+        sendRequest<IBackendRes<CurrencyOption[]>>({
           url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/currencies`,
           method: 'GET',
           headers: { Authorization: `Bearer ${accessToken}` },
         }),
       ]);
       
-      if (settingsRes?.data) {
-        const vatSetting = settingsRes.data.find((s: any) => s.key === 'DEFAULT_PURCHASE_VAT_RATE');
+      if (Array.isArray(settingsRes?.data)) {
+        const vatSetting = settingsRes.data.find((setting) => setting.key === 'DEFAULT_PURCHASE_VAT_RATE');
         if (vatSetting?.value) {
           setTaxRate(Number(vatSetting.value));
         }
       }
 
-      if (curRes?.data) {
-        const usd = curRes.data.find((c: any) => c.code === 'USD');
+      if (Array.isArray(curRes?.data)) {
+        const usd = curRes.data.find((currency) => currency.code === 'USD');
         if (usd?.exchangeRates?.length) {
-          const transferRate = usd.exchangeRates.find((r: any) => (r.rateType || 'TRANSFER') === 'TRANSFER') || usd.exchangeRates[0];
+          const transferRate = usd.exchangeRates.find((rate) => (rate.rateType || 'TRANSFER') === 'TRANSFER') || usd.exchangeRates[0];
           if (transferRate?.rate) {
             setExchangeRate(transferRate.rate);
           }
@@ -839,7 +854,7 @@ const CommercialInvoicesPage = () => {
                       type="warning"
                       showIcon
                       icon={<WarningOutlined />}
-                      message={t('warnings.existingCiTitle')}
+                      title={t('warnings.existingCiTitle')}
                       description={
                         <Space.Compact orientation="vertical" size="small">
                           <Text>

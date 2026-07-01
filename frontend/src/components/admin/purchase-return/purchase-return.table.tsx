@@ -37,7 +37,6 @@ import {
   RollbackOutlined,
   SearchOutlined,
   SendOutlined,
-  ShopOutlined,
   SwapOutlined,
   ToolOutlined,
 } from '@ant-design/icons';
@@ -206,7 +205,7 @@ const PurchaseReturnTable = () => {
       icon: <CheckCircleOutlined style={{ color: token.colorPrimary }} />,
       width: 560,
       content: (
-        <Space direction="vertical" size={12} style={{ width: '100%' }}>
+        <Space orientation="vertical" size={12} style={{ width: '100%' }}>
           <div>
             <Text type="secondary">
               {t('resolveModal.settlementType')}:

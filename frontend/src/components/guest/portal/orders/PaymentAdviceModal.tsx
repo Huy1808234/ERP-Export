@@ -493,7 +493,7 @@ export const PaymentAdviceModal = ({
                     type="success"
                     showIcon
                     style={{ textAlign: 'left', marginBottom: 8 }}
-                    message={`Mã giao dịch: ${createdReceiptNumber}`}
+                    title={`Mã giao dịch: ${createdReceiptNumber}`}
                     description="Nội dung chuyển khoản đã được nhúng vào QR. Hệ thống sẽ tự động đối soát khi nhận được thanh toán."
                   />
                 )}

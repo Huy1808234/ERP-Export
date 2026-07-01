@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { notification } from '@/providers/antd-static';
 
 import { sendRequest } from '@/lib/api-client';
-import type { IShipment, IPaginationMeta } from '@/types/o2c';
+import type { IShipment, IPaginationMeta, ShipmentStatus } from '@/types/o2c';
 
 interface FetchShipmentsParams {
   current: number;
@@ -15,12 +15,31 @@ type ShipmentStats = {
   total: number;
   inTransit: number;
   closed: number;
+  delayed: number;
+  statusCounts: Record<ShipmentStatus, number>;
+};
+
+const defaultStatusCounts: Record<ShipmentStatus, number> = {
+  BOOKED: 0,
+  LOADING: 0,
+  CUSTOMS_CLEARED: 0,
+  ON_BOARD: 0,
+  ARRIVED: 0,
+  CLOSED: 0,
+};
+
+const defaultShipmentStats: ShipmentStats = {
+  total: 0,
+  inTransit: 0,
+  closed: 0,
+  delayed: 0,
+  statusCounts: defaultStatusCounts,
 };
 
 export const useShipments = () => {
   const [data, setData] = useState<IShipment[]>([]);
   const [meta, setMeta] = useState<IPaginationMeta>({ current: 1, pageSize: 10, total: 0 });
-  const [stats, setStats] = useState({ total: 0, inTransit: 0, closed: 0 });
+  const [stats, setStats] = useState<ShipmentStats>(defaultShipmentStats);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -58,7 +77,14 @@ export const useShipments = () => {
             method: 'GET',
           });
           if (statsRes?.data) {
-            setStats(statsRes.data);
+            setStats({
+              ...defaultShipmentStats,
+              ...statsRes.data,
+              statusCounts: {
+                ...defaultStatusCounts,
+                ...(statsRes.data.statusCounts ?? {}),
+              },
+            });
           }
       } catch {
         setError('Khong the tai danh sach lo hang');
@@ -95,26 +121,16 @@ export const useShipments = () => {
   const issueStock = useCallback(
     async (id: string, onSuccess?: () => void) => {
       try {
-        const draftRes = await sendRequest<IBackendRes<{ _id: string; deliveryNumber?: string }>>({
-          url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/inventory/export-deliveries/from-shipment/${id}`,
-          method: 'POST',
-        });
-
-        if (!draftRes?.data?._id) {
-          notification.error({ title: 'Loi xuat kho', description: draftRes?.message });
-          return;
-        }
-
-        const res = await sendRequest<IBackendRes<{ deliveryNumber?: string }>>({
-          url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/inventory/export-deliveries/${draftRes.data._id}/issue`,
+        const res = await sendRequest<IBackendRes<{ exportDelivery?: { deliveryNumber?: string } }>>({
+          url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/shipments/${id}/issue-stock`,
           method: 'PATCH',
         });
 
         if (res?.data) {
           notification.success({
             title: 'Xac nhan xuat kho thanh cong',
-            description: res.data.deliveryNumber
-              ? `Da issue phieu xuat kho ${res.data.deliveryNumber}`
+            description: res.data.exportDelivery?.deliveryNumber
+              ? `Da issue phieu xuat kho ${res.data.exportDelivery.deliveryNumber}`
               : undefined,
           });
           onSuccess?.();
