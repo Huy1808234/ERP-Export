@@ -2188,19 +2188,31 @@ const FinancePage = () => {
       subtitle={copy.financeSubtitle}
       icon={<DollarOutlined />}
       extra={(
-        <Dropdown.Button
-          type="primary"
-          icon={<DownOutlined />}
-          loading={downloading}
-          disabled={!statement}
-          menu={{
-            items: statementDownloadMenuItems,
-            onClick: ({ key }) => void handleDownloadStatement(key === 'csv' ? 'csv' : 'excel'),
-          }}
-          onClick={() => void handleDownloadStatement('excel')}
-        >
-          <FileExcelOutlined /> {copy.downloadStatementExcel}
-        </Dropdown.Button>
+        <Space.Compact>
+          <Button
+            type="primary"
+            icon={<FileExcelOutlined />}
+            loading={downloading}
+            disabled={!statement}
+            onClick={() => void handleDownloadStatement('excel')}
+          >
+            {copy.downloadStatementExcel}
+          </Button>
+          <Dropdown
+            disabled={!statement || downloading}
+            menu={{
+              items: statementDownloadMenuItems,
+              onClick: ({ key }) => void handleDownloadStatement(key === 'csv' ? 'csv' : 'excel'),
+            }}
+            trigger={['click']}
+          >
+            <Button
+              type="primary"
+              icon={<DownOutlined />}
+              aria-label="Chon dinh dang tai statement"
+            />
+          </Dropdown>
+        </Space.Compact>
       )}
     >
       {contextHolder}

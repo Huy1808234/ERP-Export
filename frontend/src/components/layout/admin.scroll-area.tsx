@@ -32,6 +32,7 @@ const AdminScrollArea = ({
         '--admin-scroll-thumb-hover': isDark ? 'rgba(203, 213, 225, 0.38)' : 'rgba(71, 85, 105, 0.34)',
         minHeight: 0,
         maxWidth: '100%',
+        position: 'relative',
         overflowY,
         overflowX: 'hidden',
         scrollbarGutter: 'stable',

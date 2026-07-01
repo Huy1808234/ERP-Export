@@ -20,9 +20,10 @@ import {
   theme,
 } from 'antd';
 import {
-  CheckCircleOutlined,
   ClockCircleOutlined,
   ContainerOutlined,
+  CustomerServiceOutlined,
+  DownloadOutlined,
   EnvironmentOutlined,
   FileTextOutlined,
   ReloadOutlined,
@@ -30,13 +31,16 @@ import {
   SendOutlined,
   ShopOutlined,
   TruckOutlined,
+  WarningOutlined,
 } from '@ant-design/icons';
+import { useLocale } from 'next-intl';
+import { useRouter } from 'next/navigation';
 import AdminPageScroll from '@/components/layout/admin.page-scroll';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { useCustomerPortalShipments } from '@/hooks/useCustomerPortal';
 import type { PortalShipment, PortalShipmentTimelineItem } from '@/types/customer-portal';
 
-const { Paragraph, Text, Title } = Typography;
+const { Text, Title } = Typography;
 
 type ShipmentFilterKey = 'all' | 'booking' | 'shipping' | 'receiving' | 'completed';
 
@@ -107,6 +111,25 @@ const getLatestEvent = (timeline: PortalShipmentTimelineItem[]): PortalShipmentT
   return [...timeline].reverse().find((item) => item.state === 'process' || item.state === 'finish');
 };
 
+const getLogisticsProvider = (shipment: PortalShipment): string => (
+  shipment.shippingLine || shipment.carrier || 'Chưa có đơn vị logistics'
+);
+
+const getEtaDelayDays = (shipment: PortalShipment): number => {
+  const status = normalizeStatus(shipment.status);
+  if (!shipment.eta || ['ARRIVED', 'CLOSED'].includes(status)) return 0;
+
+  const eta = new Date(shipment.eta);
+  if (Number.isNaN(eta.getTime())) return 0;
+
+  eta.setHours(23, 59, 59, 999);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  if (eta.getTime() >= today.getTime()) return 0;
+  return Math.ceil((today.getTime() - eta.getTime()) / (1000 * 60 * 60 * 24));
+};
+
 function ShipmentStatusTag({ status }: { status?: string | null }) {
   const normalizedStatus = normalizeStatus(status);
   const meta = statusMeta[normalizedStatus] || { label: normalizedStatus, color: 'default', tone: '#64748b' };
@@ -133,6 +156,7 @@ function ShipmentOrderCard({
   const shipmentNumber = getShipmentNumber(shipment);
   const status = normalizeStatus(shipment.status);
   const meta = statusMeta[status] || statusMeta.BOOKED;
+  const etaDelayDays = getEtaDelayDays(shipment);
 
   return (
     <Card
@@ -197,6 +221,7 @@ function ShipmentOrderCard({
                   <Text type="secondary">B/L: {shipment.blNumber || '-'}</Text>
                   <Text type="secondary">Booking: {shipment.bookingNumber || '-'}</Text>
                 </Space>
+                <Text type="secondary">Đơn vị logistics: {getLogisticsProvider(shipment)}</Text>
               </Space>
             </Space>
           </Col>
@@ -204,6 +229,11 @@ function ShipmentOrderCard({
             <Space orientation="vertical" size={2}>
               <Text type="secondary">ETA dự kiến</Text>
               <Text strong>{formatDate(shipment.eta)}</Text>
+              {etaDelayDays > 0 ? (
+                <Tag color="error" style={{ marginInlineEnd: 0 }}>
+                  Trễ {etaDelayDays} ngày
+                </Tag>
+              ) : null}
             </Space>
           </Col>
           <Col xs={24} lg={4} style={{ textAlign: 'right' }}>
@@ -231,7 +261,13 @@ function ShipmentOrderCard({
   );
 }
 
-function ShipmentDetailPanel({ shipment }: { shipment: PortalShipment }) {
+function ShipmentDetailPanel({
+  shipment,
+  onCreateTicket,
+}: {
+  shipment: PortalShipment;
+  onCreateTicket: (shipment: PortalShipment) => void;
+}) {
   const { token } = theme.useToken();
   const timeline = getTimeline(shipment);
   const latestEvent = getLatestEvent(timeline);
@@ -239,6 +275,11 @@ function ShipmentDetailPanel({ shipment }: { shipment: PortalShipment }) {
   const status = normalizeStatus(shipment.status);
   const meta = statusMeta[status] || statusMeta.BOOKED;
   const containers = shipment.containers || [];
+  const etaDelayDays = getEtaDelayDays(shipment);
+  const handleDocumentDownload = (url?: string | null): void => {
+    if (!url) return;
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
 
   return (
     <Card
@@ -262,8 +303,28 @@ function ShipmentDetailPanel({ shipment }: { shipment: PortalShipment }) {
         <Space size={12} wrap>
           <Text strong style={{ color: meta.tone }}>{meta.label}</Text>
           <ShipmentStatusTag status={shipment.status} />
+          <Button size="small" icon={<CustomerServiceOutlined />} onClick={() => onCreateTicket(shipment)}>
+            Tạo ticket
+          </Button>
         </Space>
       </div>
+
+      {etaDelayDays > 0 ? (
+        <div style={{ padding: '16px 24px 0' }}>
+          <Alert
+            showIcon
+            type="warning"
+            icon={<WarningOutlined />}
+            title={`ETA đang trễ ${etaDelayDays} ngày`}
+            description="Bạn có thể tạo ticket để đội logistics kiểm tra lịch tàu, chứng từ và thời gian giao dự kiến."
+            action={(
+              <Button size="small" type="primary" icon={<CustomerServiceOutlined />} onClick={() => onCreateTicket(shipment)}>
+                Tạo ticket
+              </Button>
+            )}
+          />
+        </div>
+      ) : null}
 
       <div style={{ padding: '26px 24px 18px' }}>
         <Steps
@@ -312,7 +373,7 @@ function ShipmentDetailPanel({ shipment }: { shipment: PortalShipment }) {
                 <div style={{ fontWeight: 700 }}>{shipment.pol || '?'} → {shipment.pod || '?'}</div>
               </div>
               <div>
-                <Text type="secondary">Hãng tàu / Carrier</Text>
+                <Text type="secondary">Hãng tàu / đơn vị vận chuyển</Text>
                 <div style={{ fontWeight: 700 }}>{shipment.shippingLine || shipment.carrier || '-'}</div>
               </div>
               <div>
@@ -356,6 +417,25 @@ function ShipmentDetailPanel({ shipment }: { shipment: PortalShipment }) {
             variant="outlined"
             style={{ borderRadius: 8 }}
           >
+            <Space size={8} wrap style={{ marginBottom: 16 }}>
+              <Button
+                icon={<DownloadOutlined />}
+                disabled={!shipment.blFileUrl}
+                onClick={() => handleDocumentDownload(shipment.blFileUrl)}
+              >
+                Tải B/L
+              </Button>
+              <Button
+                icon={<DownloadOutlined />}
+                disabled={!shipment.packingListFileUrl}
+                onClick={() => handleDocumentDownload(shipment.packingListFileUrl)}
+              >
+                Tải packing list
+              </Button>
+              <Text type="secondary">
+                {shipment.blNumber ? `B/L: ${shipment.blNumber}` : 'B/L chưa được phát hành'}
+              </Text>
+            </Space>
             {containers.length === 0 ? (
               <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Chưa có container được gắn với lô hàng này" />
             ) : (
@@ -391,6 +471,8 @@ function ShipmentDetailPanel({ shipment }: { shipment: PortalShipment }) {
 
 export default function ShipmentTrackingPageContent() {
   const { token } = theme.useToken();
+  const locale = useLocale();
+  const router = useRouter();
   const { shipments, meta, summary, loading, error, fetchShipments } = useCustomerPortalShipments();
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -455,13 +537,36 @@ export default function ShipmentTrackingPageContent() {
     setSelectedShipment_id(null);
   };
 
+  const handleCreateTicket = (shipment: PortalShipment): void => {
+    const shipmentNumber = getShipmentNumber(shipment);
+    const params = new URLSearchParams({
+      category: 'LOGISTICS',
+      priority: getEtaDelayDays(shipment) > 0 ? 'HIGH' : 'MEDIUM',
+      shipmentId: shipment._id,
+      subject: `Hỗ trợ lô hàng ${shipmentNumber}`,
+      message: [
+        `Lô hàng: ${shipmentNumber}`,
+        `Hợp đồng: ${shipment.salesContract?.contractNumber || '-'}`,
+        `Tuyến: ${shipment.pol || '-'} -> ${shipment.pod || '-'}`,
+        `Đơn vị logistics: ${getLogisticsProvider(shipment)}`,
+        `Booking: ${shipment.bookingNumber || '-'}`,
+        `B/L: ${shipment.blNumber || '-'}`,
+        `ETD / ETA: ${formatDate(shipment.etd)} / ${formatDate(shipment.eta)}`,
+        '',
+        'Nội dung cần hỗ trợ:',
+      ].join('\n'),
+    });
+
+    router.push(`/${locale}/dashboard/portal/tickets?${params.toString()}`);
+  };
+
   const resultSummary = useMemo(() => {
     if (meta.total === 0) return 'Không có lô hàng phù hợp';
 
     const start = (meta.current - 1) * meta.pageSize + 1;
     const end = Math.min(meta.current * meta.pageSize, meta.total);
     return `Hiển thị ${start}-${end} / ${meta.total} lô hàng`;
-  }, [meta.current, meta.pageSize, meta.total]);
+  }, [meta]);
 
   const getFilterCount = (filter: { key: ShipmentFilterKey; statuses: string[] }) => {
     if (filter.key === 'all') return summary.total;
@@ -591,7 +696,7 @@ export default function ShipmentTrackingPageContent() {
             </Col>
             <Col xs={24} xl={14}>
               {selectedShipment ? (
-                <ShipmentDetailPanel shipment={selectedShipment} />
+                <ShipmentDetailPanel shipment={selectedShipment} onCreateTicket={handleCreateTicket} />
               ) : (
                 <Card variant="borderless" style={{ borderRadius: 8 }}>
                   <Empty description="Chọn một lô hàng để xem chi tiết" />
@@ -616,16 +721,6 @@ export default function ShipmentTrackingPageContent() {
             </div>
           </Card>
         )}
-
-        <Card variant="borderless" style={{ borderRadius: 8, background: token.colorInfoBg }}>
-          <Space align="start" size={12}>
-            <CheckCircleOutlined style={{ color: token.colorInfo, marginTop: 4 }} />
-            <Paragraph style={{ margin: 0 }}>
-              Gợi ý production: nên bổ sung tracking event theo provider logistics, file B/L/packing list có quyền tải,
-              cảnh báo ETA trễ và nút tạo ticket hỗ trợ trực tiếp từ từng lô hàng.
-            </Paragraph>
-          </Space>
-        </Card>
       </Space>
     </AdminPageScroll>
   );

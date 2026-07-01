@@ -289,6 +289,8 @@ export type PortalShipment = {
   _id: string;
   shipmentNumber?: string | null;
   blNumber?: string | null;
+  blFileUrl?: string | null;
+  packingListFileUrl?: string | null;
   status?: string | null;
   bookingNumber?: string | null;
   shippingLine?: string | null;

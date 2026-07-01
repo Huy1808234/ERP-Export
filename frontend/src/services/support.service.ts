@@ -100,12 +100,16 @@ export const supportService = {
     ticketId: string,
     status: TicketStatus,
     headers: AuthHeaders,
+    note?: string,
   ): Promise<IBackendRes<SupportTicket>> => {
     return sendRequest<IBackendRes<SupportTicket>>({
       url: `${BACKEND_URL}/api/v1/portal/admin/support/tickets/${ticketId}/status`,
       method: 'PATCH',
       headers,
-      body: { status },
+      body: {
+        status,
+        ...(note ? { note } : {}),
+      },
     });
   },
 };

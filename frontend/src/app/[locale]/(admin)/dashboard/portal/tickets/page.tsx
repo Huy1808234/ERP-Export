@@ -1,5 +1,5 @@
-import CustomerPortalPage from '@/components/admin/portal/customer-portal.page';
+import SupportPortalPageContent from '@/components/guest/portal/support/SupportPortalPageContent';
 
 export default function TicketsPage() {
-  return <CustomerPortalPage view="tickets" />;
+  return <SupportPortalPageContent />;
 }

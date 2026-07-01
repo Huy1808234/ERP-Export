@@ -19,3 +19,4 @@ yarn-error.log
 # Bỏ qua các file rác do Hệ điều hành tự sinh ra
 .DS_Store
 Thumbs.db
+.ARCHITECTURE.md

@@ -14,7 +14,7 @@ type TicketPagination = {
 
 export function useGuestSupportTickets() {
   const { message } = App.useApp();
-  const { data: session } = useSession();
+  const { data: session, status: sessionStatus } = useSession();
   const accessToken = getAccessToken(session);
   const headers = useMemo<AuthHeaders | undefined>(
     () => (accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined),
@@ -29,7 +29,14 @@ export function useGuestSupportTickets() {
   const [error, setError] = useState<string | null>(null);
 
   const fetchTickets = useCallback(async (): Promise<void> => {
-    if (!headers) return;
+    if (sessionStatus === 'loading') return;
+    if (!headers) {
+      setTickets([]);
+      setIsLoading(false);
+      setError('Authentication session is unavailable. Please sign in again.');
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
     try {
@@ -45,10 +52,16 @@ export function useGuestSupportTickets() {
     } finally {
       setIsLoading(false);
     }
-  }, [headers]);
+  }, [headers, sessionStatus]);
 
   const fetchTicketDetail = useCallback(async (id: string): Promise<void> => {
-    if (!headers) return;
+    if (!headers) {
+      if (sessionStatus !== 'loading') {
+        message.error('Authentication session is unavailable. Please sign in again.');
+      }
+      return;
+    }
+
     setIsDetailLoading(true);
     try {
       const res = await supportService.fetchTicketDetail(id, headers);
@@ -61,7 +74,7 @@ export function useGuestSupportTickets() {
     } finally {
       setIsDetailLoading(false);
     }
-  }, [headers, message]);
+  }, [headers, message, sessionStatus]);
 
   return {
     tickets,
@@ -78,7 +91,7 @@ export function useGuestSupportTickets() {
 
 export function useAdminSupportTickets() {
   const { message } = App.useApp();
-  const { data: session } = useSession();
+  const { data: session, status: sessionStatus } = useSession();
   const accessToken = getAccessToken(session);
   const headers = useMemo<AuthHeaders | undefined>(
     () => (accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined),
@@ -97,7 +110,14 @@ export function useAdminSupportTickets() {
   const { current, pageSize } = pagination;
 
   const fetchTickets = useCallback(async (): Promise<void> => {
-    if (!headers) return;
+    if (sessionStatus === 'loading') return;
+    if (!headers) {
+      setTickets([]);
+      setIsLoading(false);
+      setError('Authentication session is unavailable. Please sign in again.');
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
     try {
@@ -119,10 +139,16 @@ export function useAdminSupportTickets() {
     } finally {
       setIsLoading(false);
     }
-  }, [current, headers, pageSize, statusFilter]);
+  }, [current, headers, pageSize, sessionStatus, statusFilter]);
 
   const fetchTicketDetail = useCallback(async (id: string): Promise<void> => {
-    if (!headers) return;
+    if (!headers) {
+      if (sessionStatus !== 'loading') {
+        message.error('Authentication session is unavailable. Please sign in again.');
+      }
+      return;
+    }
+
     setIsDetailLoading(true);
     try {
       const res = await supportService.fetchAdminTicketDetail(id, headers);
@@ -135,7 +161,7 @@ export function useAdminSupportTickets() {
     } finally {
       setIsDetailLoading(false);
     }
-  }, [headers, message]);
+  }, [headers, message, sessionStatus]);
 
   return {
     tickets,

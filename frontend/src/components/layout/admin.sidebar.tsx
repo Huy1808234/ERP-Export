@@ -69,6 +69,7 @@ const menuRouteByKey: Record<string, string> = {
     'portal-orders': '/dashboard/portal/orders',
     'portal-finance': '/dashboard/portal/finance',
     'portal-shipments': '/dashboard/portal/shipments',
+    'portal-tickets': '/dashboard/portal/tickets',
     dashboard: '/dashboard',
     approvals: '/dashboard/approvals',
     'approval-matrix': '/dashboard/approval-matrix',
@@ -207,6 +208,7 @@ const AdminSideBar = ({ session }: IProps) => {
         if (pathname?.includes('/dashboard/portal/orders')) return 'portal-orders';
         if (pathname?.includes('/dashboard/portal/finance')) return 'portal-finance';
         if (pathname?.includes('/dashboard/portal/shipments')) return 'portal-shipments';
+        if (pathname?.includes('/dashboard/portal/tickets')) return 'portal-tickets';
         if (pathname?.includes('/dashboard/portal/settings')) return 'settings';
         if (pathname?.includes('/dashboard/portal')) return 'portal-overview';
         if (pathname?.includes('/dashboard/product')) return 'products';
@@ -281,6 +283,11 @@ const AdminSideBar = ({ session }: IProps) => {
                     key: "portal-shipments",
                     label: <Link href={"/dashboard/portal/shipments"}>{t('items.portalShipments')}</Link>,
                     icon: <GlobalOutlined />,
+                },
+                {
+                    key: "portal-tickets",
+                    label: <Link href={"/dashboard/portal/tickets"}>{t('items.portalTickets')}</Link>,
+                    icon: <CustomerServiceOutlined />,
                 },
             ]
         },
