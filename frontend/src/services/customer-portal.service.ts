@@ -33,6 +33,23 @@ const commercialInvoicesUrl = (path: string): string => {
   return `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/commercial-invoices${path}`;
 };
 
+type StatementExportCell = string | number | null;
+type StatementExportRow = Record<string, StatementExportCell>;
+
+const formatExportDate = (value: string | null | undefined): string | null => {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toISOString().slice(0, 10);
+};
+
+const setWorksheetWidths = (
+  worksheet: import('xlsx').WorkSheet,
+  widths: number[],
+): void => {
+  worksheet['!cols'] = widths.map((wch) => ({ wch }));
+};
+
 export type PortalProductQuery = {
   search?: string;
   category?: string;
@@ -151,6 +168,80 @@ export const downloadPortalStatement = async (
   }
 
   return response.blob();
+};
+
+export const downloadPortalStatementExcel = async (
+  statement: PortalStatement,
+): Promise<void> => {
+  const XLSX = await import('xlsx');
+  const exportDate = new Date().toISOString().slice(0, 10);
+
+  const summaryRows: StatementExportRow[] = [
+    { Metric: 'Buyer ID', Value: statement.buyerId, Currency: null },
+    { Metric: 'Generated At', Value: formatExportDate(statement.generatedAt), Currency: null },
+    { Metric: 'Total', Value: statement.summary.totalForeign, Currency: 'Statement currency' },
+    { Metric: 'Paid', Value: statement.summary.paidForeign, Currency: 'Statement currency' },
+    { Metric: 'Open', Value: statement.summary.openForeign, Currency: 'Statement currency' },
+    { Metric: 'Total VND', Value: statement.summary.totalVnd, Currency: 'VND' },
+    { Metric: 'Paid VND', Value: statement.summary.paidVnd, Currency: 'VND' },
+    { Metric: 'Open VND', Value: statement.summary.openVnd, Currency: 'VND' },
+    { Metric: 'Open invoice count', Value: statement.summary.openInvoiceCount, Currency: null },
+    { Metric: 'Pending receipt count', Value: statement.summary.pendingReceiptCount, Currency: null },
+    { Metric: 'Aging current', Value: statement.summary.agingCurrent, Currency: 'Statement currency' },
+    { Metric: 'Aging 1-30', Value: statement.summary.agingDue1to30, Currency: 'Statement currency' },
+    { Metric: 'Aging 31-60', Value: statement.summary.agingDue31to60, Currency: 'Statement currency' },
+    { Metric: 'Aging 61-90', Value: statement.summary.agingDue61to90, Currency: 'Statement currency' },
+    { Metric: 'Aging >90', Value: statement.summary.agingOverdue90, Currency: 'Statement currency' },
+  ];
+
+  const invoiceRows: StatementExportRow[] = statement.lines.map((line) => ({
+    _id: line._id,
+    invoiceNumber: line.invoiceNumber,
+    status: line.status,
+    currency: line.currency,
+    invoiceDate: formatExportDate(line.invoiceDate),
+    dueDate: formatExportDate(line.dueDate),
+    amountForeign: line.amountForeign,
+    paidAmountForeign: line.paidAmountForeign,
+    openAmountForeign: line.openAmountForeign,
+    amountVnd: line.amountVnd ?? null,
+    paidAmountVnd: line.paidAmountVnd ?? null,
+    openAmountVnd: line.openAmountVnd ?? null,
+    agingBucket: line.agingBucket,
+    daysOverdue: line.daysOverdue,
+    contractNumber: line.contractNumber ?? null,
+    shipmentNumber: line.shipmentNumber ?? null,
+  }));
+
+  const receiptRows: StatementExportRow[] = statement.receipts.map((receipt) => ({
+    _id: receipt._id,
+    receiptNumber: receipt.receiptNumber ?? null,
+    receiptType: receipt.receiptType ?? null,
+    status: receipt.status ?? null,
+    amount: receipt.amount ?? null,
+    currency: receipt.currency ?? null,
+    exchangeRate: receipt.exchangeRate ?? null,
+    accountReceivableId: receipt.accountReceivableId ?? receipt.accountReceivable?._id ?? null,
+    invoiceNumber: receipt.accountReceivable?.invoiceNumber ?? null,
+    invoiceCurrency: receipt.accountReceivable?.currency ?? null,
+    bankReference: receipt.bankReference ?? null,
+    submittedAt: formatExportDate(receipt.submittedAt),
+    rejectionReason: receipt.rejectionReason ?? null,
+  }));
+
+  const workbook = XLSX.utils.book_new();
+  const summarySheet = XLSX.utils.json_to_sheet(summaryRows);
+  const invoiceSheet = XLSX.utils.json_to_sheet(invoiceRows);
+  const receiptSheet = XLSX.utils.json_to_sheet(receiptRows);
+
+  setWorksheetWidths(summarySheet, [28, 22, 20]);
+  setWorksheetWidths(invoiceSheet, [26, 18, 14, 12, 14, 14, 16, 18, 18, 16, 18, 18, 18, 14, 22, 22]);
+  setWorksheetWidths(receiptSheet, [26, 20, 16, 14, 16, 12, 14, 26, 18, 16, 20, 14, 28]);
+
+  XLSX.utils.book_append_sheet(workbook, summarySheet, 'Summary');
+  XLSX.utils.book_append_sheet(workbook, invoiceSheet, 'Invoices');
+  XLSX.utils.book_append_sheet(workbook, receiptSheet, 'Receipts');
+  XLSX.writeFile(workbook, `statement_of_account_${exportDate}.xlsx`, { compression: true });
 };
 
 export const getPortalQuotation = async (

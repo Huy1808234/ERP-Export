@@ -9,6 +9,7 @@ import {
   Card,
   Col,
   DatePicker,
+  Dropdown,
   Empty,
   Form,
   Image,
@@ -29,14 +30,17 @@ import {
   notification,
   theme,
 } from 'antd';
+import type { MenuProps } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import type { Dayjs } from 'dayjs';
 import {
   CheckCircleOutlined,
   ClockCircleOutlined,
   DeleteOutlined,
+  DownOutlined,
   DollarOutlined,
   DownloadOutlined,
+  FileExcelOutlined,
   FileDoneOutlined,
   FileTextOutlined,
   GlobalOutlined,
@@ -64,6 +68,7 @@ import {
   useCustomerPortalProducts,
   useCustomerPortalShipments,
 } from '@/hooks/useCustomerPortal';
+import { downloadPdfBlob } from '@/services/customer-portal.service';
 import { formatPortLabel } from '@/services/port.service';
 import { CommercialDocumentDetailDrawer } from '@/components/guest/portal/orders/CommercialDocumentDetailDrawer';
 import { CommercialDocumentsTable } from '@/components/guest/portal/orders/CommercialDocumentsTable';
@@ -202,7 +207,10 @@ const getCopy = (locale: string) => {
     createdAt: isVietnamese ? 'Ngày tạo' : 'Created',
     invoices: isVietnamese ? 'Hóa đơn công nợ' : 'Receivable invoices',
     receipts: isVietnamese ? 'Biên nhận T/T' : 'T/T receipts',
-    downloadStatement: isVietnamese ? 'Tải statement CSV' : 'Download statement CSV',
+    reference: isVietnamese ? 'Tham chiếu' : 'Reference',
+    downloadStatement: isVietnamese ? 'Tải statement' : 'Download statement',
+    downloadStatementExcel: isVietnamese ? 'Tải Excel (.xlsx)' : 'Download Excel (.xlsx)',
+    downloadStatementCsv: isVietnamese ? 'Tải CSV' : 'Download CSV',
     invoiceNumber: isVietnamese ? 'Số hóa đơn' : 'Invoice No.',
     dueDate: isVietnamese ? 'Hạn thanh toán' : 'Due date',
     paid: isVietnamese ? 'Đã thanh toán' : 'Paid',
@@ -210,6 +218,16 @@ const getCopy = (locale: string) => {
     receiptNumber: isVietnamese ? 'Số biên nhận' : 'Receipt No.',
     bankReference: isVietnamese ? 'Mã ngân hàng' : 'Bank reference',
     submittedAt: isVietnamese ? 'Ngày gửi' : 'Submitted',
+    pendingShort: isVietnamese ? 'chờ duyệt' : 'pending',
+    invalidZeroAmount: isVietnamese ? 'Số tiền bằng 0 không hợp lệ' : 'Invalid zero amount',
+    receiptCurrency: isVietnamese ? 'Tiền tệ biên nhận' : 'Receipt currency',
+    invoiceCurrency: isVietnamese ? 'Tiền tệ hóa đơn' : 'Invoice currency',
+    required: isVietnamese ? 'Bắt buộc' : 'Required',
+    pay: isVietnamese ? 'Thanh toán' : 'Pay',
+    viewReceipts: isVietnamese ? 'Xem biên lai' : 'View receipts',
+    hideReceipts: isVietnamese ? 'Ẩn biên lai' : 'Hide receipts',
+    pendingApproval: isVietnamese ? 'Chờ duyệt' : 'Pending',
+    closed: isVietnamese ? 'Đã đóng' : 'Closed',
     shipmentNumber: isVietnamese ? 'Mã lô hàng' : 'Shipment No.',
     route: isVietnamese ? 'Tuyến' : 'Route',
     eta: 'ETA',
@@ -1734,7 +1752,15 @@ const FinancePage = () => {
   const copy = getCopy(locale);
   const { token } = theme.useToken();
   const [api, contextHolder] = notification.useNotification();
-  const { statement, loading, downloading, error, fetchStatement, downloadStatement } = useCustomerPortalFinance();
+  const {
+    statement,
+    loading,
+    downloading,
+    error,
+    fetchStatement,
+    downloadStatementCsv,
+    downloadStatementExcel,
+  } = useCustomerPortalFinance();
   const { data: session } = useSession();
 
   // Payment modal state
@@ -1742,6 +1768,7 @@ const FinancePage = () => {
   const [selectedInvoice, setSelectedInvoice] = useState<PortalStatementLine | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [expandedInvoiceKeys, setExpandedInvoiceKeys] = useState<string[]>([]);
+  const [downloadingPdfId, setDownloadingPdfId] = useState<string | null>(null);
 
   useEffect(() => {
     void fetchStatement();
@@ -1782,6 +1809,19 @@ const FinancePage = () => {
       CANCELLED: { color: '#94a3b8', background: 'rgba(148,163,184,.16)' },
     };
     const meta = config[normalized] || { color: token.colorTextSecondary, background: token.colorFillSecondary };
+    const labels: Record<string, { en: string; vi: string }> = {
+      PAID: { en: 'Paid', vi: 'Đã thanh toán' },
+      CONFIRMED: { en: 'Confirmed', vi: 'Đã xác nhận' },
+      UNPAID: { en: 'Unpaid', vi: 'Chưa thanh toán' },
+      PARTIAL: { en: 'Partial', vi: 'Thanh toán một phần' },
+      SUBMITTED: { en: 'Submitted', vi: 'Đã gửi' },
+      OVERDUE: { en: 'Overdue', vi: 'Quá hạn' },
+      REJECTED: { en: 'Rejected', vi: 'Từ chối' },
+      CANCELLED: { en: 'Cancelled', vi: 'Đã hủy' },
+    };
+    const label = labels[normalized]
+      ? (locale === 'vi' ? labels[normalized].vi : labels[normalized].en)
+      : normalized;
 
     return (
       <Tag
@@ -1794,13 +1834,16 @@ const FinancePage = () => {
           fontWeight: 700,
         }}
       >
-        {normalized}
+        {label}
       </Tag>
     );
   };
 
   const getReceiptsForInvoice = (invoice: PortalStatementLine): PortalPaymentReceipt[] => (
-    statement?.receipts.filter((receipt) => receipt.accountReceivableId === invoice._id) || []
+    statement?.receipts.filter((receipt) => (
+      receipt.accountReceivableId === invoice._id ||
+      receipt.accountReceivable?._id === invoice._id
+    )) || []
   );
 
   const hasPendingReceipt = (invoice: PortalStatementLine): boolean => (
@@ -1813,11 +1856,33 @@ const FinancePage = () => {
     !hasPendingReceipt(invoice)
   );
 
-  const expandInvoiceReceipts = (invoice: PortalStatementLine) => {
+  const toggleInvoiceReceipts = (invoice: PortalStatementLine) => {
     setExpandedInvoiceKeys((keys) => (
-      keys.includes(invoice._id) ? keys : [...keys, invoice._id]
+      keys.includes(invoice._id)
+        ? keys.filter((key) => key !== invoice._id)
+        : [...keys, invoice._id]
     ));
   };
+
+  const renderMoneyText = (
+    value: number | string | null | undefined,
+    currency: string | null | undefined,
+    options: { strong?: boolean; color?: string; minWidth?: number } = {},
+  ) => (
+    <Text
+      strong={options.strong}
+      style={{
+        color: options.color,
+        display: 'inline-block',
+        fontVariantNumeric: 'tabular-nums',
+        minWidth: options.minWidth || 120,
+        textAlign: 'right',
+        whiteSpace: 'nowrap',
+      }}
+    >
+      {formatMoney(value, currency, locale)}
+    </Text>
+  );
 
   const renderCodeText = (
     value: string | null | undefined,
@@ -1842,6 +1907,29 @@ const FinancePage = () => {
         </Text>
       </Tooltip>
     );
+  };
+
+  const handleInvoicePdfDownload = async (invoice: PortalStatementLine) => {
+    if (!invoice.pdfUrl) return;
+
+    if (!accessToken) {
+      api.error({ title: copy.downloadFailed, description: 'Missing access token' });
+      return;
+    }
+
+    setDownloadingPdfId(invoice._id);
+    try {
+      await downloadPdfBlob(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}${invoice.pdfUrl}`,
+        accessToken,
+        `Invoice_${invoice.invoiceNumber || invoice._id}.pdf`,
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : copy.downloadFailed;
+      api.error({ title: copy.downloadFailed, description: message });
+    } finally {
+      setDownloadingPdfId(null);
+    }
   };
 
   const invoiceColumns: ColumnsType<PortalStatementLine> = [
@@ -1877,23 +1965,27 @@ const FinancePage = () => {
     {
       title: copy.amount,
       align: 'right',
-      width: 140,
-      render: (_value: unknown, record) => formatMoney(record.amountForeign, record.currency, locale),
+      width: 160,
+      onCell: () => ({ style: { whiteSpace: 'nowrap' } }),
+      render: (_value: unknown, record) => renderMoneyText(record.amountForeign, record.currency),
     },
     {
       title: copy.paid,
       align: 'right',
-      width: 140,
-      render: (_value: unknown, record) => formatMoney(record.paidAmountForeign, record.currency, locale),
+      width: 160,
+      onCell: () => ({ style: { whiteSpace: 'nowrap' } }),
+      render: (_value: unknown, record) => renderMoneyText(record.paidAmountForeign, record.currency),
     },
     {
       title: copy.open,
       align: 'right',
-      width: 140,
+      width: 160,
+      onCell: () => ({ style: { whiteSpace: 'nowrap' } }),
       render: (_value: unknown, record) => (
-        <Text strong style={{ color: record.openAmountForeign > 0 ? '#ff4d4f' : '#52c41a' }}>
-          {formatMoney(record.openAmountForeign, record.currency, locale)}
-        </Text>
+        renderMoneyText(record.openAmountForeign, record.currency, {
+          strong: true,
+          color: record.openAmountForeign > 0 ? token.colorErrorText : token.colorSuccessText,
+        })
       ),
     },
     // Cross-linking columns
@@ -1932,8 +2024,8 @@ const FinancePage = () => {
         if (!receipts.length) return <Text type="secondary">-</Text>;
 
         return (
-          <Button size="small" onClick={() => expandInvoiceReceipts(record)}>
-            {receipts.length}{pendingCount ? ` / ${pendingCount} pending` : ''}
+          <Button size="small" onClick={() => toggleInvoiceReceipts(record)}>
+            {receipts.length}{pendingCount ? ` / ${pendingCount} ${copy.pendingShort}` : ''}
           </Button>
         );
       },
@@ -1951,12 +2043,8 @@ const FinancePage = () => {
               type="link"
               size="small"
               icon={<DownloadOutlined />}
-              onClick={() => {
-                const link = document.createElement('a');
-                link.href = `${process.env.NEXT_PUBLIC_BACKEND_URL}${record.pdfUrl}`;
-                link.download = `Invoice_${record.invoiceNumber}.pdf`;
-                link.click();
-              }}
+              loading={downloadingPdfId === record._id}
+              onClick={() => void handleInvoicePdfDownload(record)}
             >
               PDF
             </Button>
@@ -1971,17 +2059,19 @@ const FinancePage = () => {
                 setPaymentModalOpen(true);
               }}
             >
-              {locale === 'vi' ? 'Thanh toán' : 'Pay'}
+              {copy.pay}
             </Button>
           ) : getReceiptsForInvoice(record).length > 0 ? (
-            <Button size="small" onClick={() => expandInvoiceReceipts(record)}>
-              {locale === 'vi' ? 'Xem biên lai' : 'View receipts'}
+            <Button size="small" onClick={() => toggleInvoiceReceipts(record)}>
+              {expandedInvoiceKeys.includes(record._id)
+                ? copy.hideReceipts
+                : copy.viewReceipts}
             </Button>
           ) : (
             <Button size="small" disabled>
               {hasPendingReceipt(record)
-                ? (locale === 'vi' ? 'Chờ duyệt' : 'Pending')
-                : (locale === 'vi' ? 'Đã đóng' : 'Closed')}
+                ? copy.pendingApproval
+                : copy.closed}
             </Button>
           )}
         </Space>
@@ -1991,7 +2081,7 @@ const FinancePage = () => {
 
   const receiptColumns: ColumnsType<PortalPaymentReceipt> = [
     {
-      title: locale === 'vi' ? 'Tham chiếu' : 'Reference',
+      title: copy.reference,
       render: (_value: unknown, record) => (
         <Space orientation="vertical" size={0}>
           <Text strong>{record.accountReceivable?.invoiceNumber || '-'}</Text>
@@ -2024,20 +2114,27 @@ const FinancePage = () => {
     {
       title: copy.amount,
       align: 'right',
+      width: 190,
+      onCell: () => ({ style: { whiteSpace: 'nowrap' } }),
       render: (_value: unknown, record) => {
         const receiptAmount = Number(record.amount || 0);
         const invoiceCurrency = record.accountReceivable?.currency;
         const hasCurrencyMismatch = Boolean(invoiceCurrency && record.currency && invoiceCurrency !== record.currency);
         return (
           <Space orientation="vertical" size={0} style={{ textAlign: 'right' }}>
-            <Text strong type={receiptAmount <= 0 || hasCurrencyMismatch ? 'danger' : undefined}>
-              {formatMoney(record.amount, record.currency, locale)}
-            </Text>
+            {renderMoneyText(record.amount, record.currency, {
+              strong: true,
+              color: receiptAmount <= 0 || hasCurrencyMismatch ? token.colorErrorText : undefined,
+              minWidth: 100,
+            })}
             {receiptAmount <= 0 ? (
-              <Text type="danger" style={{ fontSize: 12 }}>Invalid zero amount</Text>
+              <Text type="danger" style={{ fontSize: 12 }}>{copy.invalidZeroAmount}</Text>
             ) : null}
             {hasCurrencyMismatch ? (
-              <Text type="danger" style={{ fontSize: 12 }}>Invoice currency: {invoiceCurrency}</Text>
+              <Space orientation="vertical" size={0}>
+                <Text type="danger" style={{ fontSize: 12 }}>{copy.receiptCurrency}: {record.currency}</Text>
+                <Text type="secondary" style={{ fontSize: 12 }}>{copy.invoiceCurrency}: {invoiceCurrency}</Text>
+              </Space>
             ) : null}
           </Space>
         );
@@ -2047,14 +2144,17 @@ const FinancePage = () => {
       title: copy.bankReference,
       dataIndex: 'bankReference',
       render: (value: string | null | undefined) => (
-        value ? <Text code>{value}</Text> : <Text type="danger">Required</Text>
+        value ? <Text code>{value}</Text> : <Text type="danger">{copy.required}</Text>
       ),
     },
     { title: copy.submittedAt, dataIndex: 'submittedAt', render: (value: string | null | undefined) => formatDate(value, locale) },
   ];
 
-  const handleDownload = async () => {
-    const result = await downloadStatement();
+  const handleDownloadStatement = async (format: 'excel' | 'csv'): Promise<void> => {
+    const result = format === 'excel'
+      ? await downloadStatementExcel()
+      : await downloadStatementCsv();
+
     if (result.success) {
       api.success({ title: copy.downloadOk });
       return;
@@ -2063,13 +2163,24 @@ const FinancePage = () => {
     api.error({ title: copy.downloadFailed, description: result.message });
   };
 
+  const statementDownloadMenuItems: MenuProps['items'] = [
+    {
+      key: 'excel',
+      icon: <FileExcelOutlined />,
+      label: copy.downloadStatementExcel,
+    },
+    {
+      key: 'csv',
+      icon: <DownloadOutlined />,
+      label: copy.downloadStatementCsv,
+    },
+  ];
+
   const isEmpty = !statement || (statement.lines.length === 0 && statement.receipts.length === 0);
 
   // Determine currency for display
   const defaultCurrency = statement?.lines?.[0]?.currency || 'USD';
   const unallocatedReceipts = statement?.receipts.filter((receipt) => !receipt.accountReceivableId) || [];
-  const hasOpenSummaryBalance = Number(statement?.summary.openForeign || 0) > 0;
-  const openSummaryColor = hasOpenSummaryBalance ? '#ff4d4f' : '#52c41a';
 
   return (
     <PortalShell
@@ -2077,9 +2188,19 @@ const FinancePage = () => {
       subtitle={copy.financeSubtitle}
       icon={<DollarOutlined />}
       extra={(
-        <Button icon={<DownloadOutlined />} loading={downloading} onClick={() => void handleDownload()}>
-          {copy.downloadStatement}
-        </Button>
+        <Dropdown.Button
+          type="primary"
+          icon={<DownOutlined />}
+          loading={downloading}
+          disabled={!statement}
+          menu={{
+            items: statementDownloadMenuItems,
+            onClick: ({ key }) => void handleDownloadStatement(key === 'csv' ? 'csv' : 'excel'),
+          }}
+          onClick={() => void handleDownloadStatement('excel')}
+        >
+          <FileExcelOutlined /> {copy.downloadStatementExcel}
+        </Dropdown.Button>
       )}
     >
       {contextHolder}
@@ -2261,28 +2382,30 @@ const FinancePage = () => {
         ) : null}
       </PageState>
       {/* Payment Advice Modal */}
-      <PaymentAdviceModal
-        open={paymentModalOpen}
-        onClose={() => {
-          setPaymentModalOpen(false);
-          setSelectedInvoice(null);
-        }}
-        onSuccess={() => {
-          void fetchStatement();
-        }}
-        invoice={selectedInvoice}
-        accessToken={accessToken || ''}
-        profile={{
-          companyBankInfo: `Bank Name: VIETCOMBANK
+      {selectedInvoice ? (
+        <PaymentAdviceModal
+          open={paymentModalOpen}
+          onClose={() => {
+            setPaymentModalOpen(false);
+            setSelectedInvoice(null);
+          }}
+          onSuccess={() => {
+            void fetchStatement();
+          }}
+          invoice={selectedInvoice}
+          accessToken={accessToken || ''}
+          profile={{
+            companyBankInfo: `Bank Name: VIETCOMBANK
 Beneficiary: CÔNG TY TNHH XUẤT NHẬP KHẨU ANTIGRAVITY
 Account Number: 0123456789
 Swift Code: BFTVVNVX`,
-          companyName: 'ANTIGRAVITY EXPORT CO., LTD',
-          companyAddress: '123 Export Street, Dist 1, HCMC, Vietnam',
-          vietQrAccountNo: '0123456789',
-          vietQrBankCode: 'VCBVNVX',
-        }}
-      />
+            companyName: 'ANTIGRAVITY EXPORT CO., LTD',
+            companyAddress: '123 Export Street, Dist 1, HCMC, Vietnam',
+            vietQrAccountNo: '0123456789',
+            vietQrBankCode: 'VCBVNVX',
+          }}
+        />
+      ) : null}
     </PortalShell>
   );
 };

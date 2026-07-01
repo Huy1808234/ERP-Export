@@ -4570,7 +4570,8 @@
       "subtotal": "Tạm tính",
       "tax": "Thuế",
       "total": "Tổng",
-      "totalVnd": "Tổng VND"
+      "totalVnd": "Tổng VND",
+      "exchangeRate": "Tỷ giá"
     },
     "status": {
       "DRAFT": "Nháp",
@@ -4643,21 +4644,6 @@
       "grandTotal": "TỔNG CỘNG",
       "bankInfo": "Thông tin ngân hàng",
       "selectBankAccount": "Chọn tài khoản ngân hàng ở form bên trái"
-    },
-    "labels": {
-      "ar": "Công nợ phải thu",
-      "exportDoc": "Bộ chứng từ XK",
-      "status": "Trạng thái",
-      "buyer": "Buyer",
-      "shipment": "Shipment",
-      "contract": "Hợp đồng",
-      "invoiceDate": "Ngày hóa đơn",
-      "dueDate": "Ngày đến hạn",
-      "subtotal": "Tạm tính",
-      "tax": "Thuế",
-      "total": "Tổng",
-      "totalVnd": "Tổng VND",
-      "exchangeRate": "Tỷ giá"
     }
   },
   "AdjustmentModal": {

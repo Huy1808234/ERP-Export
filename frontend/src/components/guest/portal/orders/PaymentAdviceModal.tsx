@@ -15,15 +15,12 @@ import {
   Typography,
   Divider,
   Tabs,
-  Tag,
-  Spin,
   App,
 } from 'antd';
 import {
   UploadOutlined,
   BankOutlined,
   QrcodeOutlined,
-  FileTextOutlined,
   CheckCircleOutlined,
   SyncOutlined,
 } from '@ant-design/icons';
@@ -45,7 +42,7 @@ type PaymentAdviceModalProps = {
   open: boolean;
   onClose: () => void;
   onSuccess: () => void;
-  invoice: PortalStatementLine | null;
+  invoice: PortalStatementLine;
   accessToken: string;
   profile: {
     companyBankInfo?: string;
@@ -225,7 +222,7 @@ export const PaymentAdviceModal = ({
     checkPaymentStatus();
 
     return () => clearInterval(interval);
-  }, [qrPolling, invoice, createdReceiptId, qrPaymentPhase, accessToken, onSuccess]);
+  }, [qrPolling, invoice, createdReceiptId, qrPaymentPhase, accessToken, onSuccess, notification]);
 
   const handleUpload = useCallback(async (file: RcFile) => {
     const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
@@ -260,7 +257,7 @@ export const PaymentAdviceModal = ({
     }
 
     return false;
-  }, [accessToken, form]);
+  }, [accessToken, form, notification]);
 
   const handleRemove = useCallback(() => {
     setAttachmentData(null);
@@ -269,7 +266,18 @@ export const PaymentAdviceModal = ({
   }, [form]);
 
   const handleSubmitSwift = async (values: PaymentFormValues) => {
-    if (!invoice) return;
+    const paymentAmount = Number(values.amountPaidForeign || 0);
+    const openAmount = Number(invoice.openAmountForeign || 0);
+
+    if (paymentAmount <= 0) {
+      notification.error({ title: 'Lỗi', description: 'Số tiền thanh toán phải lớn hơn 0' });
+      return;
+    }
+
+    if (paymentAmount > openAmount) {
+      notification.error({ title: 'Lỗi', description: 'Số tiền thanh toán không được vượt quá số còn lại của hóa đơn' });
+      return;
+    }
 
     if (!attachmentData) {
       notification.error({ title: 'Lỗi', description: 'Vui lòng upload chứng từ thanh toán (Payment Evidence)' });
@@ -282,7 +290,7 @@ export const PaymentAdviceModal = ({
       const payload: PaymentReceiptPayload = {
         receiptType: 'SWIFT',
         accountReceivableId: invoice._id,
-        amount: values.amountPaidForeign,
+        amount: paymentAmount,
         currency: invoice.currency,
         source: 'CUSTOMER_PORTAL_UPLOAD',
         transactionDate: values.paymentDate.format('YYYY-MM-DD'),
@@ -322,17 +330,29 @@ export const PaymentAdviceModal = ({
   };
 
   const handlePayWithQR = async () => {
-    if (!invoice) return;
-
     // Phase 1: Create receipt record
     if (qrPaymentPhase === 'idle') {
-      setQrPaymentPhase('created');
-
       try {
         // VietQR payment - no file required, status will be SUBMITTED
         // Convert to VND because SePay/VietQR only supports VND
         const paymentCurrency = 'VND';
         const conversion = convertToVnd(invoice.openAmountForeign, invoice.currency);
+
+        if (conversion.amount <= 0) {
+          notification.error({ title: 'Lỗi', description: 'Số tiền thanh toán phải lớn hơn 0' });
+          return;
+        }
+
+        if (invoice.currency !== 'VND' && (!conversion.exchangeRate || conversion.exchangeRate <= 0)) {
+          notification.error({
+            title: 'Thiếu tỷ giá',
+            description: 'Không thể tạo VietQR cho hóa đơn ngoại tệ khi chưa có tỷ giá chuyển khoản hợp lệ.',
+          });
+          return;
+        }
+
+        setQrPaymentPhase('created');
+
         const payload: PaymentReceiptPayload = {
           receiptType: 'VIETQR',
           accountReceivableId: invoice._id,
@@ -400,8 +420,6 @@ export const PaymentAdviceModal = ({
     setCreatedReceiptId(null);
     onClose();
   };
-
-  if (!invoice) return null;
 
   // Generate VietQR data
   // SePay matches the transfer by the TTR-... receipt number embedded in the
@@ -634,11 +652,24 @@ export const PaymentAdviceModal = ({
             <Form.Item
               label="Số tiền thanh toán (Amount Paid)"
               name="amountPaidForeign"
-              rules={[{ required: true, message: 'Vui lòng nhập số tiền' }]}
+              rules={[
+                { required: true, message: 'Vui lòng nhập số tiền' },
+                {
+                  validator: async (_rule, value: number | null | undefined) => {
+                    const paymentAmount = Number(value || 0);
+                    if (paymentAmount <= 0) {
+                      throw new Error('Số tiền thanh toán phải lớn hơn 0');
+                    }
+                    if (paymentAmount > Number(invoice.openAmountForeign || 0)) {
+                      throw new Error('Số tiền thanh toán không được vượt quá số còn lại');
+                    }
+                  },
+                },
+              ]}
             >
               <InputNumber
                 style={{ width: '100%' }}
-                min={0}
+                min={0.01}
                 step={0.01}
                 precision={2}
                 prefix={invoice.currency}
@@ -775,7 +806,7 @@ export const PaymentAdviceModal = ({
       onCancel={handleClose}
       width={720}
       footer={null}
-      destroyOnHidden
+      forceRender
     >
       <Form
         form={form}

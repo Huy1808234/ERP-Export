@@ -4,6 +4,7 @@ import { getAccessToken } from '@/lib/auth-token';
 import {
   createPortalInquiry,
   downloadPortalStatement,
+  downloadPortalStatementExcel,
   getPortalCurrencies,
   getPortalNotifications,
   getPortalOrders,
@@ -250,7 +251,7 @@ export const useCustomerPortalFinance = () => {
     }
   }, [session]);
 
-  const downloadStatement = useCallback(async (): Promise<PortalActionResult> => {
+  const downloadStatementCsv = useCallback(async (): Promise<PortalActionResult> => {
     const accessToken = getAccessToken(session);
     if (!accessToken) return { success: false, message: missingTokenMessage };
 
@@ -274,7 +275,30 @@ export const useCustomerPortalFinance = () => {
     }
   }, [session]);
 
-  return { statement, loading, downloading, error, fetchStatement, downloadStatement };
+  const downloadStatementExcel = useCallback(async (): Promise<PortalActionResult> => {
+    if (!statement) return { success: false, message: 'Statement data is not loaded' };
+
+    setDownloading(true);
+    try {
+      await downloadPortalStatementExcel(statement);
+      return { success: true };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to download statement';
+      return { success: false, message };
+    } finally {
+      setDownloading(false);
+    }
+  }, [statement]);
+
+  return {
+    statement,
+    loading,
+    downloading,
+    error,
+    fetchStatement,
+    downloadStatementCsv,
+    downloadStatementExcel,
+  };
 };
 
 export const useCustomerPortalShipments = () => {

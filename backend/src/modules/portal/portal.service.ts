@@ -98,6 +98,7 @@ import {
 } from './dto/query-commercial-document.dto';
 import { RequestSignatureInvitationDto } from '@/modules/sales-contracts/dto/request-signature-invitation.dto';
 import { SalesContractsService } from '@/modules/sales-contracts/sales-contracts.service';
+import { CommercialInvoice } from '@/modules/commercial-invoices/entities/commercial-invoice.entity';
 
 /**
  * Roles allowed for admin support ticket operations.
@@ -342,6 +343,8 @@ export class PortalService {
     private readonly salesContractRepository: Repository<SalesContract>,
     @InjectRepository(Shipment)
     private readonly shipmentRepository: Repository<Shipment>,
+    @InjectRepository(CommercialInvoice)
+    private readonly commercialInvoiceRepository: Repository<CommercialInvoice>,
     @InjectRepository(AuditLog)
     private readonly auditRepository: Repository<AuditLog>,
     private readonly filesService: FilesService,
@@ -1100,13 +1103,21 @@ export class PortalService {
     return { bucket: 'OVERDUE_90' as AgingBucket, daysOverdue: daysDiff };
   }
 
-  private toStatementLine(row: AccountReceivable): PortalStatementLine {
+  private toStatementLine(
+    row: AccountReceivable,
+    commercialInvoiceById: Map<string, CommercialInvoice> = new Map(),
+  ): PortalStatementLine {
     const amountForeign = new Decimal(row.amountForeign || 0);
     const paidAmountForeign = new Decimal(row.paidAmountForeign || 0);
     const amountVnd = new Decimal(row.amountVnd || 0);
     const paidAmountVnd = new Decimal(row.paidAmountVnd || 0);
     const isPaid = row.status === ARStatus.PAID || row.status === ARStatus.CANCELLED;
     const { bucket, daysOverdue } = this.calculateAgingBucket(row.dueDate, isPaid);
+    const commercialInvoice = row.commercialInvoice_id
+      ? commercialInvoiceById.get(row.commercialInvoice_id)
+      : undefined;
+    const shipment = commercialInvoice?.shipment;
+    const salesContract = commercialInvoice?.salesContract || row.salesContract;
 
     return {
       _id: row._id,
@@ -1131,10 +1142,10 @@ export class PortalService {
       // Phase 1: Aging & Cross-linking
       agingBucket: bucket,
       daysOverdue,
-      shipmentNumber: null,
-      shipmentId: null,
-      contractNumber: row.salesContract?.contractNumber || null,
-      contractId: row.salesContractId || null,
+      shipmentNumber: shipment?.shipmentNumber || null,
+      shipmentId: commercialInvoice?.shipment_id || null,
+      contractNumber: salesContract?.contractNumber || null,
+      contractId: commercialInvoice?.salesContract_id || row.salesContractId || null,
       pdfUrl: row.commercialInvoice_id ? `/api/v1/commercial-invoices/${row.commercialInvoice_id}/export-pdf` : null,
     };
   }
@@ -1904,8 +1915,24 @@ export class PortalService {
       relations: ['salesContract', 'allocations'],
       order: { dueDate: 'ASC', invoiceDate: 'ASC' },
     });
+    const commercialInvoiceIds = [
+      ...new Set(
+        receivables
+          .map((row) => row.commercialInvoice_id)
+          .filter((recordId): recordId is string => Boolean(recordId)),
+      ),
+    ];
+    const commercialInvoices = commercialInvoiceIds.length
+      ? await this.commercialInvoiceRepository.find({
+          where: { _id: In(commercialInvoiceIds), buyer_id: buyer.partnerId },
+          relations: ['shipment', 'salesContract'],
+        })
+      : [];
+    const commercialInvoiceById = new Map(
+      commercialInvoices.map((invoice) => [invoice._id, invoice]),
+    );
     const receipts = await this.findPaymentReceipts(buyer);
-    const lines = receivables.map((row) => this.toStatementLine(row));
+    const lines = receivables.map((row) => this.toStatementLine(row, commercialInvoiceById));
     
     // Calculate aging buckets
     const agingSummary = {

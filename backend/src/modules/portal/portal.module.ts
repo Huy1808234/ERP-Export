@@ -14,6 +14,7 @@ import { Shipment } from '@/modules/shipments/entities/shipment.entity';
 import { User as UserEntity } from '@/modules/users/entities/user.entity';
 import { TradeFinanceModule } from '@/modules/trade-finance/trade-finance.module';
 import { AuditLog } from '@/modules/audit-logs/entities/audit-log.entity';
+import { CommercialInvoice } from '@/modules/commercial-invoices/entities/commercial-invoice.entity';
 import { SalesContractsModule } from '@/modules/sales-contracts/sales-contracts.module';
 import { CustomerController } from './customer.controller';
 import { PortalController } from './portal.controller';
@@ -37,6 +38,7 @@ import { PortalSupportTicket } from './entities/portal-support-ticket.entity';
       SalesContract,
       Shipment,
       AuditLog,
+      CommercialInvoice,
       PortalNotification,
       PortalPaymentReceipt,
       PortalSupportMessage,

@@ -4,16 +4,11 @@ import { ConfigService } from '@nestjs/config';
 import { ValidationPipe } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { resolve } from 'path';
-import { types as pgTypes } from 'pg';
-
-const POSTGRES_TIMESTAMP_WITHOUT_TIME_ZONE_OID = 1114;
-
-// pgTypes.setTypeParser(POSTGRES_TIMESTAMP_WITHOUT_TIME_ZONE_OID, (value: string) => new Date(`${value}Z`));
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const configService = app.get(ConfigService);
-  const port = configService.get('PORT');
+  const port = configService.get<number>('PORT', 8080);
 
   // Senior Fix: Use resolve to guarantee absolute path and log it for debugging
   const imagesPath = resolve(process.cwd(), 'images');
@@ -47,5 +42,7 @@ async function bootstrap() {
   await app.listen(port, '0.0.0.0');
   console.log(`[Server] Listening at: http://localhost:${port}/api/v1`);
 }
-bootstrap();
-// Forced restart for route registration
+bootstrap().catch((error: unknown) => {
+  console.error('[Server] Failed to start', error);
+  process.exit(1);
+});
