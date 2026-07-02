@@ -2,7 +2,7 @@
 
 import { Form, Input, Modal, Select, App } from 'antd';
 import { useSession } from 'next-auth/react';
-import { useLocale, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 import { useMemo, useState } from 'react';
 import { getAccessToken } from '@/lib/auth-token';
 import { countryService } from '@/services/country.service';
@@ -17,10 +17,10 @@ interface QuickAddCountryModalProps {
 export const QuickAddCountryModal = ({ open, onCancel, onSuccess }: QuickAddCountryModalProps) => {
   const { data: session } = useSession();
   const { notification } = App.useApp();
-  const locale = useLocale();
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const tPartner = useTranslations('Partner');
+  const tCountries = useTranslations('Countries');
 
   const regionOptions = useMemo(() => buildRegionOptions(tPartner), [tPartner]);
 
@@ -42,7 +42,7 @@ export const QuickAddCountryModal = ({ open, onCancel, onSuccess }: QuickAddCoun
       const res = await countryService.create(payload, accessToken);
       if (res.data) {
         notification.success({
-          title: locale === 'vi' ? 'Thêm quốc gia thành công' : 'Country added successfully',
+          title: tCountries('messages.quickAddSuccess'),
           description: `${payload.nameVi} (${codeUpper})`
         });
         await loadCountries(accessToken, true);
@@ -51,7 +51,7 @@ export const QuickAddCountryModal = ({ open, onCancel, onSuccess }: QuickAddCoun
         onCancel();
       } else {
         notification.error({
-          title: locale === 'vi' ? 'Không thể thêm quốc gia' : 'Failed to add country',
+          title: tCountries('messages.quickAddError'),
           description: res.message,
         });
       }
@@ -64,7 +64,7 @@ export const QuickAddCountryModal = ({ open, onCancel, onSuccess }: QuickAddCoun
 
   return (
     <Modal
-      title={locale === 'vi' ? 'Thêm Quốc Gia Mới' : 'Add New Country'}
+      title={tCountries('modal.createTitle')}
       open={open}
       onCancel={() => {
         form.resetFields();
@@ -72,39 +72,39 @@ export const QuickAddCountryModal = ({ open, onCancel, onSuccess }: QuickAddCoun
       }}
       onOk={handleSave}
       confirmLoading={loading}
-      okText={locale === 'vi' ? 'Thêm' : 'Add'}
-      cancelText={locale === 'vi' ? 'Hủy' : 'Cancel'}
+      okText={tCountries('actions.create')}
+      cancelText={tCountries('actions.cancel')}
       destroyOnHidden
     >
       <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
         <Form.Item
           name="code"
-          label={locale === 'vi' ? 'Mã quốc gia (2 ký tự)' : 'Country Code (2 chars)'}
+          label={tCountries('form.code')}
           rules={[
-            { required: true, message: locale === 'vi' ? 'Nhập mã quốc gia' : 'Enter country code' },
-            { len: 2, message: locale === 'vi' ? 'Mã quốc gia cần chính xác 2 ký tự' : 'Code must be exactly 2 characters' },
-            { pattern: /^[A-Z]{2}$/i, message: locale === 'vi' ? 'Mã quốc gia chỉ gồm chữ cái' : 'Code must be letters only' }
+            { required: true, message: tCountries('validation.codeRequired') },
+            { len: 2, message: tCountries('validation.codeLength') },
+            { pattern: /^[A-Z]{2}$/i, message: tCountries('validation.codeLetters') }
           ]}
         >
-          <Input placeholder="VD: RU, CA, SG" style={{ textTransform: 'uppercase' }} maxLength={2} />
+          <Input placeholder={tCountries('placeholders.code')} style={{ textTransform: 'uppercase' }} maxLength={2} />
         </Form.Item>
         <Form.Item
           name="name"
-          label={locale === 'vi' ? 'Tên tiếng Anh / tên chuẩn' : 'English Name'}
-          rules={[{ required: true, message: locale === 'vi' ? 'Nhập tên tiếng Anh' : 'Enter English name' }]}
+          label={tCountries('form.name')}
+          rules={[{ required: true, message: tCountries('validation.nameRequired') }]}
         >
-          <Input placeholder="VD: Russian Federation" />
+          <Input placeholder={tCountries('placeholders.name')} />
         </Form.Item>
         <Form.Item
           name="nameVi"
-          label={locale === 'vi' ? 'Tên tiếng Việt' : 'Vietnamese Name'}
-          rules={[{ required: true, message: locale === 'vi' ? 'Nhập tên tiếng Việt' : 'Enter Vietnamese name' }]}
+          label={tCountries('form.nameVi')}
+          rules={[{ required: true, message: tCountries('validation.nameViRequired') }]}
         >
-          <Input placeholder="VD: Liên Bang Nga" />
+          <Input placeholder={tCountries('placeholders.nameVi')} />
         </Form.Item>
         <Form.Item
           name="region"
-          label={locale === 'vi' ? 'Vùng thị trường' : 'Market Region'}
+          label={tCountries('form.region')}
           initialValue="OTHER"
         >
           <Select options={regionOptions} />

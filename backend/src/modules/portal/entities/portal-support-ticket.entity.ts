@@ -33,6 +33,7 @@ export enum PortalTicketPriority {
 export enum PortalTicketStatus {
   OPEN = 'OPEN',
   IN_PROGRESS = 'IN_PROGRESS',
+  WAITING_INTERNAL = 'WAITING_INTERNAL',
   WAITING_BUYER = 'WAITING_BUYER',
   RESOLVED = 'RESOLVED',
   CLOSED = 'CLOSED',
@@ -45,11 +46,20 @@ export type PortalAttachment = {
 };
 
 export type PortalTicketAuditEvent = {
-  action: 'CREATED' | 'MESSAGE_ADDED' | 'STATUS_CHANGED' | 'CLOSED';
+  action:
+    | 'CREATED'
+    | 'MESSAGE_ADDED'
+    | 'INTERNAL_NOTE_ADDED'
+    | 'STATUS_CHANGED'
+    | 'ASSIGNED'
+    | 'UNASSIGNED'
+    | 'CLOSED';
   username: string;
   at: string;
   fromStatus?: PortalTicketStatus | null;
   toStatus?: PortalTicketStatus | null;
+  fromAssigneeUsername?: string | null;
+  toAssigneeUsername?: string | null;
   note?: string | null;
 };
 

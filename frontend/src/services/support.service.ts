@@ -1,5 +1,12 @@
 import { sendRequest } from '@/lib/api-client';
-import { SupportMessage, SupportTicket, TicketFormValues, TicketStatus } from '@/types/support.type';
+import {
+  SupportMessage,
+  SupportTicket,
+  TicketCategory,
+  TicketFormValues,
+  TicketPriority,
+  TicketStatus,
+} from '@/types/support.type';
 import { API_ROUTES } from '@/constants/api-routes';
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
@@ -9,6 +16,15 @@ type AdminSupportTicketList = {
   results: SupportTicket[];
   totalItems: number;
   totalPages: number;
+};
+export type AdminSupportTicketQuery = {
+  current: number;
+  pageSize: number;
+  search?: string;
+  status?: TicketStatus;
+  category?: TicketCategory;
+  priority?: TicketPriority;
+  assignedToUsername?: string;
 };
 
 export const supportService = {
@@ -22,9 +38,9 @@ export const supportService = {
     });
   },
 
-  fetchTicketDetail: async (id: string, headers: AuthHeaders): Promise<IBackendRes<SupportTicket>> => {
+  fetchTicketDetail: async (_id: string, headers: AuthHeaders): Promise<IBackendRes<SupportTicket>> => {
     return sendRequest<IBackendRes<SupportTicket>>({
-      url: `${BACKEND_URL}${API_ROUTES.PORTAL.SUPPORT_TICKET_DETAIL(id)}`,
+      url: `${BACKEND_URL}${API_ROUTES.PORTAL.SUPPORT_TICKET_DETAIL(_id)}`,
       method: 'GET',
       headers,
     });
@@ -39,9 +55,9 @@ export const supportService = {
     });
   },
 
-  addMessage: async (ticketId: string, message: string, headers: AuthHeaders): Promise<IBackendRes<SupportMessage>> => {
+  addMessage: async (_id: string, message: string, headers: AuthHeaders): Promise<IBackendRes<SupportMessage>> => {
     return sendRequest<IBackendRes<SupportMessage>>({
-      url: `${BACKEND_URL}${API_ROUTES.PORTAL.SUPPORT_TICKET_MESSAGES(ticketId)}`,
+      url: `${BACKEND_URL}${API_ROUTES.PORTAL.SUPPORT_TICKET_MESSAGES(_id)}`,
       method: 'POST',
       headers,
       body: { message },
@@ -49,12 +65,12 @@ export const supportService = {
   },
 
   updateTicketStatus: async (
-    ticketId: string,
+    _id: string,
     status: TicketStatus,
     headers: AuthHeaders,
   ): Promise<IBackendRes<SupportTicket>> => {
     return sendRequest<IBackendRes<SupportTicket>>({
-      url: `${BACKEND_URL}${API_ROUTES.PORTAL.SUPPORT_TICKET_STATUS(ticketId)}`,
+      url: `${BACKEND_URL}${API_ROUTES.PORTAL.SUPPORT_TICKET_STATUS(_id)}`,
       method: 'PATCH',
       headers,
       body: { status },
@@ -64,7 +80,7 @@ export const supportService = {
   // === ADMIN (STAFF) ===
   
   fetchAdminTickets: async (
-    params: { current: number; pageSize: number; status?: string },
+    params: AdminSupportTicketQuery,
     headers: AuthHeaders,
   ): Promise<IBackendRes<AdminSupportTicketList>> => {
     return sendRequest<IBackendRes<AdminSupportTicketList>>({
@@ -75,35 +91,53 @@ export const supportService = {
     });
   },
 
-  fetchAdminTicketDetail: async (id: string, headers: AuthHeaders): Promise<IBackendRes<SupportTicket>> => {
+  fetchAdminTicketDetail: async (_id: string, headers: AuthHeaders): Promise<IBackendRes<SupportTicket>> => {
     return sendRequest<IBackendRes<SupportTicket>>({
-      url: `${BACKEND_URL}/api/v1/portal/admin/support/tickets/${id}`,
+      url: `${BACKEND_URL}/api/v1/portal/admin/support/tickets/${_id}`,
       method: 'GET',
       headers,
     });
   },
 
   addAdminMessage: async (
-    ticketId: string,
+    _id: string,
     message: string,
     headers: AuthHeaders,
+    visibility: 'PUBLIC' | 'INTERNAL' = 'PUBLIC',
   ): Promise<IBackendRes<SupportMessage>> => {
     return sendRequest<IBackendRes<SupportMessage>>({
-      url: `${BACKEND_URL}/api/v1/portal/admin/support/tickets/${ticketId}/messages`,
+      url: `${BACKEND_URL}/api/v1/portal/admin/support/tickets/${_id}/messages`,
       method: 'POST',
       headers,
-      body: { message },
+      body: { message, visibility },
+    });
+  },
+
+  assignAdminTicket: async (
+    _id: string,
+    assignedToUsername: string | null,
+    headers: AuthHeaders,
+    note?: string,
+  ): Promise<IBackendRes<SupportTicket>> => {
+    return sendRequest<IBackendRes<SupportTicket>>({
+      url: `${BACKEND_URL}/api/v1/portal/admin/support/tickets/${_id}/assignee`,
+      method: 'PATCH',
+      headers,
+      body: {
+        ...(assignedToUsername ? { assignedToUsername } : {}),
+        ...(note ? { note } : {}),
+      },
     });
   },
 
   updateAdminTicketStatus: async (
-    ticketId: string,
+    _id: string,
     status: TicketStatus,
     headers: AuthHeaders,
     note?: string,
   ): Promise<IBackendRes<SupportTicket>> => {
     return sendRequest<IBackendRes<SupportTicket>>({
-      url: `${BACKEND_URL}/api/v1/portal/admin/support/tickets/${ticketId}/status`,
+      url: `${BACKEND_URL}/api/v1/portal/admin/support/tickets/${_id}/status`,
       method: 'PATCH',
       headers,
       body: {

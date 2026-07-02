@@ -27,6 +27,7 @@ import {
 import dayjs from 'dayjs';
 import type { Dayjs } from 'dayjs';
 import type { UploadFile, RcFile } from 'antd/es/upload';
+import { useLocale, useTranslations } from 'next-intl';
 import {
   submitPaymentReceipt,
   uploadPaymentAttachment,
@@ -77,6 +78,8 @@ export const PaymentAdviceModal = ({
 }: PaymentAdviceModalProps) => {
   const [form] = Form.useForm<PaymentFormValues>();
   const { notification } = App.useApp();
+  const t = useTranslations('CustomerPortal.paymentAdvice');
+  const locale = useLocale();
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -97,6 +100,7 @@ export const PaymentAdviceModal = ({
   const [createdReceiptId, setCreatedReceiptId] = useState<string | null>(null);
   const [createdReceiptNumber, setCreatedReceiptNumber] = useState<string | null>(null);
   const [currencies, setCurrencies] = useState<PortalCurrency[]>([]);
+  const numberLocale = locale === 'vi' ? 'vi-VN' : 'en-US';
 
   // Load currencies (with exchange rates) when modal opens
   useEffect(() => {
@@ -182,8 +186,8 @@ export const PaymentAdviceModal = ({
         setQrPolling(false);
         setQrPaymentPhase('failed');
         notification.warning({
-          title: 'Hết thời gian chờ',
-          description: 'Không nhận được xác nhận thanh toán. Vui lòng kiểm tra với ngân hàng.',
+          title: t('timeoutTitle'),
+          description: t('timeoutDescription'),
         });
         return;
       }
@@ -200,16 +204,16 @@ export const PaymentAdviceModal = ({
           setQrPaymentPhase('confirmed');
           setQrPolling(false);
           notification.success({
-            title: 'Thanh toán thành công!',
-            description: `Đã ghi nhận thanh toán qua VietQR cho hóa đơn ${invoice.invoiceNumber}.`,
+            title: t('qrSuccessTitle'),
+            description: t('qrSuccessDescription', { invoiceNumber: invoice.invoiceNumber }),
           });
           onSuccess();
         } else if (response.data?.status === 'REJECTED' || response.error) {
           setQrPolling(false);
           setQrPaymentPhase('failed');
           notification.error({
-            title: 'Thanh toán không thành công',
-            description: response.message || 'Vui lòng thử lại.',
+            title: t('qrFailedTitle'),
+            description: response.message || t('retryDescription'),
           });
         }
         // If status is still SUBMITTED, continue polling
@@ -227,12 +231,12 @@ export const PaymentAdviceModal = ({
   const handleUpload = useCallback(async (file: RcFile) => {
     const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
     if (!allowedTypes.includes(file.type)) {
-      notification.error({ title: 'Lỗi', description: 'Chỉ chấp nhận file PDF, JPG, PNG' });
+      notification.error({ title: t('errorTitle'), description: t('fileTypeError') });
       return false;
     }
 
     if (file.size > 10 * 1024 * 1024) {
-      notification.error({ title: 'Lỗi', description: 'File quá lớn. Kích thước tối đa là 10MB' });
+      notification.error({ title: t('errorTitle'), description: t('fileSizeError') });
       return false;
     }
 
@@ -247,9 +251,9 @@ export const PaymentAdviceModal = ({
       setAttachmentData(result);
       form.setFieldValue('attachmentUrl', result.url);
       form.setFieldValue('attachmentFilename', result.filename);
-      notification.success({ title: 'Thành công', description: 'Upload thành công' });
+      notification.success({ title: t('successTitle'), description: t('uploadSuccess') });
     } catch (error) {
-      notification.error({ title: 'Lỗi', description: 'Upload thất bại. Vui lòng thử lại' });
+      notification.error({ title: t('errorTitle'), description: t('uploadFailed') });
       console.error('Upload error:', error);
     } finally {
       setUploading(false);
@@ -270,17 +274,17 @@ export const PaymentAdviceModal = ({
     const openAmount = Number(invoice.openAmountForeign || 0);
 
     if (paymentAmount <= 0) {
-      notification.error({ title: 'Lỗi', description: 'Số tiền thanh toán phải lớn hơn 0' });
+      notification.error({ title: t('errorTitle'), description: t('amountPositive') });
       return;
     }
 
     if (paymentAmount > openAmount) {
-      notification.error({ title: 'Lỗi', description: 'Số tiền thanh toán không được vượt quá số còn lại của hóa đơn' });
+      notification.error({ title: t('errorTitle'), description: t('amountExceedsOpen') });
       return;
     }
 
     if (!attachmentData) {
-      notification.error({ title: 'Lỗi', description: 'Vui lòng upload chứng từ thanh toán (Payment Evidence)' });
+      notification.error({ title: t('errorTitle'), description: t('attachmentRequired') });
       return;
     }
 
@@ -307,13 +311,13 @@ export const PaymentAdviceModal = ({
       const result = await submitPaymentReceipt(accessToken, payload);
 
       if (result.error) {
-        notification.error({ title: 'Lỗi', description: result.message || 'Có lỗi xảy ra' });
+        notification.error({ title: t('errorTitle'), description: result.message || t('genericError') });
         return;
       }
 
       notification.success({
-        title: 'Thành công!',
-        description: `Đã gửi chứng từ thanh toán. Mã số: ${result.data?.receiptNumber}. Kế toán sẽ xác nhận trong 1-3 ngày làm việc.`,
+        title: t('successTitle'),
+        description: t('swiftSubmitted', { receiptNumber: result.data?.receiptNumber || '-' }),
       });
 
       form.resetFields();
@@ -322,7 +326,7 @@ export const PaymentAdviceModal = ({
       onSuccess();
       onClose();
     } catch (error) {
-      notification.error({ title: 'Lỗi', description: 'Có lỗi xảy ra. Vui lòng thử lại' });
+      notification.error({ title: t('errorTitle'), description: t('genericRetry') });
       console.error('Submit error:', error);
     } finally {
       setLoading(false);
@@ -339,14 +343,14 @@ export const PaymentAdviceModal = ({
         const conversion = convertToVnd(invoice.openAmountForeign, invoice.currency);
 
         if (conversion.amount <= 0) {
-          notification.error({ title: 'Lỗi', description: 'Số tiền thanh toán phải lớn hơn 0' });
+          notification.error({ title: t('errorTitle'), description: t('amountPositive') });
           return;
         }
 
         if (invoice.currency !== 'VND' && (!conversion.exchangeRate || conversion.exchangeRate <= 0)) {
           notification.error({
-            title: 'Thiếu tỷ giá',
-            description: 'Không thể tạo VietQR cho hóa đơn ngoại tệ khi chưa có tỷ giá chuyển khoản hợp lệ.',
+            title: t('missingRateTitle'),
+            description: t('missingRateDescription'),
           });
           return;
         }
@@ -371,8 +375,8 @@ export const PaymentAdviceModal = ({
 
         if (result.error) {
           notification.error({
-            title: 'Lỗi',
-            description: result.message || 'Có lỗi xảy ra',
+            title: t('errorTitle'),
+            description: result.message || t('genericError'),
           });
           setQrPaymentPhase('failed');
           return;
@@ -381,14 +385,14 @@ export const PaymentAdviceModal = ({
         setCreatedReceiptId(result.data?._id || null);
         setCreatedReceiptNumber(result.data?.receiptNumber || null);
         notification.info({
-          title: 'Đã tạo yêu cầu thanh toán',
-          description: `Mã giao dịch: ${result.data?.receiptNumber || ''}. Vui lòng quét mã QR bằng ứng dụng ngân hàng và bấm "Đã thanh toán" sau khi hoàn tất.`,
+          title: t('qrRequestCreatedTitle'),
+          description: t('qrRequestCreatedDescription', { receiptNumber: result.data?.receiptNumber || '-' }),
           duration: 8,
         });
       } catch (error) {
         notification.error({
-          title: 'Lỗi',
-          description: 'Có lỗi xảy ra. Vui lòng thử lại',
+          title: t('errorTitle'),
+          description: t('genericRetry'),
         });
         console.error('QR Payment error:', error);
         setQrPaymentPhase('failed');
@@ -402,8 +406,8 @@ export const PaymentAdviceModal = ({
       setQrPolling(true);
 
       notification.info({
-        title: 'Đang chờ xác nhận',
-        description: 'Đang kiểm tra với ngân hàng. Vui lòng đợi trong giây lát...',
+        title: t('waitingConfirmTitle'),
+        description: t('waitingConfirmDescription'),
         duration: 3,
       });
       return;
@@ -424,7 +428,7 @@ export const PaymentAdviceModal = ({
   // Generate VietQR data
   // SePay matches the transfer by the TTR-... receipt number embedded in the
   // transfer `content`. We only have a receipt number AFTER the customer has
-  // hit "Tạo yêu cầu thanh toán", so the QR is rendered with the receipt
+  // click "Create payment request", so the QR is rendered with the receipt
   // number when available; otherwise we show the QR but prompt the customer
   // to create the request first.
   const generateVietQR = () => {

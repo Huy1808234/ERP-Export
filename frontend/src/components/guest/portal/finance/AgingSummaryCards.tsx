@@ -1,12 +1,13 @@
 'use client';
 
-import { Card, Col, Row, Statistic, Typography } from 'antd';
+import { Card, Col, Row, Typography } from 'antd';
 import {
   CheckCircleOutlined,
   ClockCircleOutlined,
   WarningOutlined,
   CloseCircleOutlined,
 } from '@ant-design/icons';
+import { useTranslations } from 'next-intl';
 import type { PortalStatement } from '@/types/customer-portal';
 
 const { Text } = Typography;
@@ -34,8 +35,6 @@ const formatMoney = (
 const agingConfig = [
   {
     key: 'agingCurrent',
-    label: 'Current',
-    labelVi: 'Trong hạn',
     color: '#52c41a',
     bgColor: 'linear-gradient(135deg, #52c41a15, #52c41a05)',
     borderColor: '#52c41a20',
@@ -43,8 +42,6 @@ const agingConfig = [
   },
   {
     key: 'agingDue1to30',
-    label: 'Due 1-30 days',
-    labelVi: 'Quá hạn 1-30 ngày',
     color: '#faad14',
     bgColor: 'linear-gradient(135deg, #faad1415, #faad1405)',
     borderColor: '#faad1420',
@@ -52,8 +49,6 @@ const agingConfig = [
   },
   {
     key: 'agingDue31to60',
-    label: 'Due 31-60 days',
-    labelVi: 'Quá hạn 31-60 ngày',
     color: '#fa8c16',
     bgColor: 'linear-gradient(135deg, #fa8c1615, #fa8c1605)',
     borderColor: '#fa8c1620',
@@ -61,8 +56,6 @@ const agingConfig = [
   },
   {
     key: 'agingOverdue90',
-    label: 'Overdue >90 days',
-    labelVi: 'Quá hạn >90 ngày',
     color: '#ff4b4a',
     bgColor: 'linear-gradient(135deg, #ff4b4a15, #ff4b4a05)',
     borderColor: '#ff4b4a20',
@@ -75,7 +68,7 @@ export const AgingSummaryCards = ({
   defaultCurrency,
   locale,
 }: AgingSummaryCardsProps) => {
-  const isVietnamese = locale === 'vi';
+  const t = useTranslations('CustomerPortal');
   const hasData = agingConfig.some(
     (item) => (summary[item.key] ?? 0) > 0,
   );
@@ -121,7 +114,7 @@ export const AgingSummaryCards = ({
                   type="secondary"
                   style={{ display: 'block', fontSize: 12, marginBottom: 4 }}
                 >
-                  {isVietnamese ? item.labelVi : item.label}
+                  {t(`agingBuckets.${item.key}`)}
                 </Text>
                 <Text
                   strong

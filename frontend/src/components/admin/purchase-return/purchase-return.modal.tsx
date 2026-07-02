@@ -31,7 +31,7 @@ import {
   ShopOutlined,
   SolutionOutlined,
 } from '@ant-design/icons';
-import { useLocale, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 import { notification } from '@/providers/antd-static';
 import { useSession } from 'next-auth/react';
 import { sendRequest } from '@/lib/api-client';
@@ -44,53 +44,6 @@ import type { PurchaseReturnLineCondition, PurchaseReturnReasonCode } from '@/ty
 const { Text } = Typography;
 
 const RETURNABLE_PO_STATUSES = 'PARTIAL_RECEIPT,RECEIVED,COMPLETED';
-
-type PurchaseReturnModalFallbackKey =
-  | 'modal.form.purchaseOrder'
-  | 'modal.form.purchaseOrderPlaceholder'
-  | 'modal.form.vendor'
-  | 'modal.form.receivedHint'
-  | 'modal.rules.purchaseOrderRequired'
-  | 'modal.rules.qtyMax';
-
-const PURCHASE_RETURN_MODAL_FALLBACKS: Record<
-  PurchaseReturnModalFallbackKey,
-  { vi: string; en: string }
-> = {
-  'modal.form.purchaseOrder': {
-    vi: 'PO đã nhập hàng',
-    en: 'Received PO',
-  },
-  'modal.form.purchaseOrderPlaceholder': {
-    vi: 'Chọn PO đã có hàng nhập',
-    en: 'Select a PO with received goods',
-  },
-  'modal.form.vendor': {
-    vi: 'NCC: {vendor}',
-    en: 'Vendor: {vendor}',
-  },
-  'modal.form.receivedHint': {
-    vi: 'Đã nhận: {quantity}',
-    en: 'Received: {quantity}',
-  },
-  'modal.rules.purchaseOrderRequired': {
-    vi: 'Vui lòng chọn PO',
-    en: 'Please select PO',
-  },
-  'modal.rules.qtyMax': {
-    vi: 'Không vượt quá số đã nhận: {max}',
-    en: 'Cannot exceed received qty: {max}',
-  },
-};
-
-const interpolateMessage = (
-  template: string,
-  values: Record<string, string | number> = {},
-): string => {
-  return template.replace(/\{(\w+)\}/g, (_match, key: string) =>
-    String(values[key] ?? ''),
-  );
-};
 
 type PurchaseReturnProduct = {
   _id: string;
@@ -176,7 +129,6 @@ const CONDITION_KEYS: PurchaseReturnLineCondition[] = [
 
 const PurchaseReturnModal = (props: IProps) => {
   const t = useTranslations('PurchaseReturn');
-  const locale = useLocale();
   const { isOpen, setIsOpen, fetchData } = props;
   const { data: session } = useSession();
   const { token } = theme.useToken();
@@ -234,21 +186,6 @@ const PurchaseReturnModal = (props: IProps) => {
       totalRefund: +totalRefund.toFixed(2),
     };
   }, [watchedItems]);
-
-  const fallbackT = (
-    key: PurchaseReturnModalFallbackKey,
-    values?: Record<string, string | number>,
-  ): string => {
-    try {
-      return values ? t(key, values) : t(key);
-    } catch {
-      const fallbackLocale = locale === 'en' ? 'en' : 'vi';
-      return interpolateMessage(
-        PURCHASE_RETURN_MODAL_FALLBACKS[key][fallbackLocale],
-        values,
-      );
-    }
-  };
 
   useEffect(() => {
     if (!isOpen) {
@@ -406,7 +343,7 @@ const PurchaseReturnModal = (props: IProps) => {
             content: selectedPurchaseOrder?.poNumber,
           },
           {
-            title: locale === 'vi' ? 'Hàng trả' : 'Items',
+            title: t('modal.steps.items'),
             icon: <ContainerOutlined />,
             content:
               totals.totalQty > 0
@@ -414,7 +351,7 @@ const PurchaseReturnModal = (props: IProps) => {
                 : undefined,
           },
           {
-            title: locale === 'vi' ? 'Lý do' : 'Reason',
+            title: t('modal.steps.reason'),
             icon: <SolutionOutlined />,
             content: watchedReasonCode,
           },
@@ -437,19 +374,19 @@ const PurchaseReturnModal = (props: IProps) => {
           <Row gutter={16}>
             <Col xs={24} md={16}>
               <Form.Item
-                label={fallbackT('modal.form.purchaseOrder')}
+                label={t('modal.form.purchaseOrder')}
                 name="purchaseOrderId"
                 rules={[
                   {
                     required: true,
-                    message: fallbackT('modal.rules.purchaseOrderRequired'),
+                    message: t('modal.rules.purchaseOrderRequired'),
                   },
                 ]}
               >
                 <Select
                   showSearch
                   loading={poLoading}
-                  placeholder={fallbackT('modal.form.purchaseOrderPlaceholder')}
+                  placeholder={t('modal.form.purchaseOrderPlaceholder')}
                   optionFilterProp="label"
                   options={purchaseOrders.map((po) => ({
                     label: `${po.poNumber} • ${po.vendor?.name || 'NCC'}`,
@@ -478,7 +415,7 @@ const PurchaseReturnModal = (props: IProps) => {
               icon={<ShopOutlined />}
               style={{ marginBottom: 12, padding: '4px 10px' }}
             >
-              {fallbackT('modal.form.vendor', {
+              {t('modal.form.vendor', {
                 vendor: selectedPurchaseOrder.vendor.name,
               })}
             </Tag>
@@ -495,15 +432,15 @@ const PurchaseReturnModal = (props: IProps) => {
             >
               <Space size="large" wrap>
                 <StatisticMini
-                  label={locale === 'vi' ? 'Mã PO' : 'PO No.'}
+                  label={t('modal.form.poNo')}
                   value={selectedPurchaseOrder.poNumber}
                 />
                 <StatisticMini
-                  label={locale === 'vi' ? 'Tiền tệ' : 'Currency'}
+                  label={t('detail.currency')}
                   value={selectedPurchaseOrder.currency || 'VND'}
                 />
                 <StatisticMini
-                  label={locale === 'vi' ? 'SP có thể trả' : 'Returnable lines'}
+                  label={t('modal.form.returnableLines')}
                   value={`${returnableLines.length}`}
                 />
               </Space>
@@ -512,7 +449,7 @@ const PurchaseReturnModal = (props: IProps) => {
             <Alert
               type="info"
               showIcon
-              title={fallbackT('modal.form.purchaseOrderPlaceholder')}
+              title={t('modal.form.purchaseOrderPlaceholder')}
             />
           )}
         </div>
@@ -523,7 +460,7 @@ const PurchaseReturnModal = (props: IProps) => {
             <Alert
               type="warning"
               showIcon
-              title={fallbackT('modal.rules.purchaseOrderRequired')}
+              title={t('modal.rules.purchaseOrderRequired')}
             />
           ) : (
             <Form.List name="items">
@@ -625,7 +562,7 @@ const PurchaseReturnModal = (props: IProps) => {
                                     }
                                     return Promise.reject(
                                       new Error(
-                                        fallbackT('modal.rules.qtyMax', {
+                                        t('modal.rules.qtyMax', {
                                           max: maxQuantity,
                                         }),
                                       ),
@@ -745,7 +682,7 @@ const PurchaseReturnModal = (props: IProps) => {
                         >
                           <span>
                             {maxQuantity
-                              ? fallbackT('modal.form.receivedHint', {
+                              ? t('modal.form.receivedHint', {
                                   quantity: maxQuantity,
                                 })
                               : ''}
@@ -767,7 +704,7 @@ const PurchaseReturnModal = (props: IProps) => {
                             style={{ color: token.colorError }}
                           >
                             <DeleteOutlined />{' '}
-                            {locale === 'vi' ? 'Xóa dòng' : 'Remove'}
+                            {t('modal.form.removeLine')}
                           </a>
                         </div>
                       </Card>
@@ -900,11 +837,11 @@ const PurchaseReturnModal = (props: IProps) => {
 
       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
         <Button onClick={() => goToStep(Math.max(0, currentStep - 1))} disabled={currentStep === 0}>
-          {locale === 'vi' ? 'Quay lại' : 'Back'}
+          {t('modal.navigation.back')}
         </Button>
         {currentStep < 2 ? (
           <Button type="primary" onClick={() => goToStep(currentStep + 1)}>
-            {locale === 'vi' ? 'Tiếp tục' : 'Next'}
+            {t('modal.navigation.next')}
           </Button>
         ) : (
           <Button

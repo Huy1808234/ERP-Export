@@ -1,6 +1,5 @@
 import { Transform } from 'class-transformer';
-import { IsEnum, IsOptional, IsString } from 'class-validator';
-import { PortalTicketStatus } from '../entities/portal-support-ticket.entity';
+import { IsOptional, IsString } from 'class-validator';
 
 const trimOptional = ({ value }: { value: unknown }): string | undefined => {
   if (typeof value !== 'string') return undefined;
@@ -8,9 +7,11 @@ const trimOptional = ({ value }: { value: unknown }): string | undefined => {
   return trimmed.length > 0 ? trimmed : undefined;
 };
 
-export class UpdatePortalSupportTicketStatusDto {
-  @IsEnum(PortalTicketStatus)
-  status: PortalTicketStatus;
+export class AssignPortalSupportTicketDto {
+  @IsString()
+  @IsOptional()
+  @Transform(trimOptional)
+  assignedToUsername?: string;
 
   @IsString()
   @IsOptional()

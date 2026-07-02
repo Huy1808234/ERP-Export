@@ -19,6 +19,11 @@ export enum PortalMessageAuthorType {
   STAFF = 'STAFF',
 }
 
+export enum PortalMessageVisibility {
+  PUBLIC = 'PUBLIC',
+  INTERNAL = 'INTERNAL',
+}
+
 @Entity('portal_support_messages')
 @Index('idx_portal_support_messages_ticket', ['ticket_id'])
 export class PortalSupportMessage {
@@ -49,6 +54,13 @@ export class PortalSupportMessage {
 
   @Column({ type: 'text' })
   message: string;
+
+  @Column({
+    type: 'varchar',
+    length: 20,
+    default: PortalMessageVisibility.PUBLIC,
+  })
+  visibility: PortalMessageVisibility;
 
   @Column({ type: 'jsonb', nullable: true })
   attachments: PortalAttachment[] | null;

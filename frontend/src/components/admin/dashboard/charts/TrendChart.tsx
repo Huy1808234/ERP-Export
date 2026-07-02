@@ -19,18 +19,10 @@ export const TrendChart = ({ data, canViewCost }: TrendChartProps) => {
     const numberLocale = locale === 'vi' ? 'vi-VN' : 'en-US';
     const { formatCompact } = useCurrency();
 
-    const dashboardText = (key: string, fallback: string) => {
-        try {
-            return t.has(key) ? t(key) : fallback;
-        } catch {
-            return fallback;
-        }
-    };
-
     const hasTrendData = data.some((point) => point.revenueMillion > 0 || point.orders > 0);
 
     if (!hasTrendData) {
-        return <EmptyState title={dashboardText('noData', 'Chưa có dữ liệu')} description={dashboardText('noChartDataDesc', 'Không có dữ liệu thật trong khoảng thời gian đã chọn.')} isDark={isDark} variant="chart" />;
+        return <EmptyState title={t('noData')} description={t('noChartDataDesc')} isDark={isDark} variant="chart" />;
     }
 
     const tooltipStyle = getTooltipStyle(isDark);
@@ -46,7 +38,7 @@ export const TrendChart = ({ data, canViewCost }: TrendChartProps) => {
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={isDark ? 'rgba(148, 163, 184, 0.12)' : '#e5e7eb'} />
                 <XAxis dataKey="label" tick={{ fill: isDark ? '#94a3b8' : '#64748b', fontSize: 12 }} axisLine={{ stroke: isDark ? 'rgba(148, 163, 184, 0.18)' : '#e2e8f0' }} tickLine={false} dy={8} />
-                <YAxis yAxisId="revenue" tick={{ fill: isDark ? '#94a3b8' : '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} tickFormatter={(value) => `${formatCompact(Number(value || 0))} ${dashboardText('million', 'triệu')}`} width={82} />
+                <YAxis yAxisId="revenue" tick={{ fill: isDark ? '#94a3b8' : '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} tickFormatter={(value) => `${formatCompact(Number(value || 0))} ${t('million')}`} width={82} />
                 <YAxis yAxisId="orders" orientation="right" tick={{ fill: isDark ? '#94a3b8' : '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} width={46} />
                 <RechartsTooltip
                     cursor={{ fill: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }}
@@ -54,9 +46,9 @@ export const TrendChart = ({ data, canViewCost }: TrendChartProps) => {
                     itemStyle={{ fontSize: 14, fontWeight: 500 }}
                     labelStyle={{ color: isDark ? '#94a3b8' : '#64748b', marginBottom: 8, fontSize: 13 }}
                     formatter={(value, name) => {
-                        if (name === 'orders') return [Number(value || 0).toLocaleString(numberLocale), dashboardText('orders', 'Đơn hàng')];
+                        if (name === 'orders') return [Number(value || 0).toLocaleString(numberLocale), t('orders')];
                         if (name === 'gpm') return [`${Number(value || 0).toFixed(1)}%`, 'GPM'];
-                        return [`${formatCompact(Number(value || 0))} ${dashboardText('million', 'triệu')}`, dashboardText('revenue', 'Doanh thu')];
+                        return [`${formatCompact(Number(value || 0))} ${t('million')}`, t('revenue')];
                     }}
                 />
                 <Bar yAxisId="revenue" dataKey="revenueMillion" name="revenue" fill="url(#colorRevenue)" radius={[8, 8, 0, 0]} barSize={32} />

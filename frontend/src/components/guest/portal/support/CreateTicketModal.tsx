@@ -1,8 +1,8 @@
 import React from 'react';
 import { Modal, Form, Input, Row, Col, Select, Button, FormInstance } from 'antd';
 import { SendOutlined } from '@ant-design/icons';
-import { useLocale } from 'next-intl';
-import { TicketFormValues } from '@/types/support.type';
+import { useTranslations } from 'next-intl';
+import type { TicketFormValues } from '@/types/support.type';
 
 interface CreateTicketModalProps {
   open: boolean;
@@ -19,22 +19,8 @@ export default function CreateTicketModal({
   onSubmit,
   submitting = false,
 }: CreateTicketModalProps) {
-  const locale = useLocale();
-  const isVi = locale === 'vi';
-  const copy = {
-    title: isVi ? 'Tạo ticket hỗ trợ' : 'Create support ticket',
-    subject: isVi ? 'Tiêu đề' : 'Subject',
-    subjectPlaceholder: isVi ? 'Tóm tắt vấn đề cần hỗ trợ' : 'Short issue summary',
-    subjectRequired: isVi ? 'Vui lòng nhập tiêu đề' : 'Please enter a subject',
-    category: isVi ? 'Nhóm hỗ trợ' : 'Category',
-    priority: isVi ? 'Mức ưu tiên' : 'Priority',
-    message: isVi ? 'Nội dung' : 'Message',
-    messagePlaceholder: isVi
-      ? 'Mô tả vấn đề, mã chứng từ, bằng chứng hoặc câu hỏi cần đội vận hành xử lý...'
-      : 'Describe the issue, claim evidence, or question...',
-    messageRequired: isVi ? 'Vui lòng nhập nội dung' : 'Please enter a message',
-    submit: isVi ? 'Gửi ticket' : 'Submit ticket',
-  };
+  const t = useTranslations('PortalSupport');
+  const tCommon = useTranslations('SupportCommon');
 
   const requiredTrimRule = (message: string) => ({
     validator: (_: unknown, value?: string) => {
@@ -47,7 +33,7 @@ export default function CreateTicketModal({
 
   return (
     <Modal
-      title={copy.title}
+      title={t('form.title')}
       open={open}
       onCancel={onClose}
       footer={null}
@@ -62,41 +48,41 @@ export default function CreateTicketModal({
         <Form.Item name="shipmentId" hidden>
           <Input />
         </Form.Item>
-        <Form.Item name="subject" label={copy.subject} rules={[requiredTrimRule(copy.subjectRequired)]}>
-          <Input placeholder={copy.subjectPlaceholder} maxLength={160} showCount />
+        <Form.Item name="subject" label={t('form.subject')} rules={[requiredTrimRule(t('form.subjectRequired'))]}>
+          <Input placeholder={t('form.subjectPlaceholder')} maxLength={160} showCount />
         </Form.Item>
         <Row gutter={12}>
           <Col xs={24} md={12}>
-            <Form.Item name="category" label={copy.category}>
+            <Form.Item name="category" label={t('form.category')}>
               <Select
                 options={[
-                  { value: 'QUALITY', label: isVi ? 'Khiếu nại chất lượng' : 'Quality claim' },
-                  { value: 'LOGISTICS', label: isVi ? 'Logistics' : 'Logistics' },
-                  { value: 'FINANCE', label: isVi ? 'Tài chính' : 'Finance' },
-                  { value: 'DOCUMENT', label: isVi ? 'Chứng từ' : 'Documents' },
-                  { value: 'OTHER', label: isVi ? 'Khác' : 'Other' },
+                  { value: 'QUALITY', label: tCommon('category.QUALITY') },
+                  { value: 'LOGISTICS', label: tCommon('category.LOGISTICS') },
+                  { value: 'FINANCE', label: tCommon('category.FINANCE') },
+                  { value: 'DOCUMENT', label: tCommon('category.DOCUMENT') },
+                  { value: 'OTHER', label: tCommon('category.OTHER') },
                 ]}
               />
             </Form.Item>
           </Col>
           <Col xs={24} md={12}>
-            <Form.Item name="priority" label={copy.priority}>
+            <Form.Item name="priority" label={t('form.priority')}>
               <Select
                 options={[
-                  { value: 'LOW', label: isVi ? 'Thấp' : 'Low' },
-                  { value: 'MEDIUM', label: isVi ? 'Trung bình' : 'Medium' },
-                  { value: 'HIGH', label: isVi ? 'Cao' : 'High' },
-                  { value: 'URGENT', label: isVi ? 'Khẩn cấp' : 'Urgent' },
+                  { value: 'LOW', label: tCommon('priority.LOW') },
+                  { value: 'MEDIUM', label: tCommon('priority.MEDIUM') },
+                  { value: 'HIGH', label: tCommon('priority.HIGH') },
+                  { value: 'URGENT', label: tCommon('priority.URGENT') },
                 ]}
               />
             </Form.Item>
           </Col>
         </Row>
-        <Form.Item name="message" label={copy.message} rules={[requiredTrimRule(copy.messageRequired)]}>
-          <Input.TextArea rows={6} placeholder={copy.messagePlaceholder} showCount maxLength={4000} />
+        <Form.Item name="message" label={t('form.message')} rules={[requiredTrimRule(t('form.messageRequired'))]}>
+          <Input.TextArea rows={6} placeholder={t('form.messagePlaceholder')} showCount maxLength={4000} />
         </Form.Item>
         <Button type="primary" htmlType="submit" icon={<SendOutlined />} loading={submitting} block>
-          {copy.submit}
+          {t('actions.submitTicket')}
         </Button>
       </Form>
     </Modal>

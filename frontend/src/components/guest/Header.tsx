@@ -14,12 +14,14 @@ import { motion, useScroll, useTransform } from "framer-motion";
 import { useSession, signOut } from "next-auth/react";
 import type { Session } from "next-auth";
 import { useParams } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { isStaff } from "@/utils/auth-utils";
 import { CUSTOMER_PORTAL_ENTRY_PATH } from "@/utils/auth-redirect";
 
 const { Text, Title } = Typography;
 
 export const Header = ({ session: serverSession }: { session: Session | null }) => {
+  const t = useTranslations('GuestHeader');
   const { data: clientSession } = useSession();
   const session = clientSession || serverSession;
   const router = useRouter();
@@ -65,14 +67,14 @@ export const Header = ({ session: serverSession }: { session: Session | null }) 
     {
       key: 'system-dashboard',
       icon: <DashboardOutlined />,
-      label: <Text strong style={{ color: '#1890ff' }}>{isStaffUser ? 'Hệ thống Quản trị (Admin)' : 'Customer Portal'}</Text>,
+      label: <Text strong style={{ color: '#1890ff' }}>{isStaffUser ? t('adminDashboard') : t('customerPortal')}</Text>,
       onClick: () => router.push(isStaffUser ? '/dashboard' : CUSTOMER_PORTAL_ENTRY_PATH),
     },
     { type: 'divider' as const },
     {
       key: 'logout',
       icon: <LogoutOutlined />,
-      label: <Text type="danger" strong>Đăng xuất</Text>,
+      label: <Text type="danger" strong>{t('logout')}</Text>,
       onClick: () => { signOut({ callbackUrl: `/${locale}` }); },
     },
   ];
@@ -142,10 +144,10 @@ export const Header = ({ session: serverSession }: { session: Session | null }) 
                 textTransform: 'uppercase',
               }}
               items={[
-                { key: 'services', label: 'Dịch vụ', onClick: () => document.getElementById('services')?.scrollIntoView({ behavior: 'smooth' }) },
-                { key: 'products', label: 'Sản phẩm', onClick: () => document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' }) },
-                { key: 'about', label: 'Giới thiệu', onClick: () => document.getElementById('about')?.scrollIntoView({ behavior: 'smooth' }) },
-                { key: 'tracking', label: 'Tra cứu', onClick: () => document.getElementById('tracking')?.scrollIntoView({ behavior: 'smooth' }) },
+                { key: 'services', label: t('navServices'), onClick: () => document.getElementById('services')?.scrollIntoView({ behavior: 'smooth' }) },
+                { key: 'products', label: t('navProducts'), onClick: () => document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' }) },
+                { key: 'about', label: t('navAbout'), onClick: () => document.getElementById('about')?.scrollIntoView({ behavior: 'smooth' }) },
+                { key: 'tracking', label: t('navTracking'), onClick: () => document.getElementById('tracking')?.scrollIntoView({ behavior: 'smooth' }) },
               ]}
               className="custom-nav-menu"
             />
@@ -203,7 +205,7 @@ export const Header = ({ session: serverSession }: { session: Session | null }) 
                       letterSpacing: '1px'
                     }}
                   >
-                    ĐĂNG NHẬP
+                    {t('login')}
                   </Button>
                 </Link>
               )}
@@ -219,7 +221,7 @@ export const Header = ({ session: serverSession }: { session: Session | null }) 
                 border: 'none',
                 boxShadow: '0 10px 20px rgba(24, 144, 255, 0.3)'
               }}>
-                LIÊN HỆ <ArrowRightOutlined style={{ marginLeft: '8px' }} />
+                {t('contact')} <ArrowRightOutlined style={{ marginLeft: '8px' }} />
               </Button>
             </div>
           </Col>

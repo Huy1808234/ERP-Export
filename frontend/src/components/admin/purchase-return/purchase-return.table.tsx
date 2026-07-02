@@ -528,7 +528,7 @@ const PurchaseReturnTable = () => {
               fetchStats();
             }}
           >
-            {locale === 'vi' ? 'Làm mới' : 'Refresh'}
+            {t('refreshBtn')}
           </Button>
           <Button
             type="primary"
@@ -624,7 +624,7 @@ const PurchaseReturnTable = () => {
                 type="secondary"
                 style={{ fontSize: 12, textTransform: 'uppercase', fontWeight: 600 }}
               >
-                {locale === 'vi' ? 'Trạng thái' : 'By status'}
+                {t('stats.byStatus')}
               </Text>
               <div style={{ marginTop: 6 }}>
                 {statusTiles?.map((s) => (
@@ -874,7 +874,7 @@ const DetailDrawer = ({
           size="small"
           title={
             <Space>
-              <ToolOutlined /> {locale === 'vi' ? 'Thông tin chung' : 'Summary'}
+              <ToolOutlined /> {t('detail.summary')}
             </Space>
           }
           style={{ borderRadius: 12 }}

@@ -4,7 +4,7 @@ import { Button, Empty, Space, Table, Tag, Typography } from 'antd';
 import type { TablePaginationConfig, TableProps } from 'antd';
 import type { Key } from 'react';
 import { EyeOutlined, FilePdfOutlined } from '@ant-design/icons';
-import { useLocale } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import type {
   CustomerCommercialDocument,
   CustomerCommercialDocumentSortField,
@@ -39,52 +39,6 @@ const statusColor = (status: string): string => {
     return 'error';
   }
   return 'warning';
-};
-
-const getTableCopy = (locale: string) => {
-  const isVietnamese = locale === 'vi';
-
-  return {
-    document: isVietnamese ? 'Chứng từ' : 'Document',
-    date: isVietnamese ? 'Ngày' : 'Date',
-    status: isVietnamese ? 'Trạng thái' : 'Status',
-    incoterm: 'Incoterm',
-    total: isVietnamese ? 'Tổng tiền' : 'Total',
-    action: isVietnamese ? 'Thao tác' : 'Action',
-    view: isVietnamese ? 'Xem' : 'View',
-    pdf: 'PDF',
-    expired: isVietnamese ? 'Hết hạn' : 'Expired',
-    empty: isVietnamese ? 'Không có chứng từ thương mại phù hợp' : 'No commercial documents found',
-    documentTypes: {
-      QUOTATION: isVietnamese ? 'Báo giá' : 'Quotation',
-      SALES_CONTRACT: isVietnamese ? 'Hợp đồng' : 'Sales Contract',
-      PROFORMA_INVOICE: 'Proforma Invoice',
-      COMMERCIAL_INVOICE: 'Commercial Invoice',
-      ORDER: isVietnamese ? 'Đơn hàng' : 'Order',
-    } satisfies Record<CustomerCommercialDocument['documentType'], string>,
-    statuses: {
-      SENT: isVietnamese ? 'Đã gửi' : 'SENT',
-      ACCEPTED: isVietnamese ? 'Đã chấp nhận' : 'ACCEPTED',
-      REJECTED: isVietnamese ? 'Đã từ chối' : 'REJECTED',
-      EXPIRED: isVietnamese ? 'Hết hạn' : 'EXPIRED',
-      PENDING_BUYER_SIGNATURE: isVietnamese ? 'Chờ buyer ký' : 'PENDING_BUYER_SIGNATURE',
-      BUYER_SIGNED: isVietnamese ? 'Buyer đã ký' : 'BUYER_SIGNED',
-      CONFIRMED: isVietnamese ? 'Đã xác nhận' : 'CONFIRMED',
-      SHIPPED: isVietnamese ? 'Đã giao hàng' : 'SHIPPED',
-      PAID: isVietnamese ? 'Đã thanh toán' : 'PAID',
-    } as Record<string, string>,
-    lifecycleStages: {
-      Quotation: isVietnamese ? 'Báo giá' : 'Quotation',
-      Accepted: isVietnamese ? 'Đã chấp nhận' : 'Accepted',
-      Rejected: isVietnamese ? 'Đã từ chối' : 'Rejected',
-      Expired: isVietnamese ? 'Hết hạn' : 'Expired',
-      'Sales Contract': isVietnamese ? 'Hợp đồng' : 'Sales Contract',
-      'Proforma Invoice': 'Proforma Invoice',
-      Payment: isVietnamese ? 'Thanh toán' : 'Payment',
-      Shipment: isVietnamese ? 'Giao hàng' : 'Shipment',
-      Completed: isVietnamese ? 'Hoàn tất' : 'Completed',
-    } as Record<string, string>,
-  };
 };
 
 const formatDate = (value: string | null, locale: string): string => {
@@ -123,10 +77,10 @@ export function CommercialDocumentsTable({
   onTableChange,
 }: CommercialDocumentsTableProps) {
   const locale = useLocale();
-  const copy = getTableCopy(locale);
+  const t = useTranslations('CustomerPortal');
   const columns: TableProps<CustomerCommercialDocument>['columns'] = [
     {
-      title: copy.document,
+      title: t('ordersTable.document'),
       dataIndex: 'documentNumber',
       sorter: true,
       render: (value: string, record) => (
@@ -135,38 +89,40 @@ export function CommercialDocumentsTable({
             {value}
           </Button>
           <Space size={6} wrap>
-            <Tag>{copy.documentTypes[record.documentType]}</Tag>
+            <Tag>{t(`documentTypes.${record.documentType}`)}</Tag>
             <Text type="secondary">
-              {copy.lifecycleStages[record.lifecycleStage] || record.lifecycleStage}
+              {t.has(`lifecycleStages.${record.lifecycleStage}`)
+                ? t(`lifecycleStages.${record.lifecycleStage}`)
+                : record.lifecycleStage}
             </Text>
           </Space>
         </Space>
       ),
     },
     {
-      title: copy.date,
+      title: t('ordersTable.date'),
       dataIndex: 'documentDate',
       sorter: true,
       render: (value: string | null) => formatDate(value, locale),
     },
     {
-      title: copy.status,
+      title: t('ordersTable.status'),
       dataIndex: 'status',
       sorter: true,
       render: (value: string, record) => (
         <Space orientation="vertical" size={2}>
-          <Tag color={statusColor(value)}>{copy.statuses[value] || value}</Tag>
-          {record.isExpired ? <Text type="danger">{copy.expired}</Text> : null}
+          <Tag color={statusColor(value)}>{t.has(`documentStatuses.${value}`) ? t(`documentStatuses.${value}`) : value}</Tag>
+          {record.isExpired ? <Text type="danger">{t('ordersTable.expired')}</Text> : null}
         </Space>
       ),
     },
     {
-      title: copy.incoterm,
+      title: t('ordersTable.incoterm'),
       dataIndex: 'incoterm',
       render: (value: string | null) => value ? <Tag color="blue">{value}</Tag> : '-',
     },
     {
-      title: copy.total,
+      title: t('ordersTable.total'),
       dataIndex: 'totalAmount',
       align: 'right',
       sorter: true,
@@ -175,19 +131,19 @@ export function CommercialDocumentsTable({
       ),
     },
     {
-      title: copy.action,
+      title: t('ordersTable.action'),
       align: 'right',
       render: (_, record) => (
         <Space>
           <Button icon={<EyeOutlined />} onClick={() => onOpen(record)}>
-            {copy.view}
+            {t('ordersTable.view')}
           </Button>
           <Button
             icon={<FilePdfOutlined />}
             disabled={record.documentType !== 'QUOTATION'}
             onClick={() => onDownloadPdf(record)}
           >
-            {copy.pdf}
+            {t('ordersTable.pdf')}
           </Button>
         </Space>
       ),
@@ -215,7 +171,7 @@ export function CommercialDocumentsTable({
           activeSorter?.order === 'ascend' ? 'ASC' : 'DESC',
         );
       }}
-      locale={{ emptyText: <Empty description={copy.empty} /> }}
+      locale={{ emptyText: <Empty description={t('ordersTable.empty')} /> }}
       scroll={{ x: 1100 }}
     />
   );

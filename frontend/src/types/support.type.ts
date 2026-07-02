@@ -1,4 +1,19 @@
-export type TicketStatus = 'OPEN' | 'IN_PROGRESS' | 'WAITING_BUYER' | 'RESOLVED' | 'CLOSED';
+export type TicketStatus =
+    | 'OPEN'
+    | 'IN_PROGRESS'
+    | 'WAITING_INTERNAL'
+    | 'WAITING_BUYER'
+    | 'RESOLVED'
+    | 'CLOSED';
+
+export type TicketCategory =
+    | 'QUALITY'
+    | 'LOGISTICS'
+    | 'FINANCE'
+    | 'DOCUMENT'
+    | 'OTHER';
+
+export type TicketPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
 
 export type SupportAttachment = {
     fileAsset_id: string;
@@ -10,6 +25,7 @@ export type SupportMessage = {
     _id: string;
     authorUsername: string;
     authorType: 'BUYER' | 'STAFF';
+    visibility?: 'PUBLIC' | 'INTERNAL';
     message: string;
     attachments?: SupportAttachment[] | null;
     createdAt: string;
@@ -20,12 +36,24 @@ export type SupportTicket = {
     ticketNumber: string;
     shipmentId?: string | null;
     subject: string;
-    category: string;
-    priority: string;
+    category: TicketCategory;
+    priority: TicketPriority;
     status: TicketStatus;
     assignedToUsername?: string | null;
     lastMessageAt?: string | null;
     closedAt?: string | null;
+    sla?: {
+        targetHours: number;
+        dueAt: string;
+        status: 'ON_TRACK' | 'DUE_SOON' | 'BREACHED' | 'MET';
+        remainingHours: number;
+        breached: boolean;
+    };
+    aging?: {
+        ageHours: number;
+        ageDays: number;
+        lastActivityAgeHours: number;
+    };
     attachments?: SupportAttachment[] | null;
     createdAt: string;
     updatedAt: string;
@@ -48,8 +76,8 @@ export type SupportTicket = {
 
 export type TicketFormValues = {
     subject: string;
-    category?: string;
-    priority?: string;
+    category?: TicketCategory;
+    priority?: TicketPriority;
     shipmentId?: string;
     message: string;
     attachments?: SupportAttachment[];

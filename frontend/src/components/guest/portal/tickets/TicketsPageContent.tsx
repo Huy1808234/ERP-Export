@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Card, Table, Tag, Space, Button, Typography, Empty } from 'antd';
 import { PlusOutlined, CustomerServiceOutlined } from '@ant-design/icons';
+import { useTranslations } from 'next-intl';
 import { useCustomerPortalTickets } from '@/hooks/useCustomerPortalTickets';
 import { CreateTicketModal } from './CreateTicketModal';
 import { PageState } from '@/components/ui/PageState';
@@ -11,7 +12,8 @@ import { Ticket } from '@/services/ticket.service';
 const { Text } = Typography;
 
 export const TicketsPageContent = ({ locale }: { locale: string }) => {
-  const isVi = locale === 'vi';
+  const t = useTranslations('PortalSupport');
+  const tCommon = useTranslations('SupportCommon');
   const { tickets, loading, error, fetchTickets, submitTicket } = useCustomerPortalTickets();
   const [modalOpen, setModalOpen] = useState(false);
 
@@ -41,34 +43,34 @@ export const TicketsPageContent = ({ locale }: { locale: string }) => {
 
   const columns: ColumnsType<Ticket> = [
     {
-      title: isVi ? 'Mã Ticket' : 'Ticket ID',
+      title: t('list.ticket'),
       dataIndex: '_id',
       render: (value: string) => <Text strong>{value.slice(-6).toUpperCase()}</Text>,
     },
     {
-      title: isVi ? 'Tiêu đề' : 'Subject',
+      title: t('form.subject'),
       dataIndex: 'title',
     },
     {
-      title: isVi ? 'Trạng thái' : 'Status',
+      title: t('list.status'),
       dataIndex: 'status',
-      render: (status: string) => (
+      render: (status: Ticket['status']) => (
         <Tag color={getStatusColor(status)}>
-          {status}
+          {tCommon(`customerStatus.${status}`)}
         </Tag>
       ),
     },
     {
-      title: isVi ? 'Mức độ ưu tiên' : 'Priority',
+      title: t('list.priority'),
       dataIndex: 'priority',
-      render: (priority: string) => (
+      render: (priority: Ticket['priority']) => (
         <Tag color={getPriorityColor(priority)}>
-          {priority}
+          {tCommon(`priority.${priority}`)}
         </Tag>
       ),
     },
     {
-      title: isVi ? 'Ngày tạo' : 'Created At',
+      title: t('detail.created'),
       dataIndex: 'createdAt',
       render: (date: string) => new Date(date).toLocaleDateString(locale),
     },
@@ -76,8 +78,8 @@ export const TicketsPageContent = ({ locale }: { locale: string }) => {
 
   return (
     <PortalShell
-      title={isVi ? 'Hỗ trợ khách hàng' : 'Customer Support'}
-      subtitle={isVi ? 'Gửi yêu cầu hỗ trợ và theo dõi tiến độ xử lý' : 'Submit support tickets and track resolution progress'}
+      title={t('title')}
+      subtitle={t('description')}
       icon={<CustomerServiceOutlined />}
       extra={
         <Button 
@@ -86,7 +88,7 @@ export const TicketsPageContent = ({ locale }: { locale: string }) => {
           onClick={() => setModalOpen(true)}
           style={{ background: 'linear-gradient(135deg, #1890ff 0%, #096dd9 100%)', border: 'none' }}
         >
-          {isVi ? 'Tạo Yêu Cầu Mới' : 'New Ticket'}
+          {t('actions.newTicket')}
         </Button>
       }
     >
@@ -104,9 +106,9 @@ export const TicketsPageContent = ({ locale }: { locale: string }) => {
           <Empty
             description={
               <Space orientation="vertical" size={4}>
-                <Text type="secondary">{isVi ? 'Bạn chưa có yêu cầu hỗ trợ nào' : 'You have no support tickets yet'}</Text>
+                <Text type="secondary">{t('list.emptyTitle')}</Text>
                 <Text type="secondary" style={{ fontSize: 12 }}>
-                  {isVi ? 'Bấm vào "Tạo Yêu Cầu Mới" nếu bạn cần hỗ trợ.' : 'Click "New Ticket" if you need assistance.'}
+                  {t('list.emptyDescription')}
                 </Text>
               </Space>
             }
@@ -119,7 +121,6 @@ export const TicketsPageContent = ({ locale }: { locale: string }) => {
         open={modalOpen}
         onCancel={() => setModalOpen(false)}
         onSubmit={submitTicket}
-        locale={locale}
       />
     </PortalShell>
   );

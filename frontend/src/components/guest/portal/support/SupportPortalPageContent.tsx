@@ -12,7 +12,7 @@ import {
   ReloadOutlined,
   SearchOutlined,
 } from '@ant-design/icons';
-import { useLocale } from 'next-intl';
+import { useTranslations } from 'next-intl';
 import { useSearchParams } from 'next/navigation';
 import AdminPageScroll from '@/components/layout/admin.page-scroll';
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -22,18 +22,46 @@ import { supportService } from '@/services/support.service';
 import TicketList from './TicketList';
 import CreateTicketModal from './CreateTicketModal';
 import TicketDetailDrawer from './TicketDetailDrawer';
-import type { TicketFormValues, TicketStatus } from '@/types/support.type';
+import type {
+  TicketCategory,
+  TicketFormValues,
+  TicketPriority,
+  TicketStatus,
+} from '@/types/support.type';
 
 const { Text } = Typography;
 
 type TicketFilterStatus = TicketStatus | 'ALL';
-type TicketFilterPriority = 'ALL' | 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
-type TicketFilterCategory = 'ALL' | 'QUALITY' | 'LOGISTICS' | 'FINANCE' | 'DOCUMENT' | 'OTHER';
+type TicketFilterPriority = 'ALL' | TicketPriority;
+type TicketFilterCategory = 'ALL' | TicketCategory;
+
+const ticketCategories: readonly TicketCategory[] = [
+  'QUALITY',
+  'LOGISTICS',
+  'FINANCE',
+  'DOCUMENT',
+  'OTHER',
+];
+
+const ticketPriorities: readonly TicketPriority[] = [
+  'LOW',
+  'MEDIUM',
+  'HIGH',
+  'URGENT',
+];
+
+const getTicketCategory = (value: string | null): TicketCategory | undefined => (
+  ticketCategories.includes(value as TicketCategory) ? value as TicketCategory : undefined
+);
+
+const getTicketPriority = (value: string | null): TicketPriority | undefined => (
+  ticketPriorities.includes(value as TicketPriority) ? value as TicketPriority : undefined
+);
 
 export default function SupportPortalPageContent() {
   const { message } = App.useApp();
-  const locale = useLocale();
-  const isVi = locale === 'vi';
+  const t = useTranslations('PortalSupport');
+  const tCommon = useTranslations('SupportCommon');
   const { token } = theme.useToken();
   const searchParams = useSearchParams();
   const {
@@ -58,39 +86,6 @@ export default function SupportPortalPageContent() {
   const [categoryFilter, setCategoryFilter] = useState<TicketFilterCategory>('ALL');
   const [priorityFilter, setPriorityFilter] = useState<TicketFilterPriority>('ALL');
 
-  const copy = {
-    title: isVi ? 'Hỗ trợ & Khiếu nại' : 'Support & Claims',
-    subtitle: isVi
-      ? 'Theo dõi ticket logistics, tài chính, chứng từ và trao đổi trực tiếp với đội vận hành.'
-      : 'Track logistics, finance, document tickets and chat with the operations team.',
-    refresh: isVi ? 'Làm mới' : 'Refresh',
-    newTicket: isVi ? 'Tạo ticket' : 'New ticket',
-    searchPlaceholder: isVi ? 'Tìm ticket, tiêu đề, lô hàng...' : 'Search ticket, subject, shipment...',
-    status: isVi ? 'Trạng thái' : 'Status',
-    category: isVi ? 'Nhóm' : 'Category',
-    priority: isVi ? 'Ưu tiên' : 'Priority',
-    all: isVi ? 'Tất cả' : 'All',
-    open: isVi ? 'Đang mở' : 'Open',
-    waitingBuyer: isVi ? 'Chờ phản hồi' : 'Waiting buyer',
-    resolved: isVi ? 'Đã xử lý' : 'Resolved',
-    urgent: isVi ? 'Cao/khẩn cấp' : 'High/urgent',
-    listTitle: isVi ? 'Danh sách ticket' : 'Ticket list',
-    emptyTitle: isVi ? 'Chưa có ticket phù hợp' : 'No matching tickets',
-    emptyDescription: isVi
-      ? 'Bạn có thể tạo ticket mới từ lô hàng, hóa đơn hoặc trực tiếp tại đây.'
-      : 'Create a new ticket from a shipment, invoice, or directly from here.',
-    createOk: isVi ? 'Đã tạo ticket' : 'Ticket created successfully',
-    createFailed: isVi ? 'Không tạo được ticket' : 'Failed to create ticket',
-    replyFailed: isVi ? 'Không gửi được phản hồi' : 'Cannot send reply',
-    genericError: isVi ? 'Có lỗi xảy ra' : 'An error occurred',
-    closed: isVi ? 'Ticket đã được đóng' : 'Ticket closed.',
-    closeFailed: isVi ? 'Không đóng được ticket' : 'Failed to close ticket',
-    prefillTitle: isVi ? 'Ticket đã được điền từ lô hàng' : 'Ticket is prefilled from shipment context',
-    prefillDescription: isVi
-      ? 'Vui lòng kiểm tra nội dung trước khi gửi để đội vận hành xử lý đúng vấn đề.'
-      : 'Review the details before submitting so operations can triage correctly.',
-  };
-
   useEffect(() => {
     void fetchTickets();
   }, [fetchTickets]);
@@ -100,8 +95,8 @@ export default function SupportPortalPageContent() {
 
     const subject = searchParams.get('subject');
     const messageValue = searchParams.get('message');
-    const category = searchParams.get('category');
-    const priority = searchParams.get('priority');
+    const category = getTicketCategory(searchParams.get('category'));
+    const priority = getTicketPriority(searchParams.get('priority'));
     const shipmentId = searchParams.get('shipmentId');
 
     if (!subject && !messageValue) return;
@@ -118,7 +113,7 @@ export default function SupportPortalPageContent() {
   }, [form, prefillApplied, searchParams]);
 
   const ticketStats = useMemo(() => {
-    const openCount = tickets.filter((ticket) => ['OPEN', 'IN_PROGRESS'].includes(ticket.status)).length;
+    const openCount = tickets.filter((ticket) => ['OPEN', 'IN_PROGRESS', 'WAITING_INTERNAL'].includes(ticket.status)).length;
     const waitingBuyerCount = tickets.filter((ticket) => ticket.status === 'WAITING_BUYER').length;
     const resolvedCount = tickets.filter((ticket) => ['RESOLVED', 'CLOSED'].includes(ticket.status)).length;
     const urgentCount = tickets.filter((ticket) => ['HIGH', 'URGENT'].includes(ticket.priority)).length;
@@ -135,7 +130,9 @@ export default function SupportPortalPageContent() {
         || ticket.subject.toLowerCase().includes(normalizedSearch)
         || ticket.shipment?.shipmentNumber?.toLowerCase().includes(normalizedSearch);
 
-      const matchesStatus = statusFilter === 'ALL' || ticket.status === statusFilter;
+      const matchesStatus = statusFilter === 'ALL'
+        || ticket.status === statusFilter
+        || (statusFilter === 'IN_PROGRESS' && ticket.status === 'WAITING_INTERNAL');
       const matchesCategory = categoryFilter === 'ALL' || ticket.category === categoryFilter;
       const matchesPriority = priorityFilter === 'ALL' || ticket.priority === priorityFilter;
 
@@ -158,7 +155,7 @@ export default function SupportPortalPageContent() {
 
   const handleCreateTicket = async (values: TicketFormValues): Promise<void> => {
     if (!headers) {
-      message.error(copy.genericError);
+      message.error(t('feedback.genericError'));
       return;
     }
 
@@ -174,17 +171,17 @@ export default function SupportPortalPageContent() {
     try {
       const res = await supportService.createTicket(payload, headers);
       if (res?.data) {
-        message.success(copy.createOk);
+        message.success(t('feedback.createOk'));
         setModalOpen(false);
         form.resetFields();
         setPrefillApplied(false);
         setActiveTicket(res.data);
         await fetchTickets();
       } else {
-        message.error(String(res?.message || copy.createFailed));
+        message.error(String(res?.message || t('feedback.createFailed')));
       }
     } catch {
-      message.error(copy.genericError);
+      message.error(t('feedback.genericError'));
     } finally {
       setSubmitting(false);
     }
@@ -192,7 +189,7 @@ export default function SupportPortalPageContent() {
 
   const handleSendReply = async (values: { message: string }): Promise<void> => {
     if (!headers || !activeTicket) {
-      message.error(copy.genericError);
+      message.error(t('feedback.genericError'));
       return;
     }
 
@@ -204,10 +201,10 @@ export default function SupportPortalPageContent() {
         await fetchTicketDetail(activeTicket._id);
         await fetchTickets();
       } else {
-        message.error(String(res?.message || copy.replyFailed));
+        message.error(String(res?.message || t('feedback.replyFailed')));
       }
     } catch {
-      message.error(copy.genericError);
+      message.error(t('feedback.genericError'));
     } finally {
       setSubmitting(false);
     }
@@ -215,7 +212,7 @@ export default function SupportPortalPageContent() {
 
   const handleCloseTicket = async (): Promise<void> => {
     if (!headers || !activeTicket) {
-      message.error(copy.genericError);
+      message.error(t('feedback.genericError'));
       return;
     }
 
@@ -223,12 +220,12 @@ export default function SupportPortalPageContent() {
     try {
       const res = await supportService.updateTicketStatus(activeTicket._id, 'CLOSED', headers);
       if (res?.data) {
-        message.success(copy.closed);
+        message.success(t('feedback.closed'));
         setActiveTicket(res.data);
         await fetchTickets();
       }
     } catch {
-      message.error(copy.closeFailed);
+      message.error(t('feedback.closeFailed'));
     } finally {
       setSubmitting(false);
     }
@@ -237,16 +234,16 @@ export default function SupportPortalPageContent() {
   return (
     <AdminPageScroll>
       <PageHeader
-        title={copy.title}
-        description={copy.subtitle}
+        title={t('title')}
+        description={t('description')}
         icon={<CustomerServiceOutlined />}
         extra={(
           <Space wrap>
             <Button icon={<ReloadOutlined />} onClick={() => void fetchTickets()} loading={isLoading}>
-              {copy.refresh}
+              {t('actions.refresh')}
             </Button>
             <Button type="primary" icon={<PlusOutlined />} onClick={handleOpenCreate}>
-              {copy.newTicket}
+              {t('actions.newTicket')}
             </Button>
           </Space>
         )}
@@ -257,36 +254,36 @@ export default function SupportPortalPageContent() {
           <Alert
             showIcon
             type="info"
-            title={copy.prefillTitle}
-            description={copy.prefillDescription}
+            title={t('feedback.prefillTitle')}
+            description={t('feedback.prefillDescription')}
           />
         ) : null}
 
         <Row gutter={[16, 16]}>
           <Col xs={24} sm={12} xl={6}>
             <Card variant="borderless">
-              <Statistic title={copy.open} value={ticketStats.openCount} prefix={<InboxOutlined />} styles={{ content: { color: token.colorPrimary } }} />
+              <Statistic title={t('stats.open')} value={ticketStats.openCount} prefix={<InboxOutlined />} styles={{ content: { color: token.colorPrimary } }} />
             </Card>
           </Col>
           <Col xs={24} sm={12} xl={6}>
             <Card variant="borderless">
-              <Statistic title={copy.waitingBuyer} value={ticketStats.waitingBuyerCount} prefix={<ClockCircleOutlined />} styles={{ content: { color: token.colorWarning } }} />
+              <Statistic title={t('stats.waitingBuyer')} value={ticketStats.waitingBuyerCount} prefix={<ClockCircleOutlined />} styles={{ content: { color: token.colorWarning } }} />
             </Card>
           </Col>
           <Col xs={24} sm={12} xl={6}>
             <Card variant="borderless">
-              <Statistic title={copy.resolved} value={ticketStats.resolvedCount} prefix={<CheckCircleOutlined />} styles={{ content: { color: token.colorSuccess } }} />
+              <Statistic title={t('stats.resolved')} value={ticketStats.resolvedCount} prefix={<CheckCircleOutlined />} styles={{ content: { color: token.colorSuccess } }} />
             </Card>
           </Col>
           <Col xs={24} sm={12} xl={6}>
             <Card variant="borderless">
-              <Statistic title={copy.urgent} value={ticketStats.urgentCount} prefix={<ExclamationCircleOutlined />} styles={{ content: { color: token.colorError } }} />
+              <Statistic title={t('stats.urgent')} value={ticketStats.urgentCount} prefix={<ExclamationCircleOutlined />} styles={{ content: { color: token.colorError } }} />
             </Card>
           </Col>
         </Row>
 
         <Card
-          title={<Space><CustomerServiceOutlined style={{ color: token.colorPrimary }} /><span>{copy.listTitle}</span><Tag>{filteredTickets.length}/{tickets.length}</Tag></Space>}
+          title={<Space><CustomerServiceOutlined style={{ color: token.colorPrimary }} /><span>{t('list.title')}</span><Tag>{filteredTickets.length}/{tickets.length}</Tag></Space>}
           variant="borderless"
           styles={{ body: { padding: 0 } }}
           extra={(
@@ -294,7 +291,7 @@ export default function SupportPortalPageContent() {
               <Input
                 allowClear
                 prefix={<SearchOutlined />}
-                placeholder={copy.searchPlaceholder}
+                placeholder={t('filters.search')}
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 style={{ width: 280 }}
@@ -304,12 +301,12 @@ export default function SupportPortalPageContent() {
                 onChange={setStatusFilter}
                 style={{ width: 150 }}
                 options={[
-                  { value: 'ALL', label: copy.all },
-                  { value: 'OPEN', label: isVi ? 'Đang mở' : 'Open' },
-                  { value: 'IN_PROGRESS', label: isVi ? 'Đang xử lý' : 'In progress' },
-                  { value: 'WAITING_BUYER', label: isVi ? 'Chờ phản hồi' : 'Waiting buyer' },
-                  { value: 'RESOLVED', label: isVi ? 'Đã xử lý' : 'Resolved' },
-                  { value: 'CLOSED', label: isVi ? 'Đã đóng' : 'Closed' },
+                  { value: 'ALL', label: t('filters.all') },
+                  { value: 'OPEN', label: tCommon('customerStatus.OPEN') },
+                  { value: 'IN_PROGRESS', label: tCommon('customerStatus.IN_PROGRESS') },
+                  { value: 'WAITING_BUYER', label: tCommon('customerStatus.WAITING_BUYER') },
+                  { value: 'RESOLVED', label: tCommon('customerStatus.RESOLVED') },
+                  { value: 'CLOSED', label: tCommon('customerStatus.CLOSED') },
                 ]}
               />
               <Select<TicketFilterCategory>
@@ -317,12 +314,12 @@ export default function SupportPortalPageContent() {
                 onChange={setCategoryFilter}
                 style={{ width: 145 }}
                 options={[
-                  { value: 'ALL', label: copy.category },
-                  { value: 'LOGISTICS', label: 'LOGISTICS' },
-                  { value: 'FINANCE', label: 'FINANCE' },
-                  { value: 'DOCUMENT', label: 'DOCUMENT' },
-                  { value: 'QUALITY', label: 'QUALITY' },
-                  { value: 'OTHER', label: 'OTHER' },
+                  { value: 'ALL', label: t('filters.category') },
+                  { value: 'LOGISTICS', label: tCommon('category.LOGISTICS') },
+                  { value: 'FINANCE', label: tCommon('category.FINANCE') },
+                  { value: 'DOCUMENT', label: tCommon('category.DOCUMENT') },
+                  { value: 'QUALITY', label: tCommon('category.QUALITY') },
+                  { value: 'OTHER', label: tCommon('category.OTHER') },
                 ]}
               />
               <Select<TicketFilterPriority>
@@ -330,11 +327,11 @@ export default function SupportPortalPageContent() {
                 onChange={setPriorityFilter}
                 style={{ width: 140 }}
                 options={[
-                  { value: 'ALL', label: copy.priority },
-                  { value: 'LOW', label: isVi ? 'Thấp' : 'Low' },
-                  { value: 'MEDIUM', label: isVi ? 'Trung bình' : 'Medium' },
-                  { value: 'HIGH', label: isVi ? 'Cao' : 'High' },
-                  { value: 'URGENT', label: isVi ? 'Khẩn cấp' : 'Urgent' },
+                  { value: 'ALL', label: t('filters.priority') },
+                  { value: 'LOW', label: tCommon('priority.LOW') },
+                  { value: 'MEDIUM', label: tCommon('priority.MEDIUM') },
+                  { value: 'HIGH', label: tCommon('priority.HIGH') },
+                  { value: 'URGENT', label: tCommon('priority.URGENT') },
                 ]}
               />
             </Space>
@@ -353,13 +350,13 @@ export default function SupportPortalPageContent() {
                   image={Empty.PRESENTED_IMAGE_SIMPLE}
                   description={(
                     <Space orientation="vertical" size={4}>
-                      <Text strong>{copy.emptyTitle}</Text>
-                      <Text type="secondary">{copy.emptyDescription}</Text>
+                      <Text strong>{t('list.emptyTitle')}</Text>
+                      <Text type="secondary">{t('list.emptyDescription')}</Text>
                     </Space>
                   )}
                 >
                   <Button type="primary" icon={<PlusOutlined />} onClick={handleOpenCreate}>
-                    {copy.newTicket}
+                    {t('actions.newTicket')}
                   </Button>
                 </Empty>
               )}

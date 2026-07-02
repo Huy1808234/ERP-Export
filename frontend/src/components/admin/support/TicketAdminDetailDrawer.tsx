@@ -2,13 +2,15 @@ import React from 'react';
 import { Drawer, Space, Typography, Tag, Timeline, Input, Button, Form, FormInstance, Card, Avatar } from 'antd';
 import { CustomerServiceOutlined, SendOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
-import { SupportTicket, TicketStatus } from '@/types/support.type';
+import { useTranslations } from 'next-intl';
+import type { SupportTicket, TicketStatus } from '@/types/support.type';
 
 const { Text } = Typography;
 
-const statusColor: Record<string, string> = {
+const statusColor: Record<TicketStatus, string> = {
   OPEN: 'error',
   IN_PROGRESS: 'processing',
+  WAITING_INTERNAL: 'purple',
   WAITING_BUYER: 'warning',
   RESOLVED: 'success',
   CLOSED: 'default',
@@ -29,19 +31,21 @@ export default function TicketAdminDetailDrawer({
   replyForm,
   onSendReply,
 }: TicketAdminDetailDrawerProps) {
+  const t = useTranslations('AdminSupport');
+  const tCommon = useTranslations('SupportCommon');
   return (
     <Drawer
-      title={activeTicket ? `${activeTicket.ticketNumber} - ${activeTicket.subject}` : 'Ticket'}
+      title={activeTicket ? `${activeTicket.ticketNumber} - ${activeTicket.subject}` : t('detail.ticketFallback')}
       open={Boolean(activeTicket)}
       onClose={onClose}
       size={720}
       extra={activeTicket && (
         <Space>
           {activeTicket.status !== 'RESOLVED' && activeTicket.status !== 'CLOSED' && (
-            <Button type="primary" onClick={() => onUpdateStatus('RESOLVED')}>Mark Resolved</Button>
+            <Button type="primary" onClick={() => onUpdateStatus('RESOLVED')}>{t('actions.markResolved')}</Button>
           )}
           {activeTicket.status !== 'CLOSED' && (
-            <Button danger onClick={() => onUpdateStatus('CLOSED')}>Close Ticket</Button>
+            <Button danger onClick={() => onUpdateStatus('CLOSED')}>{t('actions.close')}</Button>
           )}
         </Space>
       )}
@@ -49,11 +53,10 @@ export default function TicketAdminDetailDrawer({
       {activeTicket ? (
         <Space orientation="vertical" size={24} style={{ width: '100%' }}>
           <Space>
-            <Tag color={statusColor[activeTicket.status]}>{activeTicket.status}</Tag>
-            <Tag>{activeTicket.category}</Tag>
-            <Tag>{activeTicket.priority}</Tag>
-            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-            <Text type="secondary">Buyer: {(activeTicket as any).buyer?.name || '-'}</Text>
+            <Tag color={statusColor[activeTicket.status]}>{tCommon(`status.${activeTicket.status}`)}</Tag>
+            <Tag>{tCommon(`category.${activeTicket.category}`)}</Tag>
+            <Tag>{tCommon(`priority.${activeTicket.priority}`)}</Tag>
+            <Text type="secondary">{t('detail.buyer')} {activeTicket.buyer?.name || '-'}</Text>
           </Space>
           
           <div style={{ background: '#f8fafc', padding: 16, borderRadius: 8 }}>
@@ -61,8 +64,8 @@ export default function TicketAdminDetailDrawer({
               mode="left"
               items={(activeTicket.messages || []).map((item) => ({
                 color: item.authorType === 'STAFF' ? 'green' : 'blue',
-                dot: item.authorType === 'STAFF' ? <CustomerServiceOutlined style={{ fontSize: '16px' }} /> : <Avatar size="small">{item.authorUsername.charAt(0).toUpperCase()}</Avatar>,
-                children: (
+                icon: item.authorType === 'STAFF' ? <CustomerServiceOutlined style={{ fontSize: '16px' }} /> : <Avatar size="small">{item.authorUsername.charAt(0).toUpperCase()}</Avatar>,
+                content: (
                   <div style={{ paddingBottom: 16 }}>
                     <Text strong>{item.authorUsername}</Text>
                     <Text type="secondary" style={{ marginLeft: 8 }}>{dayjs(item.createdAt).format('DD/MM/YYYY HH:mm')}</Text>
@@ -76,22 +79,22 @@ export default function TicketAdminDetailDrawer({
           </div>
 
           {activeTicket.status !== 'CLOSED' && activeTicket.status !== 'RESOLVED' ? (
-            <Card size="small" title="Reply to Customer">
+            <Card size="small" title={t('detail.replyToBuyer')}>
               <Form form={replyForm} layout="vertical" onFinish={onSendReply}>
-                <Form.Item name="message" rules={[{ required: true, message: 'Please enter a reply message' }]}>
-                  <Input.TextArea rows={4} placeholder="Type your reply to the buyer here..." />
+                <Form.Item name="message" rules={[{ required: true, message: t('detail.messageRequired') }]}>
+                  <Input.TextArea rows={4} placeholder={t('detail.replyPlaceholder')} />
                 </Form.Item>
                 <Button type="primary" htmlType="submit" icon={<SendOutlined />}>
-                  Send Reply
+                  {t('actions.sendReply')}
                 </Button>
               </Form>
             </Card>
           ) : (
             <Card size="small" style={{ textAlign: 'center', background: '#f1f5f9' }}>
-              <Text type="secondary">This ticket is {activeTicket.status.toLowerCase()}. You cannot add new messages.</Text>
+              <Text type="secondary">{t('detail.closedHint')}</Text>
               {activeTicket.status === 'RESOLVED' && (
                  <div style={{ marginTop: 12 }}>
-                   <Button onClick={() => onUpdateStatus('OPEN')}>Reopen Ticket</Button>
+                   <Button onClick={() => onUpdateStatus('OPEN')}>{t('actions.reopen')}</Button>
                  </div>
               )}
             </Card>

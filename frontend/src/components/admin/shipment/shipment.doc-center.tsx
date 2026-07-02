@@ -36,6 +36,7 @@ import {
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import type { UploadFile } from 'antd/es/upload/interface';
+import { useTranslations } from 'next-intl';
 import { backendFetch, sendRequest, sendRequestFile } from '@/lib/api-client';
 import { getAccessToken } from '@/lib/auth-token';
 import PortSelect from '@/components/admin/ports/PortSelect';
@@ -160,22 +161,76 @@ interface IProps {
     session: SessionTokenShape;
 }
 
-const DOCUMENT_OPTIONS: Array<{ value: DocumentTypeValue; label: string }> = [
-    { value: 'COMMERCIAL_INVOICE', label: 'Commercial Invoice (Hóa đơn thương mại)' },
-    { value: 'PACKING_LIST', label: 'Packing List (Phiếu đóng gói)' },
-    { value: 'PROFORMA_INVOICE', label: 'Proforma Invoice (Hóa đơn chiếu lệ)' },
-    { value: 'BILL_OF_LADING', label: 'Bill of Lading (Vận đơn đường biển)' },
-    { value: 'AIRWAY_BILL', label: 'Airway Bill (Vận đơn hàng không)' },
-    { value: 'CERTIFICATE_OF_ORIGIN', label: 'Certificate of Origin (Giấy chứng nhận xuất xứ)' },
-    { value: 'CUSTOMS_DECLARATION', label: 'Customs Declaration (Tờ khai hải quan)' },
-    { value: 'PACKING_DECLARATION', label: 'Packing Declaration (Khai báo đóng gói)' },
-    { value: 'PHYTOSANITARY_CERTIFICATE', label: 'Phytosanitary Certificate (Giấy chứng nhận kiểm dịch thực vật)' },
-    { value: 'HEALTH_CERTIFICATE', label: 'Health Certificate (Giấy chứng nhận y tế)' },
-    { value: 'FUMIGATION_CERTIFICATE', label: 'Fumigation Certificate (Giấy chứng nhận khử trùng)' },
-    { value: 'QUALITY_INSPECTION_CERTIFICATE', label: 'Quality Inspection Certificate (Giấy chứng nhận chất lượng)' },
-    { value: 'VAT_REFUND_DOSSIER', label: 'VAT Refund Dossier (Hồ sơ hoàn thuế)' },
-    { value: 'OTHER', label: 'Other Document (Chứng từ khác)' },
+type DocCenterLabels = {
+  docCommercialInvoice: string;
+  docPackingList: string;
+  docProformaInvoice: string;
+  docBillOfLading: string;
+  docAirwayBill: string;
+  docCertificateOfOrigin: string;
+  docCustomsDeclaration: string;
+  docPackingDeclaration: string;
+  docPhytosanitary: string;
+  docHealth: string;
+  docFumigation: string;
+  docQualityInspection: string;
+  docVatRefund: string;
+  docOther: string;
+  statusMissing: string;
+  statusDraft: string;
+  statusUploaded: string;
+  statusGenerated: string;
+  statusReviewed: string;
+  statusApproved: string;
+  statusExpired: string;
+  statusNotApplicable: string;
+  actionVersionCreated: string;
+  actionFileUploaded: string;
+  actionGenerated: string;
+  actionReviewed: string;
+  actionShared: string;
+  actionUnshared: string;
+  actionDownloaded: string;
+  requiredMessage: string;
+};
+
+const buildDocumentOptions = (l: DocCenterLabels): Array<{ value: DocumentTypeValue; label: string }> => [
+  { value: 'COMMERCIAL_INVOICE', label: l.docCommercialInvoice },
+  { value: 'PACKING_LIST', label: l.docPackingList },
+  { value: 'PROFORMA_INVOICE', label: l.docProformaInvoice },
+  { value: 'BILL_OF_LADING', label: l.docBillOfLading },
+  { value: 'AIRWAY_BILL', label: l.docAirwayBill },
+  { value: 'CERTIFICATE_OF_ORIGIN', label: l.docCertificateOfOrigin },
+  { value: 'CUSTOMS_DECLARATION', label: l.docCustomsDeclaration },
+  { value: 'PACKING_DECLARATION', label: l.docPackingDeclaration },
+  { value: 'PHYTOSANITARY_CERTIFICATE', label: l.docPhytosanitary },
+  { value: 'HEALTH_CERTIFICATE', label: l.docHealth },
+  { value: 'FUMIGATION_CERTIFICATE', label: l.docFumigation },
+  { value: 'QUALITY_INSPECTION_CERTIFICATE', label: l.docQualityInspection },
+  { value: 'VAT_REFUND_DOSSIER', label: l.docVatRefund },
+  { value: 'OTHER', label: l.docOther },
 ];
+
+const buildStatusLabel = (l: DocCenterLabels): Record<ChecklistStatus, string> => ({
+  MISSING: l.statusMissing,
+  DRAFT: l.statusDraft,
+  UPLOADED: l.statusUploaded,
+  GENERATED: l.statusGenerated,
+  REVIEWED: l.statusReviewed,
+  APPROVED: l.statusApproved,
+  EXPIRED: l.statusExpired,
+  NOT_APPLICABLE: l.statusNotApplicable,
+});
+
+const buildActionLabel = (l: DocCenterLabels): Record<string, string> => ({
+  VERSION_CREATED: l.actionVersionCreated,
+  FILE_UPLOADED: l.actionFileUploaded,
+  GENERATED: l.actionGenerated,
+  REVIEWED: l.actionReviewed,
+  SHARED: l.actionShared,
+  UNSHARED: l.actionUnshared,
+  DOWNLOADED: l.actionDownloaded,
+});
 
 const BUSINESS_DOCUMENT_TYPES: DocumentTypeValue[] = [
     'BILL_OF_LADING',
@@ -199,29 +254,6 @@ const STATUS_COLOR: Record<ChecklistStatus, string> = {
     EXPIRED: 'volcano',
     NOT_APPLICABLE: 'default',
 };
-
-const STATUS_LABEL: Record<ChecklistStatus, string> = {
-    MISSING: 'Thiếu',
-    DRAFT: 'Nháp',
-    UPLOADED: 'Đã upload',
-    GENERATED: 'Đã sinh',
-    REVIEWED: 'Đã rà soát',
-    APPROVED: 'Đã duyệt',
-    EXPIRED: 'Hết hạn',
-    NOT_APPLICABLE: 'Không áp dụng',
-};
-
-const ACTION_LABEL: Record<string, string> = {
-    VERSION_CREATED: 'Tạo version',
-    FILE_UPLOADED: 'Upload file',
-    GENERATED: 'Sinh chứng từ',
-    REVIEWED: 'Rà soát',
-    SHARED: 'Share portal',
-    UNSHARED: 'Gỡ share',
-    DOWNLOADED: 'Buyer tải',
-};
-
-const requiredRule = { required: true, message: 'Bắt buộc' };
 
 const isBusinessDocumentType = (documentType?: DocumentTypeValue) => (
     !!documentType && BUSINESS_DOCUMENT_TYPES.includes(documentType)
@@ -273,6 +305,7 @@ const humanizeKey = (key: string) => (
 );
 
 const ShipmentDocCenter = ({ open, onClose, shipmentId, session }: IProps) => {
+    const t = useTranslations('ShipmentDocCenter');
     const { notification } = App.useApp();
     const [loading, setLoading] = useState(false);
     const [center, setCenter] = useState<DocumentCenter | null>(null);
@@ -281,6 +314,44 @@ const ShipmentDocCenter = ({ open, onClose, shipmentId, session }: IProps) => {
     const [uploadFiles, setUploadFiles] = useState<UploadFile[]>([]);
     const [form] = Form.useForm<RegisterDocumentValues>();
     const { token } = theme.useToken();
+
+    const docLabels = useMemo<DocCenterLabels>(() => ({
+      docCommercialInvoice: t('docCommercialInvoice'),
+      docPackingList: t('docPackingList'),
+      docProformaInvoice: t('docProformaInvoice'),
+      docBillOfLading: t('docBillOfLading'),
+      docAirwayBill: t('docAirwayBill'),
+      docCertificateOfOrigin: t('docCertificateOfOrigin'),
+      docCustomsDeclaration: t('docCustomsDeclaration'),
+      docPackingDeclaration: t('docPackingDeclaration'),
+      docPhytosanitary: t('docPhytosanitary'),
+      docHealth: t('docHealth'),
+      docFumigation: t('docFumigation'),
+      docQualityInspection: t('docQualityInspection'),
+      docVatRefund: t('docVatRefund'),
+      docOther: t('docOther'),
+      statusMissing: t('statusMissing'),
+      statusDraft: t('statusDraft'),
+      statusUploaded: t('statusUploaded'),
+      statusGenerated: t('statusGenerated'),
+      statusReviewed: t('statusReviewed'),
+      statusApproved: t('statusApproved'),
+      statusExpired: t('statusExpired'),
+      statusNotApplicable: t('statusNotApplicable'),
+      actionVersionCreated: t('actionVersionCreated'),
+      actionFileUploaded: t('actionFileUploaded'),
+      actionGenerated: t('actionGenerated'),
+      actionReviewed: t('actionReviewed'),
+      actionShared: t('actionShared'),
+      actionUnshared: t('actionUnshared'),
+      actionDownloaded: t('actionDownloaded'),
+      requiredMessage: t('requiredMessage'),
+    }), [t]);
+
+    const DOCUMENT_OPTIONS = useMemo(() => buildDocumentOptions(docLabels), [docLabels]);
+    const STATUS_LABEL = useMemo(() => buildStatusLabel(docLabels), [docLabels]);
+    const ACTION_LABEL = useMemo(() => buildActionLabel(docLabels), [docLabels]);
+    const requiredRule = useMemo(() => ({ required: true, message: docLabels.requiredMessage }), [docLabels.requiredMessage]);
 
     const accessToken = useMemo(() => getAccessToken(session), [session]);
     const selectedDocumentType = Form.useWatch('documentType', form) as DocumentTypeValue | undefined;
@@ -296,12 +367,12 @@ const ShipmentDocCenter = ({ open, onClose, shipmentId, session }: IProps) => {
             });
             if (res?.data) setCenter(res.data);
         } catch (error) {
-            const message = error instanceof Error ? error.message : 'Không tải được dữ liệu';
-            notification.error({ title: 'Không tải được bộ chứng từ', description: message });
+            const message = error instanceof Error ? error.message : t('loadError');
+            notification.error({ title: t('loadErrorTitle'), description: message });
         } finally {
             setLoading(false);
         }
-    }, [accessToken, notification, shipmentId]);
+    }, [accessToken, notification, shipmentId, t]);
 
     useEffect(() => {
         if (open) void fetchDocumentCenter();
@@ -338,11 +409,11 @@ const ShipmentDocCenter = ({ open, onClose, shipmentId, session }: IProps) => {
             link.click();
             document.body.removeChild(link);
             window.URL.revokeObjectURL(url);
-            notification.success({ title: `Đã tải ${type}` });
+            notification.success({ title: t('downloaded', { type }) });
             void fetchDocumentCenter();
         } catch (error) {
-            const message = error instanceof Error ? error.message : 'Không thể tải PDF';
-            notification.error({ title: 'Không thể tải PDF', description: message });
+            const message = error instanceof Error ? error.message : t('downloadError');
+            notification.error({ title: t('downloadError'), description: message });
         }
     };
 
@@ -355,11 +426,11 @@ const ShipmentDocCenter = ({ open, onClose, shipmentId, session }: IProps) => {
                 method: 'POST',
                 headers: { Authorization: `Bearer ${accessToken}` },
             });
-            notification.success({ title: 'Đã tạo snapshot chứng từ' });
+            notification.success({ title: t('generateSuccess') });
             void fetchDocumentCenter();
         } catch (error) {
-            const message = error instanceof Error ? error.message : 'Không tạo được chứng từ';
-            notification.error({ title: 'Không tạo được chứng từ', description: message });
+            const message = error instanceof Error ? error.message : t('generateError');
+            notification.error({ title: t('generateError'), description: message });
         }
     };
 
@@ -379,7 +450,7 @@ const ShipmentDocCenter = ({ open, onClose, shipmentId, session }: IProps) => {
         });
 
         if (!res?.data?.url) {
-            throw new Error(res?.message || 'Upload file thất bại');
+            throw new Error(res?.message || t('uploadFailed'));
         }
 
         return res.data;
@@ -415,14 +486,14 @@ const ShipmentDocCenter = ({ open, onClose, shipmentId, session }: IProps) => {
                 },
                 headers: { Authorization: `Bearer ${accessToken}` },
             });
-            notification.success({ title: 'Đã ghi nhận phiên bản chứng từ' });
+            notification.success({ title: t('registerSuccess') });
             form.resetFields();
             setUploadFiles([]);
             setRegisterOpen(false);
             void fetchDocumentCenter();
         } catch (error) {
-            const message = error instanceof Error ? error.message : 'Không lưu được chứng từ';
-            notification.error({ title: 'Không lưu được chứng từ', description: message });
+            const message = error instanceof Error ? error.message : t('registerSaveError');
+            notification.error({ title: t('registerSaveError'), description: message });
         } finally {
             setUploading(false);
         }
@@ -438,11 +509,11 @@ const ShipmentDocCenter = ({ open, onClose, shipmentId, session }: IProps) => {
                 body: { checklistStatus },
                 headers: { Authorization: `Bearer ${accessToken}` },
             });
-            notification.success({ title: 'Đã cập nhật trạng thái chứng từ' });
+            notification.success({ title: t('reviewSuccess') });
             void fetchDocumentCenter();
         } catch (error) {
-            const message = error instanceof Error ? error.message : 'Không cập nhật được chứng từ';
-            notification.error({ title: 'Không cập nhật được chứng từ', description: message });
+            const message = error instanceof Error ? error.message : t('reviewError');
+            notification.error({ title: t('reviewError'), description: message });
         }
     };
 
@@ -455,11 +526,11 @@ const ShipmentDocCenter = ({ open, onClose, shipmentId, session }: IProps) => {
                 method: 'PATCH',
                 headers: { Authorization: `Bearer ${accessToken}` },
             });
-            notification.success({ title: shared ? 'Đã chia sẻ lên buyer portal' : 'Đã gỡ chia sẻ' });
+            notification.success({ title: shared ? t('shareYes') : t('shareNo') });
             void fetchDocumentCenter();
         } catch (error) {
-            const message = error instanceof Error ? error.message : 'Không cập nhật chia sẻ';
-            notification.error({ title: 'Không cập nhật chia sẻ', description: message });
+            const message = error instanceof Error ? error.message : t('shareError');
+            notification.error({ title: t('shareError'), description: message });
         }
     };
 
@@ -471,40 +542,40 @@ const ShipmentDocCenter = ({ open, onClose, shipmentId, session }: IProps) => {
         if (selectedDocumentType === 'BILL_OF_LADING') {
             return (
                 <>
-                    <Divider titlePlacement="start">Bill of Lading (Vận đơn đường biển)</Divider>
+                    <Divider titlePlacement="start">{t('dividerBillOfLading')}</Divider>
                     <div className="grid grid-cols-1 gap-x-3 md:grid-cols-2">
-                        <Form.Item label="B/L number (Số vận đơn)" name={['businessData', 'blNumber']} rules={[requiredRule]}>
+                        <Form.Item label={`${t('lblBlNumber')} (${t('hintBlNumber')})`} name={['businessData', 'blNumber']} rules={[requiredRule]}>
                             <Input placeholder="BL-HCM-0001" />
                         </Form.Item>
-                        <Form.Item label="B/L type (Loại vận đơn)" name={['businessData', 'blType']}>
+                        <Form.Item label={`${t('lblBlType')} (${t('hintBlType')})`} name={['businessData', 'blType']}>
                             <Select options={[
-                                { value: 'ORIGINAL', label: 'Original B/L' },
-                                { value: 'SEAWAY', label: 'Seaway Bill' },
-                                { value: 'TELEX_RELEASE', label: 'Telex Release' },
+                                { value: 'ORIGINAL', label: t('blOriginal') },
+                                { value: 'SEAWAY', label: t('blSeaway') },
+                                { value: 'TELEX_RELEASE', label: t('blTelex') },
                             ]} />
                         </Form.Item>
-                        <Form.Item label="Carrier (Hãng tàu/Hàng không)" name={['businessData', 'carrierName']} rules={[requiredRule]}>
+                        <Form.Item label={`${t('lblCarrier')} (${t('hintCarrier')})`} name={['businessData', 'carrierName']} rules={[requiredRule]}>
                             <Input placeholder="Maersk, ONE, CMA CGM..." />
                         </Form.Item>
-                        <Form.Item label="Shipper (Người gửi hàng)" name={['businessData', 'shipperName']}>
+                        <Form.Item label={`${t('lblShipper')} (${t('hintShipper')})`} name={['businessData', 'shipperName']}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Consignee (Người nhận hàng)" name={['businessData', 'consigneeName']}>
+                        <Form.Item label={`${t('lblConsignee')} (${t('hintConsignee')})`} name={['businessData', 'consigneeName']}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Notify party (Bên nhận thông báo)" name={['businessData', 'notifyParty']}>
+                        <Form.Item label={`${t('lblNotifyParty')} (${t('hintNotifyParty')})`} name={['businessData', 'notifyParty']}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Vessel (Tàu biển)" name={['businessData', 'vesselName']} rules={[requiredRule]}>
+                        <Form.Item label={`${t('lblVessel')} (${t('hintVessel')})`} name={['businessData', 'vesselName']} rules={[requiredRule]}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Voyage (Chuyến tàu)" name={['businessData', 'voyageNumber']} rules={[requiredRule]}>
+                        <Form.Item label={`${t('lblVoyage')} (${t('hintVoyage')})`} name={['businessData', 'voyageNumber']} rules={[requiredRule]}>
                             <Input />
                         </Form.Item>
                         <Form.Item name={['businessData', 'portOfLoading']} hidden>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Port of loading (Cảng xếp)" name={['businessData', 'portOfLoading_port_id']} rules={[requiredRule]}>
+                        <Form.Item label={`${t('lblPortOfLoading')} (${t('hintPortOfLoading')})`} name={['businessData', 'portOfLoading_port_id']} rules={[requiredRule]}>
                             <PortSelect
                                 legacyText={getRecordString(form.getFieldValue('businessData'), 'portOfLoading')}
                                 onPortChange={(port) => setBusinessPortSnapshot('portOfLoading', port)}
@@ -513,40 +584,40 @@ const ShipmentDocCenter = ({ open, onClose, shipmentId, session }: IProps) => {
                         <Form.Item name={['businessData', 'portOfDischarge']} hidden>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Port of discharge (Cảng dỡ)" name={['businessData', 'portOfDischarge_port_id']} rules={[requiredRule]}>
+                        <Form.Item label={`${t('lblPortOfDischarge')} (${t('hintPortOfDischarge')})`} name={['businessData', 'portOfDischarge_port_id']} rules={[requiredRule]}>
                             <PortSelect
                                 legacyText={getRecordString(form.getFieldValue('businessData'), 'portOfDischarge')}
                                 onPortChange={(port) => setBusinessPortSnapshot('portOfDischarge', port)}
                             />
                         </Form.Item>
-                        <Form.Item label="On board date (Ngày lên tàu)" name={['businessData', 'onBoardDate']} rules={[requiredRule]}>
+                        <Form.Item label={`${t('lblOnBoardDate')} (${t('hintOnBoardDate')})`} name={['businessData', 'onBoardDate']} rules={[requiredRule]}>
                             <DatePicker className="w-full" />
                         </Form.Item>
-                        <Form.Item label="Freight terms (Điều kiện cước)" name={['businessData', 'freightTerms']} rules={[requiredRule]}>
+                        <Form.Item label={`${t('lblFreightTerms')} (${t('hintFreightTerms')})`} name={['businessData', 'freightTerms']} rules={[requiredRule]}>
                             <Select options={[
-                                { value: 'PREPAID', label: 'Prepaid' },
-                                { value: 'COLLECT', label: 'Collect' },
+                                { value: 'PREPAID', label: t('freightPrepaid') },
+                                { value: 'COLLECT', label: t('freightCollect') },
                             ]} />
                         </Form.Item>
-                        <Form.Item label="Place of receipt (Nơi nhận hàng)" name={['businessData', 'placeOfReceipt']}>
+                        <Form.Item label={`${t('lblPlaceOfReceipt')} (${t('hintPlaceOfReceipt')})`} name={['businessData', 'placeOfReceipt']}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Place of delivery (Nơi giao hàng)" name={['businessData', 'placeOfDelivery']}>
+                        <Form.Item label={`${t('lblPlaceOfDelivery')} (${t('hintPlaceOfDelivery')})`} name={['businessData', 'placeOfDelivery']}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Containers (Số container)" name={['businessData', 'containerNumbers']}>
+                        <Form.Item label={`${t('lblContainers')} (${t('hintContainers')})`} name={['businessData', 'containerNumbers']}>
                             <Input placeholder="MSCU1234567, TEMU7654321" />
                         </Form.Item>
-                        <Form.Item label="Seals (Số chì)" name={['businessData', 'sealNumbers']}>
+                        <Form.Item label={`${t('lblSeals')} (${t('hintSeals')})`} name={['businessData', 'sealNumbers']}>
                             <Input />
                         </Form.Item>
-                        <Form.Item className="md:col-span-2" label="Marks and numbers (Ký mã hiệu)" name={['businessData', 'marksAndNumbers']}>
+                        <Form.Item className="md:col-span-2" label={`${t('lblMarksAndNumbers')} (${t('hintMarksAndNumbers')})`} name={['businessData', 'marksAndNumbers']}>
                             <Input.TextArea rows={2} />
                         </Form.Item>
-                        <Form.Item label="Packages (Số kiện)" name={['businessData', 'packageCount']}>
+                        <Form.Item label={`${t('lblPackages')} (${t('hintPackages')})`} name={['businessData', 'packageCount']}>
                             <InputNumber min={0} className="w-full" />
                         </Form.Item>
-                        <Form.Item label="Package type (Loại kiện)" name={['businessData', 'packageType']}>
+                        <Form.Item label={`${t('lblPackageType')} (${t('hintPackageType')})`} name={['businessData', 'packageType']}>
                             <Input placeholder="Cartons, pallets, bags..." />
                         </Form.Item>
                     </div>
@@ -557,51 +628,51 @@ const ShipmentDocCenter = ({ open, onClose, shipmentId, session }: IProps) => {
         if (selectedDocumentType === 'AIRWAY_BILL') {
             return (
                 <>
-                    <Divider titlePlacement="start">Airway Bill (Vận đơn hàng không)</Divider>
+                    <Divider titlePlacement="start">{t('dividerAirwayBill')}</Divider>
                     <div className="grid grid-cols-1 gap-x-3 md:grid-cols-2">
-                        <Form.Item label="AWB number (Số AWB)" name={['businessData', 'awbNumber']} rules={[requiredRule]}>
+                        <Form.Item label={`${t('lblAwbNumber')} (${t('hintAwbNumber')})`} name={['businessData', 'awbNumber']} rules={[requiredRule]}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="AWB type (Loại AWB)" name={['businessData', 'awbType']}>
+                        <Form.Item label={`${t('lblAwbType')} (${t('hintAwbType')})`} name={['businessData', 'awbType']}>
                             <Select options={[
-                                { value: 'MASTER', label: 'Master AWB' },
-                                { value: 'HOUSE', label: 'House AWB' },
+                                { value: 'MASTER', label: t('awbMaster') },
+                                { value: 'HOUSE', label: t('awbHouse') },
                             ]} />
                         </Form.Item>
-                        <Form.Item label="Airline (Hãng hàng không)" name={['businessData', 'airlineName']} rules={[requiredRule]}>
+                        <Form.Item label={`${t('lblAirline')} (${t('hintAirline')})`} name={['businessData', 'airlineName']} rules={[requiredRule]}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Shipper (Người gửi hàng)" name={['businessData', 'shipperName']}>
+                        <Form.Item label={`${t('lblShipper')} (${t('hintShipper')})`} name={['businessData', 'shipperName']}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Consignee (Người nhận hàng)" name={['businessData', 'consigneeName']}>
+                        <Form.Item label={`${t('lblConsignee')} (${t('hintConsignee')})`} name={['businessData', 'consigneeName']}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Flight (Chuyến bay)" name={['businessData', 'flightNumber']} rules={[requiredRule]}>
+                        <Form.Item label={`${t('lblFlight')} (${t('hintFlight')})`} name={['businessData', 'flightNumber']} rules={[requiredRule]}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Departure airport (Sân bay đi)" name={['businessData', 'airportOfDeparture']} rules={[requiredRule]}>
+                        <Form.Item label={`${t('lblDepartureAirport')} (${t('hintDepartureAirport')})`} name={['businessData', 'airportOfDeparture']} rules={[requiredRule]}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Destination airport (Sân bay đến)" name={['businessData', 'airportOfDestination']} rules={[requiredRule]}>
+                        <Form.Item label={`${t('lblDestinationAirport')} (${t('hintDestinationAirport')})`} name={['businessData', 'airportOfDestination']} rules={[requiredRule]}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Departure date (Ngày đi)" name={['businessData', 'departureDate']} rules={[requiredRule]}>
+                        <Form.Item label={`${t('lblDepartureDate')} (${t('hintDepartureDate')})`} name={['businessData', 'departureDate']} rules={[requiredRule]}>
                             <DatePicker className="w-full" />
                         </Form.Item>
-                        <Form.Item label="Arrival date (Ngày đến)" name={['businessData', 'arrivalDate']}>
+                        <Form.Item label={`${t('lblArrivalDate')} (${t('hintArrivalDate')})`} name={['businessData', 'arrivalDate']}>
                             <DatePicker className="w-full" />
                         </Form.Item>
-                        <Form.Item label="Gross weight kg (Trọng lượng cả bì)" name={['businessData', 'grossWeightKg']}>
+                        <Form.Item label={`${t('lblGrossWeight')} (${t('hintGrossWeight')})`} name={['businessData', 'grossWeightKg']}>
                             <InputNumber min={0} precision={2} className="w-full" />
                         </Form.Item>
-                        <Form.Item label="Chargeable weight kg (Trọng lượng tính cước)" name={['businessData', 'chargeableWeightKg']}>
+                        <Form.Item label={`${t('lblChargeableWeight')} (${t('hintChargeableWeight')})`} name={['businessData', 'chargeableWeightKg']}>
                             <InputNumber min={0} precision={2} className="w-full" />
                         </Form.Item>
-                        <Form.Item label="Pieces (Số kiện)" name={['businessData', 'pieces']}>
+                        <Form.Item label={`${t('lblPieces')} (${t('hintPieces')})`} name={['businessData', 'pieces']}>
                             <InputNumber min={0} className="w-full" />
                         </Form.Item>
-                        <Form.Item label="Commodity (Tên hàng)" name={['businessData', 'commodity']}>
+                        <Form.Item label={`${t('lblCommodity')} (${t('hintCommodity')})`} name={['businessData', 'commodity']}>
                             <Input />
                         </Form.Item>
                     </div>
@@ -612,12 +683,12 @@ const ShipmentDocCenter = ({ open, onClose, shipmentId, session }: IProps) => {
         if (selectedDocumentType === 'CERTIFICATE_OF_ORIGIN') {
             return (
                 <>
-                    <Divider titlePlacement="start">Certificate of Origin (Giấy chứng nhận xuất xứ)</Divider>
+                    <Divider titlePlacement="start">{t('dividerCertificateOfOrigin')}</Divider>
                     <div className="grid grid-cols-1 gap-x-3 md:grid-cols-2">
-                        <Form.Item label="C/O number (Số C/O)" name={['businessData', 'coNumber']} rules={[requiredRule]}>
+                        <Form.Item label={`${t('lblCoNumber')} (${t('hintCoNumber')})`} name={['businessData', 'coNumber']} rules={[requiredRule]}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Form (Mẫu C/O)" name={['businessData', 'coForm']} rules={[requiredRule]}>
+                        <Form.Item label={`${t('lblCoForm')} (${t('hintCoForm')})`} name={['businessData', 'coForm']} rules={[requiredRule]}>
                             <Select options={[
                                 { value: 'B', label: 'Form B' },
                                 { value: 'D', label: 'Form D' },
@@ -628,31 +699,31 @@ const ShipmentDocCenter = ({ open, onClose, shipmentId, session }: IProps) => {
                                 { value: 'RCEP', label: 'RCEP' },
                             ]} />
                         </Form.Item>
-                        <Form.Item label="Issuing authority (Cơ quan cấp)" name={['businessData', 'issuingAuthority']} rules={[requiredRule]}>
+                        <Form.Item label={`${t('lblIssuingAuthority')} (${t('hintIssuingAuthority')})`} name={['businessData', 'issuingAuthority']} rules={[requiredRule]}>
                             <Input placeholder="VCCI, MOIT..." />
                         </Form.Item>
-                        <Form.Item label="Issue date (Ngày cấp)" name={['businessData', 'issueDate']} rules={[requiredRule]}>
+                        <Form.Item label={`${t('lblIssueDate')} (${t('hintIssueDate')})`} name={['businessData', 'issueDate']} rules={[requiredRule]}>
                             <DatePicker className="w-full" />
                         </Form.Item>
-                        <Form.Item label="Origin country (Nước xuất xứ)" name={['businessData', 'originCountry']} rules={[requiredRule]}>
+                        <Form.Item label={`${t('lblOriginCountry')} (${t('hintOriginCountry')})`} name={['businessData', 'originCountry']} rules={[requiredRule]}>
                             <Input placeholder="Vietnam" />
                         </Form.Item>
-                        <Form.Item label="Destination country (Nước nhập khẩu)" name={['businessData', 'destinationCountry']}>
+                        <Form.Item label={`${t('lblDestinationCountry')} (${t('hintDestinationCountry')})`} name={['businessData', 'destinationCountry']}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Invoice number (Số hóa đơn)" name={['businessData', 'invoiceNumber']}>
+                        <Form.Item label={`${t('lblInvoiceNumber')} (${t('hintInvoiceNumber')})`} name={['businessData', 'invoiceNumber']}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Invoice date (Ngày hóa đơn)" name={['businessData', 'invoiceDate']}>
+                        <Form.Item label={`${t('lblInvoiceDate')} (${t('hintInvoiceDate')})`} name={['businessData', 'invoiceDate']}>
                             <DatePicker className="w-full" />
                         </Form.Item>
-                        <Form.Item label="HS code summary (Mã HS)" name={['businessData', 'hsCodeSummary']}>
+                        <Form.Item label={`${t('lblHsCode')} (${t('hintHsCode')})`} name={['businessData', 'hsCodeSummary']}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Transport route (Tuyến đường vận chuyển)" name={['businessData', 'transportRoute']}>
+                        <Form.Item label={`${t('lblTransportRoute')} (${t('hintTransportRoute')})`} name={['businessData', 'transportRoute']}>
                             <Input placeholder="Vietnam to destination country" />
                         </Form.Item>
-                        <Form.Item className="md:col-span-2" label="Origin criteria (Tiêu chí xuất xứ)" name={['businessData', 'criteria']}>
+                        <Form.Item className="md:col-span-2" label={`${t('lblOriginCriteria')} (${t('hintOriginCriteria')})`} name={['businessData', 'criteria']}>
                             <Input.TextArea rows={2} />
                         </Form.Item>
                     </div>
@@ -663,43 +734,43 @@ const ShipmentDocCenter = ({ open, onClose, shipmentId, session }: IProps) => {
         if (selectedDocumentType === 'CUSTOMS_DECLARATION') {
             return (
                 <>
-                    <Divider titlePlacement="start">Customs Declaration (Tờ khai hải quan)</Divider>
+                    <Divider titlePlacement="start">{t('dividerCustomsDeclaration')}</Divider>
                     <div className="grid grid-cols-1 gap-x-3 md:grid-cols-2">
-                        <Form.Item label="Declaration number (Số tờ khai)" name={['businessData', 'declarationNumber']} rules={[requiredRule]}>
+                        <Form.Item label={`${t('lblDeclarationNumber')} (${t('hintDeclarationNumber')})`} name={['businessData', 'declarationNumber']} rules={[requiredRule]}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Customs office (Chi cục hải quan)" name={['businessData', 'customsOffice']} rules={[requiredRule]}>
+                        <Form.Item label={`${t('lblCustomsOffice')} (${t('hintCustomsOffice')})`} name={['businessData', 'customsOffice']} rules={[requiredRule]}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Declaration date (Ngày khai báo)" name={['businessData', 'declarationDate']} rules={[requiredRule]}>
+                        <Form.Item label={`${t('lblDeclarationDate')} (${t('hintDeclarationDate')})`} name={['businessData', 'declarationDate']} rules={[requiredRule]}>
                             <DatePicker className="w-full" />
                         </Form.Item>
-                        <Form.Item label="Clearance date (Ngày thông quan)" name={['businessData', 'clearanceDate']} rules={[requiredRule]}>
+                        <Form.Item label={`${t('lblClearanceDate')} (${t('hintClearanceDate')})`} name={['businessData', 'clearanceDate']} rules={[requiredRule]}>
                             <DatePicker className="w-full" />
                         </Form.Item>
-                        <Form.Item label="Channel (Luồng tờ khai)" name={['businessData', 'channel']} rules={[requiredRule]}>
+                        <Form.Item label={`${t('lblChannel')} (${t('hintChannel')})`} name={['businessData', 'channel']} rules={[requiredRule]}>
                             <Select options={[
-                                { value: 'GREEN', label: 'Green' },
-                                { value: 'YELLOW', label: 'Yellow' },
-                                { value: 'RED', label: 'Red' },
+                                { value: 'GREEN', label: t('channelGreen') },
+                                { value: 'YELLOW', label: t('channelYellow') },
+                                { value: 'RED', label: t('channelRed') },
                             ]} />
                         </Form.Item>
-                        <Form.Item label="Export type (Loại hình xuất khẩu)" name={['businessData', 'exportType']}>
+                        <Form.Item label={`${t('lblExportType')} (${t('hintExportType')})`} name={['businessData', 'exportType']}>
                             <Input placeholder="B11, E62..." />
                         </Form.Item>
-                        <Form.Item label="Exporter tax code (Mã số thuế xuất khẩu)" name={['businessData', 'exporterTaxCode']}>
+                        <Form.Item label={`${t('lblExporterTaxCode')} (${t('hintExporterTaxCode')})`} name={['businessData', 'exporterTaxCode']}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Invoice number (Số hóa đơn)" name={['businessData', 'invoiceNumber']}>
+                        <Form.Item label={`${t('lblInvoiceNumber')} (${t('hintInvoiceNumber')})`} name={['businessData', 'invoiceNumber']}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Total invoice value (Tổng trị giá hóa đơn)" name={['businessData', 'invoiceValue']}>
+                        <Form.Item label={`${t('lblInvoiceValue')} (${t('hintInvoiceValue')})`} name={['businessData', 'invoiceValue']}>
                             <InputNumber min={0} precision={2} className="w-full" />
                         </Form.Item>
-                        <Form.Item label="Currency (Đơn vị tiền tệ)" name={['businessData', 'currency']}>
+                        <Form.Item label={`${t('lblCurrency')} (${t('hintCurrency')})`} name={['businessData', 'currency']}>
                             <Input placeholder="USD, VND..." />
                         </Form.Item>
-                        <Form.Item className="md:col-span-2" label="HS summary (Tóm tắt mã HS)" name={['businessData', 'hsCodeSummary']}>
+                        <Form.Item className="md:col-span-2" label={`${t('lblHsSummary')} (${t('hintHsSummary')})`} name={['businessData', 'hsCodeSummary']}>
                             <Input.TextArea rows={2} />
                         </Form.Item>
                     </div>
@@ -710,35 +781,35 @@ const ShipmentDocCenter = ({ open, onClose, shipmentId, session }: IProps) => {
         if (selectedDocumentType === 'PACKING_DECLARATION') {
             return (
                 <>
-                    <Divider titlePlacement="start">Packing Declaration (Khai báo đóng gói)</Divider>
+                    <Divider titlePlacement="start">{t('dividerPackingDeclaration')}</Divider>
                     <div className="grid grid-cols-1 gap-x-3 md:grid-cols-2">
                         <Form.Item label="Declaration number (Số khai báo)" name={['businessData', 'declarationNumber']} rules={[requiredRule]}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Issue date (Ngày cấp)" name={['businessData', 'issueDate']} rules={[requiredRule]}>
+                        <Form.Item label={`${t('lblIssueDate')} (${t('hintIssueDate')})`} name={['businessData', 'issueDate']} rules={[requiredRule]}>
                             <DatePicker className="w-full" />
                         </Form.Item>
-                        <Form.Item label="Packing material (Vật liệu đóng gói)" name={['businessData', 'packingMaterial']} rules={[requiredRule]}>
+                        <Form.Item label={`${t('lblPackingMaterial')} (${t('hintPackingMaterial')})`} name={['businessData', 'packingMaterial']} rules={[requiredRule]}>
                             <Select options={[
-                                { value: 'WOODEN', label: 'Wooden packing' },
-                                { value: 'NON_WOODEN', label: 'Non-wooden packing' },
-                                { value: 'MIXED', label: 'Mixed packing' },
+                                { value: 'WOODEN', label: t('packingWooden') },
+                                { value: 'NON_WOODEN', label: t('packingNonWooden') },
+                                { value: 'MIXED', label: t('packingMixed') },
                             ]} />
                         </Form.Item>
-                        <Form.Item label="ISPM 15 applied (Áp dụng ISPM 15)" name={['businessData', 'ispm15Applied']}>
+                        <Form.Item label={`${t('lblIspm15')} (${t('hintIspm15')})`} name={['businessData', 'ispm15Applied']}>
                             <Select options={[
-                                { value: 'YES', label: 'Yes' },
-                                { value: 'NO', label: 'No' },
-                                { value: 'NOT_APPLICABLE', label: 'Not applicable' },
+                                { value: 'YES', label: t('yes') },
+                                { value: 'NO', label: t('no') },
+                                { value: 'NOT_APPLICABLE', label: t('notApplicable') },
                             ]} />
                         </Form.Item>
-                        <Form.Item label="Declarant (Người khai báo)" name={['businessData', 'declarantName']} rules={[requiredRule]}>
+                        <Form.Item label={`${t('lblDeclarant')} (${t('hintDeclarant')})`} name={['businessData', 'declarantName']} rules={[requiredRule]}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Position (Chức vụ)" name={['businessData', 'declarantPosition']}>
+                        <Form.Item label={`${t('lblDeclarantPosition')} (${t('hintDeclarantPosition')})`} name={['businessData', 'declarantPosition']}>
                             <Input />
                         </Form.Item>
-                        <Form.Item className="md:col-span-2" label="Treatment statement (Khai báo xử lý)" name={['businessData', 'treatmentStatement']} rules={[requiredRule]}>
+                        <Form.Item className="md:col-span-2" label={`${t('lblTreatmentStatement')} (${t('hintTreatmentStatement')})`} name={['businessData', 'treatmentStatement']} rules={[requiredRule]}>
                             <Input.TextArea rows={2} placeholder="Describe fumigation / heat treatment / non-wood declaration." />
                         </Form.Item>
                     </div>
@@ -749,33 +820,33 @@ const ShipmentDocCenter = ({ open, onClose, shipmentId, session }: IProps) => {
         if (selectedDocumentType === 'PHYTOSANITARY_CERTIFICATE') {
             return (
                 <>
-                    <Divider titlePlacement="start">Phytosanitary Certificate (Giấy chứng nhận kiểm dịch thực vật)</Divider>
+                    <Divider titlePlacement="start">{t('dividerPhytosanitary')}</Divider>
                     <div className="grid grid-cols-1 gap-x-3 md:grid-cols-2">
-                        <Form.Item label="Certificate number (Số chứng nhận)" name={['businessData', 'certificateNumber']} rules={[requiredRule]}>
+                        <Form.Item label={`${t('lblCertificateNumber')} (${t('hintCertificateNumber')})`} name={['businessData', 'certificateNumber']} rules={[requiredRule]}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Issuing authority (Cơ quan cấp)" name={['businessData', 'issuingAuthority']} rules={[requiredRule]}>
+                        <Form.Item label={`${t('lblIssuingAuthority')} (${t('hintIssuingAuthority')})`} name={['businessData', 'issuingAuthority']} rules={[requiredRule]}>
                             <Input placeholder="Plant Protection Department..." />
                         </Form.Item>
-                        <Form.Item label="Issue date (Ngày cấp)" name={['businessData', 'issueDate']} rules={[requiredRule]}>
+                        <Form.Item label={`${t('lblIssueDate')} (${t('hintIssueDate')})`} name={['businessData', 'issueDate']} rules={[requiredRule]}>
                             <DatePicker className="w-full" />
                         </Form.Item>
-                        <Form.Item label="Inspection place (Nơi kiểm dịch)" name={['businessData', 'inspectionPlace']} rules={[requiredRule]}>
+                        <Form.Item label={`${t('lblInspectionPlace')} (${t('hintInspectionPlace')})`} name={['businessData', 'inspectionPlace']} rules={[requiredRule]}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Botanical name (Tên thực vật)" name={['businessData', 'botanicalName']} rules={[requiredRule]}>
+                        <Form.Item label={`${t('lblBotanicalName')} (${t('hintBotanicalName')})`} name={['businessData', 'botanicalName']} rules={[requiredRule]}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Treatment (Biện pháp xử lý)" name={['businessData', 'treatment']}>
+                        <Form.Item label={`${t('lblTreatment')} (${t('hintTreatment')})`} name={['businessData', 'treatment']}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Quantity (Số lượng)" name={['businessData', 'quantity']}>
+                        <Form.Item label={`${t('lblQuantity')} (${t('hintQuantity')})`} name={['businessData', 'quantity']}>
                             <Input />
                         </Form.Item>
                         <Form.Item label="Destination country (Nước đến)" name={['businessData', 'destinationCountry']}>
                             <Input />
                         </Form.Item>
-                        <Form.Item className="md:col-span-2" label="Additional declaration (Khai báo bổ sung)" name={['businessData', 'additionalDeclaration']}>
+                        <Form.Item className="md:col-span-2" label={`${t('lblAdditionalDeclaration')} (${t('hintAdditionalDeclaration')})`} name={['businessData', 'additionalDeclaration']}>
                             <Input.TextArea rows={2} />
                         </Form.Item>
                     </div>
@@ -786,33 +857,33 @@ const ShipmentDocCenter = ({ open, onClose, shipmentId, session }: IProps) => {
         if (selectedDocumentType === 'HEALTH_CERTIFICATE') {
             return (
                 <>
-                    <Divider titlePlacement="start">Health Certificate (Giấy chứng nhận y tế)</Divider>
+                    <Divider titlePlacement="start">{t('dividerHealth')}</Divider>
                     <div className="grid grid-cols-1 gap-x-3 md:grid-cols-2">
-                        <Form.Item label="Certificate number (Số chứng nhận)" name={['businessData', 'certificateNumber']} rules={[requiredRule]}>
+                        <Form.Item label={`${t('lblCertificateNumber')} (${t('hintCertificateNumber')})`} name={['businessData', 'certificateNumber']} rules={[requiredRule]}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Issuing authority (Cơ quan cấp)" name={['businessData', 'issuingAuthority']} rules={[requiredRule]}>
+                        <Form.Item label={`${t('lblIssuingAuthority')} (${t('hintIssuingAuthority')})`} name={['businessData', 'issuingAuthority']} rules={[requiredRule]}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Issue date (Ngày cấp)" name={['businessData', 'issueDate']} rules={[requiredRule]}>
+                        <Form.Item label={`${t('lblIssueDate')} (${t('hintIssueDate')})`} name={['businessData', 'issueDate']} rules={[requiredRule]}>
                             <DatePicker className="w-full" />
                         </Form.Item>
-                        <Form.Item label="Product description (Mô tả sản phẩm)" name={['businessData', 'productDescription']} rules={[requiredRule]}>
+                        <Form.Item label={`${t('lblProductDescription')} (${t('hintProductDescription')})`} name={['businessData', 'productDescription']} rules={[requiredRule]}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Batch / lot (Số lô)" name={['businessData', 'batchOrLotNumber']}>
+                        <Form.Item label={`${t('lblBatchLot')} (${t('hintBatchLot')})`} name={['businessData', 'batchOrLotNumber']}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Manufacturing date (Ngày sản xuất)" name={['businessData', 'manufacturingDate']}>
+                        <Form.Item label={`${t('lblManufacturingDate')} (${t('hintManufacturingDate')})`} name={['businessData', 'manufacturingDate']}>
                             <DatePicker className="w-full" />
                         </Form.Item>
-                        <Form.Item label="Expiry date (Ngày hết hạn)" name={['businessData', 'expiryDate']}>
+                        <Form.Item label={`${t('lblExpiryDate')} (${t('hintExpiryDate')})`} name={['businessData', 'expiryDate']}>
                             <DatePicker className="w-full" />
                         </Form.Item>
                         <Form.Item label="Destination country (Nước đến)" name={['businessData', 'destinationCountry']}>
                             <Input />
                         </Form.Item>
-                        <Form.Item className="md:col-span-2" label="Health statement (Tuyên bố sức khỏe)" name={['businessData', 'healthStatement']} rules={[requiredRule]}>
+                        <Form.Item className="md:col-span-2" label={`${t('lblHealthStatement')} (${t('hintHealthStatement')})`} name={['businessData', 'healthStatement']} rules={[requiredRule]}>
                             <Input.TextArea rows={2} />
                         </Form.Item>
                     </div>
@@ -823,33 +894,33 @@ const ShipmentDocCenter = ({ open, onClose, shipmentId, session }: IProps) => {
         if (selectedDocumentType === 'FUMIGATION_CERTIFICATE') {
             return (
                 <>
-                    <Divider titlePlacement="start">Fumigation Certificate (Giấy chứng nhận khử trùng)</Divider>
+                    <Divider titlePlacement="start">{t('dividerFumigation')}</Divider>
                     <div className="grid grid-cols-1 gap-x-3 md:grid-cols-2">
-                        <Form.Item label="Certificate number (Số chứng nhận)" name={['businessData', 'certificateNumber']} rules={[requiredRule]}>
+                        <Form.Item label={`${t('lblCertificateNumber')} (${t('hintCertificateNumber')})`} name={['businessData', 'certificateNumber']} rules={[requiredRule]}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Fumigation company (Công ty khử trùng)" name={['businessData', 'fumigationCompany']} rules={[requiredRule]}>
+                        <Form.Item label={`${t('lblFumigationCompany')} (${t('hintFumigationCompany')})`} name={['businessData', 'fumigationCompany']} rules={[requiredRule]}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Fumigation date (Ngày khử trùng)" name={['businessData', 'fumigationDate']} rules={[requiredRule]}>
+                        <Form.Item label={`${t('lblFumigationDate')} (${t('hintFumigationDate')})`} name={['businessData', 'fumigationDate']} rules={[requiredRule]}>
                             <DatePicker className="w-full" />
                         </Form.Item>
-                        <Form.Item label="Chemical used (Hóa chất sử dụng)" name={['businessData', 'chemicalUsed']} rules={[requiredRule]}>
+                        <Form.Item label={`${t('lblChemicalUsed')} (${t('hintChemicalUsed')})`} name={['businessData', 'chemicalUsed']} rules={[requiredRule]}>
                             <Input placeholder="Methyl Bromide, Phosphine..." />
                         </Form.Item>
-                        <Form.Item label="Dosage (Liều lượng)" name={['businessData', 'dosage']} rules={[requiredRule]}>
+                        <Form.Item label={`${t('lblDosage')} (${t('hintDosage')})`} name={['businessData', 'dosage']} rules={[requiredRule]}>
                             <Input placeholder="g/m3" />
                         </Form.Item>
-                        <Form.Item label="Exposure duration (Thời gian ủ thuốc)" name={['businessData', 'exposureDuration']}>
+                        <Form.Item label={`${t('lblExposureDuration')} (${t('hintExposureDuration')})`} name={['businessData', 'exposureDuration']}>
                             <Input placeholder="24 hours" />
                         </Form.Item>
-                        <Form.Item label="Temperature (Nhiệt độ)" name={['businessData', 'temperature']}>
+                        <Form.Item label={`${t('lblTemperature')} (${t('hintTemperature')})`} name={['businessData', 'temperature']}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Treatment location (Địa điểm xử lý)" name={['businessData', 'treatmentLocation']}>
+                        <Form.Item label={`${t('lblTreatmentLocation')} (${t('hintTreatmentLocation')})`} name={['businessData', 'treatmentLocation']}>
                             <Input />
                         </Form.Item>
-                        <Form.Item className="md:col-span-2" label="Container / seal numbers (Số container / seal)" name={['businessData', 'containerSealNumbers']}>
+                        <Form.Item className="md:col-span-2" label={`${t('lblContainerSealNumbers')} (${t('hintContainerSealNumbers')})`} name={['businessData', 'containerSealNumbers']}>
                             <Input.TextArea rows={2} />
                         </Form.Item>
                     </div>
@@ -860,37 +931,37 @@ const ShipmentDocCenter = ({ open, onClose, shipmentId, session }: IProps) => {
         if (selectedDocumentType === 'QUALITY_INSPECTION_CERTIFICATE') {
             return (
                 <>
-                    <Divider titlePlacement="start">Quality Inspection Certificate (Giấy chứng nhận chất lượng)</Divider>
+                    <Divider titlePlacement="start">{t('dividerQualityInspection')}</Divider>
                     <div className="grid grid-cols-1 gap-x-3 md:grid-cols-2">
-                        <Form.Item label="Certificate number (Số chứng nhận)" name={['businessData', 'certificateNumber']} rules={[requiredRule]}>
+                        <Form.Item label={`${t('lblCertificateNumber')} (${t('hintCertificateNumber')})`} name={['businessData', 'certificateNumber']} rules={[requiredRule]}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Inspection agency (Cơ quan giám định)" name={['businessData', 'inspectionAgency']} rules={[requiredRule]}>
+                        <Form.Item label={`${t('lblInspectionAgency')} (${t('hintInspectionAgency')})`} name={['businessData', 'inspectionAgency']} rules={[requiredRule]}>
                             <Input placeholder="SGS, Bureau Veritas, Vinacontrol..." />
                         </Form.Item>
-                        <Form.Item label="Issue date (Ngày cấp)" name={['businessData', 'issueDate']} rules={[requiredRule]}>
+                        <Form.Item label={`${t('lblIssueDate')} (${t('hintIssueDate')})`} name={['businessData', 'issueDate']} rules={[requiredRule]}>
                             <DatePicker className="w-full" />
                         </Form.Item>
-                        <Form.Item label="Inspection date (Ngày giám định)" name={['businessData', 'inspectionDate']}>
+                        <Form.Item label={`${t('lblInspectionDate')} (${t('hintInspectionDate')})`} name={['businessData', 'inspectionDate']}>
                             <DatePicker className="w-full" />
                         </Form.Item>
-                        <Form.Item label="Inspection standard (Tiêu chuẩn giám định)" name={['businessData', 'inspectionStandard']} rules={[requiredRule]}>
+                        <Form.Item label={`${t('lblInspectionStandard')} (${t('hintInspectionStandard')})`} name={['businessData', 'inspectionStandard']} rules={[requiredRule]}>
                             <Input placeholder="Contract spec, ISO, buyer spec..." />
                         </Form.Item>
-                        <Form.Item label="Inspection result (Kết quả giám định)" name={['businessData', 'inspectionResult']} rules={[requiredRule]}>
+                        <Form.Item label={`${t('lblInspectionResult')} (${t('hintInspectionResult')})`} name={['businessData', 'inspectionResult']} rules={[requiredRule]}>
                             <Select options={[
-                                { value: 'PASSED', label: 'Passed' },
-                                { value: 'CONDITIONALLY_PASSED', label: 'Conditionally passed' },
-                                { value: 'FAILED', label: 'Failed' },
+                                { value: 'PASSED', label: t('resultPassed') },
+                                { value: 'CONDITIONALLY_PASSED', label: t('resultConditionallyPassed') },
+                                { value: 'FAILED', label: t('resultFailed') },
                             ]} />
                         </Form.Item>
-                        <Form.Item label="Sample size (Cỡ mẫu)" name={['businessData', 'sampleSize']}>
+                        <Form.Item label={`${t('lblSampleSize')} (${t('hintSampleSize')})`} name={['businessData', 'sampleSize']}>
                             <Input />
                         </Form.Item>
-                        <Form.Item label="Defect rate (Tỷ lệ lỗi)" name={['businessData', 'defectRate']}>
+                        <Form.Item label={`${t('lblDefectRate')} (${t('hintDefectRate')})`} name={['businessData', 'defectRate']}>
                             <Input />
                         </Form.Item>
-                        <Form.Item className="md:col-span-2" label="Inspection remarks (Nhận xét giám định)" name={['businessData', 'inspectionRemarks']}>
+                        <Form.Item className="md:col-span-2" label={`${t('lblInspectionRemarks')} (${t('hintInspectionRemarks')})`} name={['businessData', 'inspectionRemarks']}>
                             <Input.TextArea rows={2} />
                         </Form.Item>
                     </div>
@@ -903,29 +974,29 @@ const ShipmentDocCenter = ({ open, onClose, shipmentId, session }: IProps) => {
 
     const auditColumns: ColumnsType<ExportDocumentAuditEvent> = [
         {
-            title: 'Thời gian',
+            title: t('colTime'),
             dataIndex: 'at',
             width: 180,
             render: (value?: string) => formatDateTime(value),
         },
         {
-            title: 'Sự kiện',
+            title: t('colEvent'),
             dataIndex: 'action',
             width: 150,
             render: (value: string) => ACTION_LABEL[value] || value,
         },
-        { title: 'Người xử lý', dataIndex: 'username', width: 140 },
+        { title: t('colUser'), dataIndex: 'username', width: 140 },
         {
-            title: 'Ghi chú',
+            title: t('colNote'),
             dataIndex: 'note',
             render: (value?: string | null) => value || '-',
         },
         {
-            title: 'File',
+            title: t('colFile'),
             width: 110,
             render: (_, record) => record.fileUrl ? (
                 <Button size="small" icon={<EyeOutlined />} onClick={() => handleOpenFile(record.fileUrl)}>
-                    Mở
+                    {t('actionOpen')}
                 </Button>
             ) : '-',
         },
@@ -933,67 +1004,67 @@ const ShipmentDocCenter = ({ open, onClose, shipmentId, session }: IProps) => {
 
     const checklistColumns: ColumnsType<ChecklistRow> = [
         {
-            title: 'Chứng từ',
+            title: t('colDocument'),
             dataIndex: 'label',
             render: (label: string, record) => (
                 <Space>
                     <FileDoneOutlined />
                     <div>
                         <Text strong>{label}</Text>
-                        {record.required && <Tag className="ml-2" color="red">Bắt buộc</Tag>}
+                        {record.required && <Tag className="ml-2" color="red">{t('required')}</Tag>}
                     </div>
                 </Space>
             ),
         },
         {
-            title: 'Trạng thái',
+            title: t('colStatus'),
             dataIndex: 'status',
             width: 150,
             render: (status: ChecklistStatus) => <Tag color={STATUS_COLOR[status] || 'default'}>{STATUS_LABEL[status] || status}</Tag>,
         },
         {
-            title: 'Phiên bản',
+            title: t('colVersion'),
             width: 110,
             render: (_, record) => record.document ? `v${record.document.versionNo}` : '-',
         },
         {
-            title: 'Số chứng từ',
+            title: t('colDocNumber'),
             width: 180,
             render: (_, record) => record.document?.documentNumber || '-',
         },
         {
-            title: 'Thao tác',
+            title: t('colActions'),
             width: 380,
             render: (_, record) => (
                 <Space wrap>
                     {['COMMERCIAL_INVOICE', 'PACKING_LIST'].includes(record.documentType) && (
                         <Button size="small" icon={<ReloadOutlined />} onClick={() => handleGenerate(record.documentType)}>
-                            Sinh
+                            {t('actionGenerate')}
                         </Button>
                     )}
                     {record.documentType === 'COMMERCIAL_INVOICE' && (
                         <Button size="small" icon={<DownloadOutlined />} onClick={() => handleDownloadPdf('CI')}>
-                            CI
+                            {t('actionCi')}
                         </Button>
                     )}
                     {record.documentType === 'PACKING_LIST' && (
                         <Button size="small" icon={<DownloadOutlined />} onClick={() => handleDownloadPdf('PL')}>
-                            PL
+                            {t('actionPl')}
                         </Button>
                     )}
                     {isBusinessDocumentType(record.documentType) && (
                         <Button size="small" icon={<FormOutlined />} onClick={() => openRegisterModal(record.documentType)}>
-                            Form
+                            {t('actionForm')}
                         </Button>
                     )}
                     {record.document?.fileUrl && (
                         <Button size="small" icon={<EyeOutlined />} onClick={() => handleOpenFile(record.document?.fileUrl)}>
-                            File
+                            {t('actionFile')}
                         </Button>
                     )}
                     {record.document && record.status !== 'APPROVED' && (
                         <Button size="small" type="primary" icon={<CheckCircleOutlined />} onClick={() => handleReview(record, 'APPROVED')}>
-                            Duyệt
+                            {t('actionApprove')}
                         </Button>
                     )}
                     {record.document && (
@@ -1002,7 +1073,7 @@ const ShipmentDocCenter = ({ open, onClose, shipmentId, session }: IProps) => {
                             icon={<ShareAltOutlined />}
                             onClick={() => handleShare(record.document?._id || '', !record.document?.sharedWithBuyer)}
                         >
-                            {record.document.sharedWithBuyer ? 'Gỡ share' : 'Share'}
+                            {record.document.sharedWithBuyer ? t('actionUnshare') : t('actionShare')}
                         </Button>
                     )}
                 </Space>
@@ -1011,43 +1082,43 @@ const ShipmentDocCenter = ({ open, onClose, shipmentId, session }: IProps) => {
     ];
 
     const versionsColumns: ColumnsType<ExportDocumentRecord> = [
-        { title: 'Loại', dataIndex: 'documentType', width: 210 },
-        { title: 'Số CT', dataIndex: 'documentNumber', render: (value?: string | null) => value || '-' },
-        { title: 'Version', dataIndex: 'versionNo', width: 90, render: (value: number) => `v${value}` },
+        { title: t('colType'), dataIndex: 'documentType', width: 210 },
+        { title: t('colDocNoShort'), dataIndex: 'documentNumber', render: (value?: string | null) => value || '-' },
+        { title: t('colVersion'), dataIndex: 'versionNo', width: 90, render: (value: number) => `v${value}` },
         {
-            title: 'Trạng thái',
+            title: t('colStatus'),
             dataIndex: 'checklistStatus',
             width: 140,
             render: (status: ChecklistStatus) => <Tag color={STATUS_COLOR[status] || 'default'}>{STATUS_LABEL[status] || status}</Tag>,
         },
         {
-            title: 'File',
+            title: t('colFile'),
             width: 120,
             render: (_, record) => record.fileUrl ? (
                 <Button size="small" icon={<EyeOutlined />} onClick={() => handleOpenFile(record.fileUrl)}>
-                    Mở file
+                    {t('actionOpenFile')}
                 </Button>
             ) : '-',
         },
         {
-            title: 'Files ref',
+            title: t('colFilesRef'),
             dataIndex: 'fileAsset_id',
             width: 120,
             render: (value?: string | null) => value ? <Text code>{value.slice(-12)}</Text> : '-',
         },
         {
-            title: 'Current',
+            title: t('colCurrent'),
             dataIndex: 'isCurrentVersion',
             width: 90,
-            render: (value: boolean) => <Badge status={value ? 'success' : 'default'} text={value ? 'Có' : 'Cũ'} />,
+            render: (value: boolean) => <Badge status={value ? 'success' : 'default'} text={value ? t('currentYes') : t('currentNo')} />,
         },
         {
-            title: 'Người xử lý',
+            title: t('colReviewer'),
             width: 160,
             render: (_, record) => record.reviewedByUsername || record.uploadedByUsername || '-',
         },
         {
-            title: 'Audit mới nhất',
+            title: t('colLatestAudit'),
             width: 170,
             render: (_, record) => {
                 const latest = record.auditTrail?.[record.auditTrail.length - 1];
@@ -1055,11 +1126,11 @@ const ShipmentDocCenter = ({ open, onClose, shipmentId, session }: IProps) => {
             },
         },
         {
-            title: 'Buyer portal',
+            title: t('colBuyerPortal'),
             width: 120,
             render: (_, record) => (
                 <Tag color={record.sharedWithBuyer ? 'green' : 'default'}>
-                    {record.sharedWithBuyer ? 'Đang share' : 'Nội bộ'}
+                    {record.sharedWithBuyer ? t('sharedYes') : t('sharedNo')}
                 </Tag>
             ),
         },
@@ -1087,7 +1158,7 @@ const ShipmentDocCenter = ({ open, onClose, shipmentId, session }: IProps) => {
                     dataSource={record.auditTrail || []}
                     columns={auditColumns}
                     pagination={false}
-                    locale={{ emptyText: 'Chưa có audit trail' }}
+                    locale={{ emptyText: t('noAuditTrail') }}
                 />
             </Space>
         );
@@ -1101,7 +1172,7 @@ const ShipmentDocCenter = ({ open, onClose, shipmentId, session }: IProps) => {
             title={
                 <Space>
                     <FilePdfOutlined className="text-red-500" />
-                    <Text strong>Trung tâm chứng từ xuất khẩu</Text>
+                    <Text strong>{t('drawerTitle')}</Text>
                     {shipment?.shipmentNumber && <Tag color="blue">{shipment.shipmentNumber}</Tag>}
                 </Space>
             }
@@ -1113,19 +1184,19 @@ const ShipmentDocCenter = ({ open, onClose, shipmentId, session }: IProps) => {
             extra={
                 <Space>
                     <Button icon={<FileAddOutlined />} onClick={() => openRegisterModal()}>
-                        Ghi nhận chứng từ
+                        {t('registerDocument')}
                     </Button>
                     <Button icon={<ReloadOutlined />} onClick={fetchDocumentCenter}>
-                        Làm mới
+                        {t('refresh')}
                     </Button>
                 </Space>
             }
         >
             <Space className="w-full" orientation="vertical" size={16}>
                 <Descriptions bordered size="small" column={3}>
-                    <Descriptions.Item label="Lô hàng">{shipment?.shipmentNumber || '-'}</Descriptions.Item>
-                    <Descriptions.Item label="Hợp đồng">{shipment?.salesContract?.contractNumber || '-'}</Descriptions.Item>
-                    <Descriptions.Item label="Trạng thái">{shipment?.status || '-'}</Descriptions.Item>
+                    <Descriptions.Item label={t('metaShipment')}>{shipment?.shipmentNumber || '-'}</Descriptions.Item>
+                    <Descriptions.Item label={t('metaContract')}>{shipment?.salesContract?.contractNumber || '-'}</Descriptions.Item>
+                    <Descriptions.Item label={t('metaStatus')}>{shipment?.status || '-'}</Descriptions.Item>
                     <Descriptions.Item label="POL">{shipment?.pol || '-'}</Descriptions.Item>
                     <Descriptions.Item label="POD">{shipment?.pod || '-'}</Descriptions.Item>
                     <Descriptions.Item label="B/L">{shipment?.blNumber || '-'}</Descriptions.Item>
@@ -1136,20 +1207,20 @@ const ShipmentDocCenter = ({ open, onClose, shipmentId, session }: IProps) => {
                     items={[
                         {
                             key: 'checklist',
-                            label: 'Checklist chứng từ',
+                            label: t('tabChecklist'),
                             children: (
                                 <Space className="w-full" orientation="vertical" size={16}>
-                                    <div 
-                                        className="rounded-lg border p-4" 
+                                    <div
+                                        className="rounded-lg border p-4"
                                         style={{ background: token.colorBgContainer, borderColor: token.colorBorderSecondary }}
                                     >
                                         <Space className="w-full justify-between" wrap>
                                             <div>
-                                                <Text strong>Hồ sơ hoàn thuế GTGT xuất khẩu</Text>
-                                                <div style={{ fontSize: 12, color: token.colorTextSecondary }}>Cần đủ CI, PL, B/L, C/O và tờ khai hải quan.</div>
+                                                <Text strong>{t('vatRefundDossier')}</Text>
+                                                <div style={{ fontSize: 12, color: token.colorTextSecondary }}>{t('vatRefundDossierDesc')}</div>
                                             </div>
                                             <Tag color={dossierReady ? 'green' : 'orange'}>
-                                                {dossierReady ? 'Sẵn sàng' : 'Chưa đủ chứng từ'}
+                                                {dossierReady ? t('dossierReady') : t('dossierNotReady')}
                                             </Tag>
                                         </Space>
                                     </div>
@@ -1168,7 +1239,7 @@ const ShipmentDocCenter = ({ open, onClose, shipmentId, session }: IProps) => {
                         },
                         {
                             key: 'versions',
-                            label: 'Lịch sử phiên bản',
+                            label: t('tabVersions'),
                             children: (
                                 <Table
                                     rowKey="_id"
@@ -1187,7 +1258,7 @@ const ShipmentDocCenter = ({ open, onClose, shipmentId, session }: IProps) => {
             </Space>
 
             <Modal
-                title="Ghi nhận phiên bản chứng từ"
+                title={t('registerSuccess')}
                 open={registerOpen}
                 onCancel={() => setRegisterOpen(false)}
                 onOk={() => form.submit()}
@@ -1197,22 +1268,22 @@ const ShipmentDocCenter = ({ open, onClose, shipmentId, session }: IProps) => {
                 width={760}
             >
                 <Form form={form} layout="vertical" onFinish={handleRegister}>
-                    <Form.Item label="Loại chứng từ" name="documentType" rules={[requiredRule]}>
+                    <Form.Item label={t('formDocumentType')} name="documentType" rules={[requiredRule]}>
                         <Select options={DOCUMENT_OPTIONS} showSearch optionFilterProp="label" />
                     </Form.Item>
 
                     {renderBusinessFormFields()}
 
                     <div className="grid grid-cols-1 gap-x-3 md:grid-cols-2">
-                        <Form.Item label="Số chứng từ" name="documentNumber">
-                            <Input placeholder="Nếu bỏ trống sẽ lấy từ form nghiệp vụ" />
+                        <Form.Item label={t('formDocumentNumber')} name="documentNumber">
+                            <Input placeholder={t('formDocumentNumberHint')} />
                         </Form.Item>
-                        <Form.Item label="Tên file" name="fileName">
+                        <Form.Item label={t('formFileName')} name="fileName">
                             <Input placeholder="commercial-invoice.pdf" />
                         </Form.Item>
                     </div>
 
-                    <Form.Item label="Upload file PDF/ảnh qua Files module">
+                    <Form.Item label={t('formUploadFile')}>
                         <Upload
                             beforeUpload={() => false}
                             maxCount={1}
@@ -1220,16 +1291,16 @@ const ShipmentDocCenter = ({ open, onClose, shipmentId, session }: IProps) => {
                             onChange={({ fileList }) => setUploadFiles(fileList)}
                             accept="application/pdf,image/*"
                         >
-                            <Button icon={<UploadOutlined />}>Chọn file từ máy</Button>
+                            <Button icon={<UploadOutlined />}>{t('formChooseFile')}</Button>
                         </Upload>
                     </Form.Item>
-                    <Form.Item label="Đường dẫn file" name="fileUrl">
-                        <Input placeholder="/uploads/documents/... nếu file đã có sẵn" />
+                    <Form.Item label={t('formFileUrl')} name="fileUrl">
+                        <Input placeholder={t('formFileUrlHint')} />
                     </Form.Item>
-                    <Form.Item label="Số tờ khai hải quan" name="customsDeclarationNumber">
-                        <Input placeholder="Nếu là tờ khai hải quan và muốn nhập nhanh" />
+                    <Form.Item label={t('formCustomsDeclNumber')} name="customsDeclarationNumber">
+                        <Input placeholder={t('formCustomsDeclNumberHint')} />
                     </Form.Item>
-                    <Form.Item label="Ghi chú" name="notes">
+                    <Form.Item label={t('formNotes')} name="notes">
                         <Input.TextArea rows={3} />
                     </Form.Item>
                 </Form>

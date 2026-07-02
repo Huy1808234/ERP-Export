@@ -33,7 +33,7 @@ import {
   TruckOutlined,
   WarningOutlined,
 } from '@ant-design/icons';
-import { useLocale } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { useRouter } from 'next/navigation';
 import AdminPageScroll from '@/components/layout/admin.page-scroll';
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -44,34 +44,54 @@ const { Text, Title } = Typography;
 
 type ShipmentFilterKey = 'all' | 'booking' | 'shipping' | 'receiving' | 'completed';
 
-const shipmentFilters: Array<{
+type ShipmentLabels = {
+  filterAll: string;
+  filterBooking: string;
+  filterShipping: string;
+  filterReceiving: string;
+  filterCompleted: string;
+  statusBooked: string;
+  statusLoading: string;
+  statusCustomsCleared: string;
+  statusOnBoard: string;
+  statusArrived: string;
+  statusClosed: string;
+  milestoneBooked: string;
+  milestoneLoading: string;
+  milestoneCustomsCleared: string;
+  milestoneOnBoard: string;
+  milestoneArrived: string;
+  milestoneClosed: string;
+};
+
+const buildShipmentFilters = (l: ShipmentLabels): Array<{
   key: ShipmentFilterKey;
   label: string;
   statuses: string[];
-}> = [
-  { key: 'all', label: 'Tất cả', statuses: [] },
-  { key: 'booking', label: 'Đã đặt lịch', statuses: ['BOOKED'] },
-  { key: 'shipping', label: 'Vận chuyển', statuses: ['LOADING', 'CUSTOMS_CLEARED', 'ON_BOARD'] },
-  { key: 'receiving', label: 'Chờ nhận hàng', statuses: ['ARRIVED'] },
-  { key: 'completed', label: 'Hoàn tất', statuses: ['CLOSED'] },
+}> => [
+  { key: 'all', label: l.filterAll, statuses: [] },
+  { key: 'booking', label: l.filterBooking, statuses: ['BOOKED'] },
+  { key: 'shipping', label: l.filterShipping, statuses: ['LOADING', 'CUSTOMS_CLEARED', 'ON_BOARD'] },
+  { key: 'receiving', label: l.filterReceiving, statuses: ['ARRIVED'] },
+  { key: 'completed', label: l.filterCompleted, statuses: ['CLOSED'] },
 ];
 
-const statusMeta: Record<string, { label: string; color: string; tone: string }> = {
-  BOOKED: { label: 'Đã đặt lịch', color: 'blue', tone: '#2563eb' },
-  LOADING: { label: 'Đang đóng hàng', color: 'processing', tone: '#0ea5e9' },
-  CUSTOMS_CLEARED: { label: 'Đã thông quan', color: 'purple', tone: '#7c3aed' },
-  ON_BOARD: { label: 'Đang vận chuyển', color: 'cyan', tone: '#0891b2' },
-  ARRIVED: { label: 'Chờ nhận hàng', color: 'orange', tone: '#f97316' },
-  CLOSED: { label: 'Hoàn tất', color: 'green', tone: '#16a34a' },
-};
+const buildStatusMeta = (l: ShipmentLabels): Record<string, { label: string; color: string; tone: string }> => ({
+  BOOKED: { label: l.statusBooked, color: 'blue', tone: '#2563eb' },
+  LOADING: { label: l.statusLoading, color: 'processing', tone: '#0ea5e9' },
+  CUSTOMS_CLEARED: { label: l.statusCustomsCleared, color: 'purple', tone: '#7c3aed' },
+  ON_BOARD: { label: l.statusOnBoard, color: 'cyan', tone: '#0891b2' },
+  ARRIVED: { label: l.statusArrived, color: 'orange', tone: '#f97316' },
+  CLOSED: { label: l.statusClosed, color: 'green', tone: '#16a34a' },
+});
 
-const defaultTimeline: PortalShipmentTimelineItem[] = [
-  { status: 'BOOKED', label: 'Đơn hàng đã đặt lịch', state: 'finish' },
-  { status: 'LOADING', label: 'Đóng hàng / xuất kho', state: 'wait' },
-  { status: 'CUSTOMS_CLEARED', label: 'Thông quan xuất khẩu', state: 'wait' },
-  { status: 'ON_BOARD', label: 'Đã lên tàu', state: 'wait' },
-  { status: 'ARRIVED', label: 'Đến cảng đích', state: 'wait' },
-  { status: 'CLOSED', label: 'Hoàn tất giao nhận', state: 'wait' },
+const buildDefaultTimeline = (l: ShipmentLabels): PortalShipmentTimelineItem[] => [
+  { status: 'BOOKED', label: l.milestoneBooked, state: 'finish' },
+  { status: 'LOADING', label: l.milestoneLoading, state: 'wait' },
+  { status: 'CUSTOMS_CLEARED', label: l.milestoneCustomsCleared, state: 'wait' },
+  { status: 'ON_BOARD', label: l.milestoneOnBoard, state: 'wait' },
+  { status: 'ARRIVED', label: l.milestoneArrived, state: 'wait' },
+  { status: 'CLOSED', label: l.milestoneClosed, state: 'wait' },
 ];
 
 const normalizeStatus = (status?: string | null): string => status || 'BOOKED';
@@ -87,8 +107,14 @@ const formatDate = (value?: string | null): string => {
 
 const getShipmentNumber = (shipment: PortalShipment): string => shipment.shipmentNumber || shipment._id;
 
-const getTimeline = (shipment: PortalShipment): PortalShipmentTimelineItem[] => {
-  if (shipment.timeline?.length) return shipment.timeline;
+const getTimeline = (shipment: PortalShipment, defaultTimeline: PortalShipmentTimelineItem[]): PortalShipmentTimelineItem[] => {
+  if (shipment.timeline?.length) {
+    return shipment.timeline.map((item) => ({
+      ...item,
+      // Backend may store raw English label; prefer localized label from defaultTimeline
+      label: defaultTimeline.find((entry) => entry.status === item.status)?.label ?? item.label,
+    }));
+  }
 
   const currentStatus = normalizeStatus(shipment.status);
   const currentIndex = defaultTimeline.findIndex((item) => item.status === currentStatus);
@@ -111,8 +137,8 @@ const getLatestEvent = (timeline: PortalShipmentTimelineItem[]): PortalShipmentT
   return [...timeline].reverse().find((item) => item.state === 'process' || item.state === 'finish');
 };
 
-const getLogisticsProvider = (shipment: PortalShipment): string => (
-  shipment.shippingLine || shipment.carrier || 'Chưa có đơn vị logistics'
+const getLogisticsProvider = (shipment: PortalShipment, t: ReturnType<typeof useTranslations<'ShipmentTracking'>>): string => (
+  shipment.shippingLine || shipment.carrier || t('logisticsProviderNone')
 );
 
 const getEtaDelayDays = (shipment: PortalShipment): number => {
@@ -130,7 +156,7 @@ const getEtaDelayDays = (shipment: PortalShipment): number => {
   return Math.ceil((today.getTime() - eta.getTime()) / (1000 * 60 * 60 * 24));
 };
 
-function ShipmentStatusTag({ status }: { status?: string | null }) {
+function ShipmentStatusTag({ status, statusMeta }: { status?: string | null; statusMeta: Record<string, { label: string; color: string; tone: string }> }) {
   const normalizedStatus = normalizeStatus(status);
   const meta = statusMeta[normalizedStatus] || { label: normalizedStatus, color: 'default', tone: '#64748b' };
 
@@ -145,13 +171,21 @@ function ShipmentOrderCard({
   shipment,
   selected,
   onSelect,
+  t,
+  statusMeta,
+  defaultTimeline,
+  amitLogistics,
 }: {
   shipment: PortalShipment;
   selected: boolean;
   onSelect: (shipment: PortalShipment) => void;
+  t: ReturnType<typeof useTranslations<'ShipmentTracking'>>;
+  statusMeta: Record<string, { label: string; color: string; tone: string }>;
+  defaultTimeline: PortalShipmentTimelineItem[];
+  amitLogistics: string;
 }) {
   const { token } = theme.useToken();
-  const timeline = getTimeline(shipment);
+  const timeline = getTimeline(shipment, defaultTimeline);
   const latestEvent = getLatestEvent(timeline);
   const shipmentNumber = getShipmentNumber(shipment);
   const status = normalizeStatus(shipment.status);
@@ -184,12 +218,12 @@ function ShipmentOrderCard({
       >
         <Space size={8} wrap>
           <ShopOutlined style={{ color: token.colorPrimary }} />
-          <Text strong>Amit Export Logistics</Text>
-          <Tag color="blue" style={{ marginInlineEnd: 0 }}>ERP EXPORT</Tag>
+          <Text strong>{amitLogistics}</Text>
+          <Tag color="blue" style={{ marginInlineEnd: 0 }}>{t('erpExport')}</Tag>
         </Space>
         <Space size={8} wrap>
-          <Text type="secondary">{shipment.salesContract?.contractNumber || 'Chưa gắn hợp đồng'}</Text>
-          <ShipmentStatusTag status={shipment.status} />
+          <Text type="secondary">{shipment.salesContract?.contractNumber || t('noContract')}</Text>
+          <ShipmentStatusTag status={shipment.status} statusMeta={statusMeta} />
         </Space>
       </div>
 
@@ -221,17 +255,17 @@ function ShipmentOrderCard({
                   <Text type="secondary">B/L: {shipment.blNumber || '-'}</Text>
                   <Text type="secondary">Booking: {shipment.bookingNumber || '-'}</Text>
                 </Space>
-                <Text type="secondary">Đơn vị logistics: {getLogisticsProvider(shipment)}</Text>
+                <Text type="secondary">{t('logisticsProvider', { name: getLogisticsProvider(shipment, t) })}</Text>
               </Space>
             </Space>
           </Col>
           <Col xs={24} lg={5}>
             <Space orientation="vertical" size={2}>
-              <Text type="secondary">ETA dự kiến</Text>
+              <Text type="secondary">{t('etaExpected')}</Text>
               <Text strong>{formatDate(shipment.eta)}</Text>
               {etaDelayDays > 0 ? (
                 <Tag color="error" style={{ marginInlineEnd: 0 }}>
-                  Trễ {etaDelayDays} ngày
+                  {t('lateDays', { n: etaDelayDays })}
                 </Tag>
               ) : null}
             </Space>
@@ -252,8 +286,8 @@ function ShipmentOrderCard({
         >
           <Space size={8} wrap>
             <TruckOutlined style={{ color: token.colorSuccess }} />
-            <Text strong>{latestEvent?.label || 'Đang cập nhật vận đơn'}</Text>
-            <Text type="secondary">{latestEvent?.date ? formatDate(latestEvent.date) : 'Chưa có thời gian ghi nhận'}</Text>
+            <Text strong>{latestEvent?.label || t('updatingBill')}</Text>
+            <Text type="secondary">{latestEvent?.date ? formatDate(latestEvent.date) : t('noRecordTime')}</Text>
           </Space>
         </div>
       </div>
@@ -264,12 +298,18 @@ function ShipmentOrderCard({
 function ShipmentDetailPanel({
   shipment,
   onCreateTicket,
+  t,
+  statusMeta,
+  defaultTimeline,
 }: {
   shipment: PortalShipment;
   onCreateTicket: (shipment: PortalShipment) => void;
+  t: ReturnType<typeof useTranslations<'ShipmentTracking'>>;
+  statusMeta: Record<string, { label: string; color: string; tone: string }>;
+  defaultTimeline: PortalShipmentTimelineItem[];
 }) {
   const { token } = theme.useToken();
-  const timeline = getTimeline(shipment);
+  const timeline = getTimeline(shipment, defaultTimeline);
   const latestEvent = getLatestEvent(timeline);
   const shipmentNumber = getShipmentNumber(shipment);
   const status = normalizeStatus(shipment.status);
@@ -297,14 +337,14 @@ function ShipmentDetailPanel({
         }}
       >
         <Space orientation="vertical" size={2}>
-          <Text type="secondary">Mã lô hàng</Text>
+          <Text type="secondary">{t('shipmentNumber')}</Text>
           <Title level={5} style={{ margin: 0 }}>{shipmentNumber}</Title>
         </Space>
         <Space size={12} wrap>
           <Text strong style={{ color: meta.tone }}>{meta.label}</Text>
-          <ShipmentStatusTag status={shipment.status} />
+          <ShipmentStatusTag status={shipment.status} statusMeta={statusMeta} />
           <Button size="small" icon={<CustomerServiceOutlined />} onClick={() => onCreateTicket(shipment)}>
-            Tạo ticket
+            {t('createTicket')}
           </Button>
         </Space>
       </div>
@@ -315,11 +355,11 @@ function ShipmentDetailPanel({
             showIcon
             type="warning"
             icon={<WarningOutlined />}
-            title={`ETA đang trễ ${etaDelayDays} ngày`}
-            description="Bạn có thể tạo ticket để đội logistics kiểm tra lịch tàu, chứng từ và thời gian giao dự kiến."
+            title={t('etaDelayedTitle', { n: etaDelayDays })}
+            description={t('etaDelayedDesc')}
             action={(
               <Button size="small" type="primary" icon={<CustomerServiceOutlined />} onClick={() => onCreateTicket(shipment)}>
-                Tạo ticket
+                {t('createTicket')}
               </Button>
             )}
           />
@@ -350,11 +390,11 @@ function ShipmentDetailPanel({
         }}
       >
         <Space orientation="vertical" size={2}>
-          <Text type="secondary">Cập nhật mới nhất</Text>
-          <Text strong>{latestEvent?.label || 'Đang đồng bộ trạng thái'}</Text>
+          <Text type="secondary">{t('latestUpdate')}</Text>
+          <Text strong>{latestEvent?.label || t('syncingStatus')}</Text>
         </Space>
         <Space orientation="vertical" size={2} style={{ textAlign: 'right' }}>
-          <Text type="secondary">Ngày dự kiến nhận</Text>
+          <Text type="secondary">{t('expectedReceiveDate')}</Text>
           <Text strong>{formatDate(shipment.eta)}</Text>
         </Space>
       </div>
@@ -363,25 +403,25 @@ function ShipmentDetailPanel({
         <Col xs={24} xl={10}>
           <Card
             size="small"
-            title={<Space><EnvironmentOutlined />Tuyến vận chuyển</Space>}
+            title={<Space><EnvironmentOutlined />{t('routeCard')}</Space>}
             variant="outlined"
             style={{ borderRadius: 8, height: '100%' }}
           >
             <Space orientation="vertical" size={14} style={{ width: '100%' }}>
               <div>
-                <Text type="secondary">POL / POD</Text>
+                <Text type="secondary">{t('polPod')}</Text>
                 <div style={{ fontWeight: 700 }}>{shipment.pol || '?'} → {shipment.pod || '?'}</div>
               </div>
               <div>
-                <Text type="secondary">Hãng tàu / đơn vị vận chuyển</Text>
+                <Text type="secondary">{t('carrier')}</Text>
                 <div style={{ fontWeight: 700 }}>{shipment.shippingLine || shipment.carrier || '-'}</div>
               </div>
               <div>
-                <Text type="secondary">Tàu / Chuyến</Text>
+                <Text type="secondary">{t('vesselVoyage')}</Text>
                 <div style={{ fontWeight: 700 }}>{shipment.vesselName || '-'} {shipment.voyageNumber || ''}</div>
               </div>
               <div>
-                <Text type="secondary">ETD / ETA</Text>
+                <Text type="secondary">{t('etdEta')}</Text>
                 <div style={{ fontWeight: 700 }}>{formatDate(shipment.etd)} / {formatDate(shipment.eta)}</div>
               </div>
             </Space>
@@ -391,7 +431,7 @@ function ShipmentDetailPanel({
         <Col xs={24} xl={14}>
           <Card
             size="small"
-            title={<Space><ClockCircleOutlined />Lịch sử vận chuyển</Space>}
+            title={<Space><ClockCircleOutlined />{t('historyCard')}</Space>}
             variant="outlined"
             style={{ borderRadius: 8, height: '100%' }}
           >
@@ -413,7 +453,7 @@ function ShipmentDetailPanel({
         <Col xs={24}>
           <Card
             size="small"
-            title={<Space><FileTextOutlined />Container & chứng từ</Space>}
+            title={<Space><FileTextOutlined />{t('containerDocsCard')}</Space>}
             variant="outlined"
             style={{ borderRadius: 8 }}
           >
@@ -423,21 +463,21 @@ function ShipmentDetailPanel({
                 disabled={!shipment.blFileUrl}
                 onClick={() => handleDocumentDownload(shipment.blFileUrl)}
               >
-                Tải B/L
+                {t('downloadBl')}
               </Button>
               <Button
                 icon={<DownloadOutlined />}
                 disabled={!shipment.packingListFileUrl}
                 onClick={() => handleDocumentDownload(shipment.packingListFileUrl)}
               >
-                Tải packing list
+                {t('downloadPackingList')}
               </Button>
               <Text type="secondary">
-                {shipment.blNumber ? `B/L: ${shipment.blNumber}` : 'B/L chưa được phát hành'}
+                {shipment.blNumber ? `B/L: ${shipment.blNumber}` : t('blNotIssued')}
               </Text>
             </Space>
             {containers.length === 0 ? (
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Chưa có container được gắn với lô hàng này" />
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('noContainers')} />
             ) : (
               <Row gutter={[12, 12]}>
                 {containers.map((container) => (
@@ -451,10 +491,10 @@ function ShipmentDetailPanel({
                       }}
                     >
                       <Space orientation="vertical" size={4}>
-                        <Text strong>{container.containerNumber || container.type || 'Container'}</Text>
-                        <Text type="secondary">Seal: {container.sealNumber || '-'}</Text>
+                        <Text strong>{container.containerNumber || container.type || t('container')}</Text>
+                        <Text type="secondary">{t('seal')}: {container.sealNumber || '-'}</Text>
                         <Text type="secondary">
-                          {container.type || '-'} · {Number(container.cbm || 0).toLocaleString('vi-VN')} CBM
+                          {container.type || '-'} · {Number(container.cbm || 0).toLocaleString('vi-VN')} {t('cbm')}
                         </Text>
                       </Space>
                     </div>
@@ -471,6 +511,7 @@ function ShipmentDetailPanel({
 
 export default function ShipmentTrackingPageContent() {
   const { token } = theme.useToken();
+  const t = useTranslations('ShipmentTracking');
   const locale = useLocale();
   const router = useRouter();
   const { shipments, meta, summary, loading, error, fetchShipments } = useCustomerPortalShipments();
@@ -480,6 +521,31 @@ export default function ShipmentTrackingPageContent() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [selectedShipment_id, setSelectedShipment_id] = useState<string | null>(null);
+
+  const shipmentLabels = useMemo<ShipmentLabels>(() => ({
+    filterAll: t('filterAll'),
+    filterBooking: t('filterBooking'),
+    filterShipping: t('filterShipping'),
+    filterReceiving: t('filterReceiving'),
+    filterCompleted: t('filterCompleted'),
+    statusBooked: t('statusBooked'),
+    statusLoading: t('statusLoading'),
+    statusCustomsCleared: t('statusCustomsCleared'),
+    statusOnBoard: t('statusOnBoard'),
+    statusArrived: t('statusArrived'),
+    statusClosed: t('statusClosed'),
+    milestoneBooked: t('milestoneBooked'),
+    milestoneLoading: t('milestoneLoading'),
+    milestoneCustomsCleared: t('milestoneCustomsCleared'),
+    milestoneOnBoard: t('milestoneOnBoard'),
+    milestoneArrived: t('milestoneArrived'),
+    milestoneClosed: t('milestoneClosed'),
+  }), [t]);
+
+  const shipmentFilters = useMemo(() => buildShipmentFilters(shipmentLabels), [shipmentLabels]);
+  const statusMeta = useMemo(() => buildStatusMeta(shipmentLabels), [shipmentLabels]);
+  const defaultTimeline = useMemo(() => buildDefaultTimeline(shipmentLabels), [shipmentLabels]);
+  const amitLogistics = t('amitLogistics');
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -500,7 +566,7 @@ export default function ShipmentTrackingPageContent() {
       ...(debouncedSearch ? { search: debouncedSearch } : {}),
       ...(status ? { status } : {}),
     };
-  }, [activeFilter, currentPage, debouncedSearch, pageSize]);
+  }, [activeFilter, currentPage, debouncedSearch, pageSize, shipmentFilters]);
 
   useEffect(() => {
     fetchShipments(shipmentQuery);
@@ -512,10 +578,13 @@ export default function ShipmentTrackingPageContent() {
       return;
     }
 
+    // Only auto-select first shipment when current selection is invalid
+    // This prevents unnecessary re-renders when selectedShipment_id changes
     if (!selectedShipment_id || !shipments.some((shipment) => shipment._id === selectedShipment_id)) {
       setSelectedShipment_id(shipments[0]._id);
     }
-  }, [shipments, selectedShipment_id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shipments.length]); // Only depend on length to avoid infinite loop
 
   const selectedShipment = useMemo(() => {
     return shipments.find((shipment) => shipment._id === selectedShipment_id) || null;
@@ -543,17 +612,17 @@ export default function ShipmentTrackingPageContent() {
       category: 'LOGISTICS',
       priority: getEtaDelayDays(shipment) > 0 ? 'HIGH' : 'MEDIUM',
       shipmentId: shipment._id,
-      subject: `Hỗ trợ lô hàng ${shipmentNumber}`,
+      subject: t('ticketSubject', { number: shipmentNumber }),
       message: [
-        `Lô hàng: ${shipmentNumber}`,
-        `Hợp đồng: ${shipment.salesContract?.contractNumber || '-'}`,
-        `Tuyến: ${shipment.pol || '-'} -> ${shipment.pod || '-'}`,
-        `Đơn vị logistics: ${getLogisticsProvider(shipment)}`,
-        `Booking: ${shipment.bookingNumber || '-'}`,
-        `B/L: ${shipment.blNumber || '-'}`,
-        `ETD / ETA: ${formatDate(shipment.etd)} / ${formatDate(shipment.eta)}`,
+        t('ticketMessageShipment', { number: shipmentNumber }),
+        t('ticketMessageContract', { value: shipment.salesContract?.contractNumber || '-' }),
+        t('ticketMessageRoute', { pol: shipment.pol || '-', pod: shipment.pod || '-' }),
+        t('ticketMessageLogistics', { name: getLogisticsProvider(shipment, t) }),
+        t('ticketMessageBooking', { value: shipment.bookingNumber || '-' }),
+        t('ticketMessageBl', { value: shipment.blNumber || '-' }),
+        t('ticketMessageEtdEta', { etd: formatDate(shipment.etd), eta: formatDate(shipment.eta) }),
         '',
-        'Nội dung cần hỗ trợ:',
+        t('ticketMessageAsk'),
       ].join('\n'),
     });
 
@@ -561,12 +630,12 @@ export default function ShipmentTrackingPageContent() {
   };
 
   const resultSummary = useMemo(() => {
-    if (meta.total === 0) return 'Không có lô hàng phù hợp';
+    if (meta.total === 0) return t('noResults');
 
     const start = (meta.current - 1) * meta.pageSize + 1;
     const end = Math.min(meta.current * meta.pageSize, meta.total);
-    return `Hiển thị ${start}-${end} / ${meta.total} lô hàng`;
-  }, [meta]);
+    return t('showRange', { start, end, total: meta.total });
+  }, [meta, t]);
 
   const getFilterCount = (filter: { key: ShipmentFilterKey; statuses: string[] }) => {
     if (filter.key === 'all') return summary.total;
@@ -577,12 +646,12 @@ export default function ShipmentTrackingPageContent() {
   return (
     <AdminPageScroll>
       <PageHeader
-        title="Tra cứu lô hàng"
+        title={t('headerTitle')}
         icon={<TruckOutlined />}
-        description="Theo dõi shipment, tuyến cảng, ETA, B/L và mốc xử lý logistics theo tài khoản buyer."
+        description={t('headerDesc')}
         extra={(
           <Button icon={<ReloadOutlined />} onClick={handleRefresh} loading={loading}>
-            Làm mới
+            {t('refresh')}
           </Button>
         )}
       />
@@ -592,9 +661,9 @@ export default function ShipmentTrackingPageContent() {
           <Alert
             showIcon
             type="error"
-            title="Không tải được danh sách lô hàng"
+            title={t('errorTitle')}
             description={error}
-            action={<Button size="small" onClick={handleRefresh}>Thử lại</Button>}
+            action={<Button size="small" onClick={handleRefresh}>{t('retry')}</Button>}
           />
         )}
 
@@ -615,7 +684,7 @@ export default function ShipmentTrackingPageContent() {
           >
             <Space size={10} wrap>
               <Badge status="processing" />
-              <Text strong>Kênh theo dõi đơn xuất khẩu</Text>
+              <Text strong>{t('trackingChannel')}</Text>
               <Text type="secondary">{resultSummary}</Text>
             </Space>
             <Input
@@ -623,7 +692,7 @@ export default function ShipmentTrackingPageContent() {
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               prefix={<SearchOutlined />}
-              placeholder="Tìm mã lô, hợp đồng, booking, B/L, cảng..."
+              placeholder={t('searchPlaceholder')}
               style={{ width: 420, maxWidth: '100%' }}
             />
           </div>
@@ -631,9 +700,10 @@ export default function ShipmentTrackingPageContent() {
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+              gridTemplateColumns: 'repeat(5, minmax(0, 1fr))',
               borderBottom: `1px solid ${token.colorBorderSecondary}`,
             }}
+            className="shipment-tracking-tabs"
           >
             {shipmentFilters.map((filter) => {
               const active = activeFilter === filter.key;
@@ -642,8 +712,10 @@ export default function ShipmentTrackingPageContent() {
                   key={filter.key}
                   type="button"
                   onClick={() => handleFilterChange(filter.key)}
+                  className="shipment-tracking-tab"
                   style={{
                     minHeight: 54,
+                    padding: '8px 6px',
                     border: 0,
                     borderRight: `1px solid ${token.colorBorderSecondary}`,
                     borderBottom: active ? `3px solid ${token.colorPrimary}` : '3px solid transparent',
@@ -651,6 +723,12 @@ export default function ShipmentTrackingPageContent() {
                     background: active ? token.colorPrimaryBg : token.colorBgContainer,
                     cursor: 'pointer',
                     fontWeight: active ? 700 : 500,
+                    fontSize: 13,
+                    lineHeight: 1.3,
+                    textAlign: 'center',
+                    whiteSpace: 'normal',
+                    overflowWrap: 'break-word',
+                    transition: 'background 0.15s ease',
                   }}
                 >
                   {filter.label} ({getFilterCount(filter)})
@@ -674,32 +752,44 @@ export default function ShipmentTrackingPageContent() {
               image={Empty.PRESENTED_IMAGE_SIMPLE}
               description={(
                 <Space orientation="vertical" size={4}>
-                  <Text strong>Chưa có lô hàng phù hợp</Text>
-                  <Text type="secondary">Thử đổi tab trạng thái hoặc từ khóa tìm kiếm.</Text>
+                  <Text strong>{t('emptyTitle')}</Text>
+                  <Text type="secondary">{t('emptyDesc')}</Text>
                 </Space>
               )}
             />
           </Card>
         ) : (
-          <Row gutter={[16, 16]}>
-            <Col xs={24} xl={10}>
-              <Space orientation="vertical" size={12} style={{ width: '100%' }}>
+          <Row gutter={[16, 16]} align="stretch">
+            <Col xs={24} xl={8} style={{ display: 'flex', flexDirection: 'column' }}>
+              <Space orientation="vertical" size={12} style={{ width: '100%', height: '100%', overflowY: 'auto' }}>
                 {shipments.map((shipment) => (
                   <ShipmentOrderCard
                     key={shipment._id}
                     shipment={shipment}
                     selected={shipment._id === selectedShipment_id}
                     onSelect={(record) => setSelectedShipment_id(record._id)}
+                    t={t}
+                    statusMeta={statusMeta}
+                    defaultTimeline={defaultTimeline}
+                    amitLogistics={amitLogistics}
                   />
                 ))}
               </Space>
             </Col>
-            <Col xs={24} xl={14}>
+            <Col xs={24} xl={16} style={{ display: 'flex', flexDirection: 'column' }}>
               {selectedShipment ? (
-                <ShipmentDetailPanel shipment={selectedShipment} onCreateTicket={handleCreateTicket} />
+                <div style={{ height: '100%' }}>
+                  <ShipmentDetailPanel
+                    shipment={selectedShipment}
+                    onCreateTicket={handleCreateTicket}
+                    t={t}
+                    statusMeta={statusMeta}
+                    defaultTimeline={defaultTimeline}
+                  />
+                </div>
               ) : (
-                <Card variant="borderless" style={{ borderRadius: 8 }}>
-                  <Empty description="Chọn một lô hàng để xem chi tiết" />
+                <Card variant="borderless" style={{ borderRadius: 8, height: '100%' }}>
+                  <Empty description={t('selectDetail')} />
                 </Card>
               )}
             </Col>
@@ -715,7 +805,7 @@ export default function ShipmentTrackingPageContent() {
                 total={meta.total}
                 showSizeChanger
                 pageSizeOptions={[10, 20, 50]}
-                showTotal={(total) => `Tổng ${total} lô hàng`}
+                showTotal={(total) => t('paginationTotal', { total })}
                 onChange={handlePageChange}
               />
             </div>

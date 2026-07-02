@@ -2,29 +2,18 @@ import React from 'react';
 import { Button, Drawer, Form, FormInstance, Input, Space, Tag, Timeline, Typography, theme } from 'antd';
 import { CheckCircleOutlined, FileTextOutlined, SendOutlined, TruckOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
-import { useLocale } from 'next-intl';
-import { SupportTicket } from '@/types/support.type';
+import { useTranslations } from 'next-intl';
+import type { SupportTicket, TicketStatus } from '@/types/support.type';
 
 const { Title, Text } = Typography;
 
-const statusColor: Record<string, string> = {
+const statusColor: Record<TicketStatus, string> = {
   OPEN: 'blue',
   IN_PROGRESS: 'processing',
+  WAITING_INTERNAL: 'processing',
   WAITING_BUYER: 'warning',
   RESOLVED: 'green',
   CLOSED: 'default',
-};
-
-const getStatusLabel = (status: string, isVi: boolean): string => {
-  if (!isVi) return status.replace(/_/g, ' ');
-  const labels: Record<string, string> = {
-    OPEN: 'Đang mở',
-    IN_PROGRESS: 'Đang xử lý',
-    WAITING_BUYER: 'Chờ phản hồi',
-    RESOLVED: 'Đã xử lý',
-    CLOSED: 'Đã đóng',
-  };
-  return labels[status] || status;
 };
 
 interface TicketDetailDrawerProps {
@@ -44,21 +33,21 @@ export default function TicketDetailDrawer({
   onSendReply,
   loading,
 }: TicketDetailDrawerProps) {
-  const locale = useLocale();
-  const isVi = locale === 'vi';
+  const t = useTranslations('PortalSupport');
+  const tCommon = useTranslations('SupportCommon');
   const { token } = theme.useToken();
   const canReply = Boolean(activeTicket && !['RESOLVED', 'CLOSED'].includes(activeTicket.status));
   const canClose = Boolean(activeTicket && activeTicket.status !== 'CLOSED');
 
   return (
     <Drawer
-      title={activeTicket ? `${activeTicket.ticketNumber} - ${activeTicket.subject}` : 'Ticket'}
+      title={activeTicket ? `${activeTicket.ticketNumber} - ${activeTicket.subject}` : t('detail.ticketFallback')}
       open={Boolean(activeTicket)}
       onClose={onClose}
       size={720}
       extra={canClose ? (
         <Button icon={<CheckCircleOutlined />} onClick={onCloseTicket}>
-          {isVi ? 'Đóng ticket' : 'Close ticket'}
+          {t('actions.closeTicket')}
         </Button>
       ) : null}
     >
@@ -67,14 +56,14 @@ export default function TicketDetailDrawer({
           <div style={{ background: token.colorFillAlter, padding: 16, borderRadius: 8 }}>
             <Space size="large" wrap>
               <div>
-                <Text type="secondary">{isVi ? 'Trạng thái: ' : 'Status: '}</Text>
-                <Tag color={statusColor[activeTicket.status] || 'default'}>
-                  {getStatusLabel(activeTicket.status, isVi)}
+                <Text type="secondary">{t('detail.status')} </Text>
+                <Tag color={statusColor[activeTicket.status]}>
+                  {tCommon(`customerStatus.${activeTicket.status}`)}
                 </Tag>
               </div>
-              <div><Text type="secondary">{isVi ? 'Ưu tiên: ' : 'Priority: '}</Text><Text strong>{activeTicket.priority}</Text></div>
-              <div><Text type="secondary">{isVi ? 'Nhóm: ' : 'Category: '}</Text><Text>{activeTicket.category}</Text></div>
-              <div><Text type="secondary">{isVi ? 'Tạo lúc: ' : 'Created: '}</Text><Text>{dayjs(activeTicket.createdAt).format('DD/MM/YYYY HH:mm')}</Text></div>
+              <div><Text type="secondary">{t('detail.priority')} </Text><Text strong>{tCommon(`priority.${activeTicket.priority}`)}</Text></div>
+              <div><Text type="secondary">{t('detail.category')} </Text><Text>{tCommon(`category.${activeTicket.category}`)}</Text></div>
+              <div><Text type="secondary">{t('detail.created')} </Text><Text>{dayjs(activeTicket.createdAt).format('DD/MM/YYYY HH:mm')}</Text></div>
             </Space>
             {activeTicket.shipment?.shipmentNumber ? (
               <div style={{ marginTop: 12 }}>
@@ -87,15 +76,15 @@ export default function TicketDetailDrawer({
             ) : null}
           </div>
 
-          <Title level={5}>{isVi ? 'Trao đổi' : 'Messages'}</Title>
+          <Title level={5}>{t('detail.messages')}</Title>
           {activeTicket.messages && activeTicket.messages.length > 0 ? (
             <Timeline
               items={activeTicket.messages.map((m) => ({
                 color: m.authorType === 'BUYER' ? 'blue' : 'green',
-                children: (
+                content: (
                   <div>
                     <div style={{ marginBottom: 4 }}>
-                      <Text strong>{m.authorType === 'BUYER' ? (isVi ? 'Bạn' : 'You') : (isVi ? 'Đội hỗ trợ' : 'Support Team')} </Text>
+                      <Text strong>{m.authorType === 'BUYER' ? t('detail.you') : t('detail.supportTeam')} </Text>
                       <Text type="secondary" style={{ fontSize: 12 }}>({m.authorUsername}) - {dayjs(m.createdAt).format('DD/MM/YYYY HH:mm')}</Text>
                     </div>
                     <div style={{
@@ -120,7 +109,7 @@ export default function TicketDetailDrawer({
               }))}
             />
           ) : (
-            <Text type="secondary">{isVi ? 'Chưa có tin nhắn.' : 'No messages yet.'}</Text>
+            <Text type="secondary">{t('detail.noMessages')}</Text>
           )}
 
           {canReply ? (
@@ -132,7 +121,7 @@ export default function TicketDetailDrawer({
                     validator: (_: unknown, value?: string) => (
                       typeof value === 'string' && value.trim().length > 0
                         ? Promise.resolve()
-                        : Promise.reject(new Error(isVi ? 'Vui lòng nhập phản hồi' : 'Please enter a message'))
+                        : Promise.reject(new Error(t('detail.replyRequired')))
                     ),
                   },
                 ]}
@@ -141,12 +130,12 @@ export default function TicketDetailDrawer({
                   rows={4}
                   maxLength={3000}
                   showCount
-                  placeholder={isVi ? 'Nhập phản hồi của bạn...' : 'Type your reply here...'}
+                  placeholder={t('detail.replyPlaceholder')}
                 />
               </Form.Item>
               <div style={{ textAlign: 'right' }}>
                 <Button type="primary" htmlType="submit" icon={<SendOutlined />} loading={loading}>
-                  {isVi ? 'Gửi phản hồi' : 'Send reply'}
+                  {t('actions.sendReply')}
                 </Button>
               </div>
             </Form>

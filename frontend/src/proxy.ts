@@ -81,7 +81,13 @@ export default auth((req) => {
     || PUBLIC_PATH_PREFIXES.some((prefix) => pathWithoutLocale.startsWith(prefix));
 
   if (isPublicPage) {
-    return withPathnameHeader(intlMiddleware(req), req.nextUrl.pathname);
+    const res = withPathnameHeader(intlMiddleware(req), req.nextUrl.pathname);
+    if (process.env.NODE_ENV !== 'production') {
+      res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+      res.headers.set('Pragma', 'no-cache');
+      res.headers.set('Expires', '0');
+    }
+    return res;
   }
 
   const legacyPartnerRedirect = getLegacyPartnerRedirect(req, pathWithoutLocale, pathLocale || routing.defaultLocale);

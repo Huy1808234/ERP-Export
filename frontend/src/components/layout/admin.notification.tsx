@@ -1,11 +1,10 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import { Badge, Button, Empty, Space, Tag, Typography, theme } from 'antd';
+import { Button, Empty, Space, Typography, theme } from 'antd';
 import {
   CheckOutlined,
   SyncOutlined,
-  BellOutlined,
 } from '@ant-design/icons';
 import { useTranslations } from 'next-intl';
 import { useTheme } from '@/context/theme.context';
@@ -13,19 +12,20 @@ import type { AppNotification } from '@/hooks/useNotifications';
 import { useRouter } from '@/i18n/routing';
 
 const { Text } = Typography;
+type Translator = ReturnType<typeof useTranslations>;
 
-function timeAgo(dateString: string, locale: string): string {
+function timeAgo(dateString: string, locale: string, t: Translator): string {
   const date = new Date(dateString);
   const now = new Date();
   const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
   
-  if (diffInSeconds < 60) return locale === 'vi' ? 'Vừa xong' : 'Just now';
+  if (diffInSeconds < 60) return t('justNow');
   const diffInMinutes = Math.floor(diffInSeconds / 60);
-  if (diffInMinutes < 60) return locale === 'vi' ? `${diffInMinutes} phút trước` : `${diffInMinutes} mins ago`;
+  if (diffInMinutes < 60) return t('minutesAgo', { count: diffInMinutes });
   const diffInHours = Math.floor(diffInMinutes / 60);
-  if (diffInHours < 24) return locale === 'vi' ? `${diffInHours} giờ trước` : `${diffInHours} hours ago`;
+  if (diffInHours < 24) return t('hoursAgo', { count: diffInHours });
   const diffInDays = Math.floor(diffInHours / 24);
-  if (diffInDays < 30) return locale === 'vi' ? `${diffInDays} ngày trước` : `${diffInDays} days ago`;
+  if (diffInDays < 30) return t('daysAgo', { count: diffInDays });
   
   return date.toLocaleDateString(locale === 'vi' ? 'vi-VN' : 'en-US');
 }
@@ -66,8 +66,8 @@ const AdminNotificationPanel: React.FC<AdminNotificationPanelProps> = ({
   }, [notifications, activeTab]);
 
   const renderTabLabel = (tab: string) => {
-    if (tab === 'ALL') return `${t.has('all') ? t('all') : 'Tất cả'} (${notifications.length})`;
-    if (tab === 'UNREAD') return `${t.has('unread') ? t('unread') : 'Chưa đọc'} (${unreadCount})`;
+    if (tab === 'ALL') return `${t('all')} (${notifications.length})`;
+    if (tab === 'UNREAD') return `${t('unread')} (${unreadCount})`;
     return tab;
   };
 
@@ -105,7 +105,7 @@ const AdminNotificationPanel: React.FC<AdminNotificationPanelProps> = ({
             onClick={onRefresh}
             style={{ color: token.colorTextSecondary }}
           >
-            Làm mới
+            {t('refresh')}
           </Button>
           <Button
             type="text"
@@ -115,7 +115,7 @@ const AdminNotificationPanel: React.FC<AdminNotificationPanelProps> = ({
             disabled={!notifications.some((n) => !n.isRead)}
             style={{ color: token.colorTextSecondary }}
           >
-            Đọc hết
+            {t('markAllRead')}
           </Button>
         </Space>
       </div>
@@ -221,7 +221,7 @@ const AdminNotificationPanel: React.FC<AdminNotificationPanelProps> = ({
                   </Text>
                   <Space size="large" style={{ fontSize: 12 }}>
                     <Text type="secondary">
-                      {timeAgo(notification.createdAt, locale)}
+                      {timeAgo(notification.createdAt, locale, t)}
                     </Text>
                     <Text type="secondary" style={{ textTransform: 'uppercase' }}>
                       {notification.kind}
@@ -243,7 +243,7 @@ const AdminNotificationPanel: React.FC<AdminNotificationPanelProps> = ({
         }}
       >
         <Button type="link" onClick={() => router.push('/dashboard/notifications')}>
-          Xem tất cả
+          {t('viewAll')}
         </Button>
       </div>
 

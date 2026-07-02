@@ -21,16 +21,8 @@ export const ShipmentDonutChart = ({ data, activeStatus, onStatusChange }: Shipm
     const { isDark } = useTheme();
     const numberLocale = locale === 'vi' ? 'vi-VN' : 'en-US';
 
-    const dashboardText = (key: string, fallback: string) => {
-        try {
-            return t.has(key) ? t(key) : fallback;
-        } catch {
-            return fallback;
-        }
-    };
-
     if (!data.length) {
-        return <EmptyState title={dashboardText('noData', 'Chưa có dữ liệu')} description={dashboardText('noLogisticsDataDesc', 'Chưa có dữ liệu trạng thái lô hàng trong khoảng thời gian đã chọn.')} isDark={isDark} variant="chart" />;
+        return <EmptyState title={t('noData')} description={t('noLogisticsDataDesc')} isDark={isDark} variant="chart" />;
     }
 
     const total = data.reduce((sum, item) => sum + (item.secondary || 0), 0);
@@ -59,12 +51,12 @@ export const ShipmentDonutChart = ({ data, activeStatus, onStatusChange }: Shipm
                                 );
                             })}
                         </Pie>
-                        <RechartsTooltip contentStyle={tooltipStyle} formatter={(value) => [`${Number(value || 0).toFixed(1)}%`, dashboardText('share', 'Tỷ trọng')]} />
+                        <RechartsTooltip contentStyle={tooltipStyle} formatter={(value) => [`${Number(value || 0).toFixed(1)}%`, t('share')]} />
                     </PieChart>
                 </SafeResponsiveContainer>
                 <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
                     <Text strong style={{ fontSize: 36, fontWeight: 900, color: isDark ? '#f8fafc' : '#0f172a' }}>{total.toLocaleString(numberLocale)}</Text>
-                    <Text style={{ fontSize: 13, textTransform: 'uppercase', letterSpacing: 0.5, color: isDark ? '#94a3b8' : '#64748b' }}>{dashboardText('shipments', 'Lô hàng')}</Text>
+                    <Text style={{ fontSize: 13, textTransform: 'uppercase', letterSpacing: 0.5, color: isDark ? '#94a3b8' : '#64748b' }}>{t('shipments')}</Text>
                 </div>
             </div>
             <Space orientation="vertical" size={12} style={{ width: '100%', paddingRight: 16 }}>
@@ -99,7 +91,7 @@ export const ShipmentDonutChart = ({ data, activeStatus, onStatusChange }: Shipm
                         </button>
                     );
                 })}
-                {activeStatus ? <Button type="text" size="small" onClick={() => onStatusChange(null)} style={{ marginTop: 8 }}>{dashboardText('clearFilter', 'Bỏ lọc')}</Button> : null}
+                {activeStatus ? <Button type="text" size="small" onClick={() => onStatusChange(null)} style={{ marginTop: 8 }}>{t('clearFilter')}</Button> : null}
             </Space>
         </div>
     );

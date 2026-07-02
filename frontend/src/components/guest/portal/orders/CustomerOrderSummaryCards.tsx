@@ -8,7 +8,7 @@ import {
   ProfileOutlined,
   ShoppingCartOutlined,
 } from '@ant-design/icons';
-import { useLocale } from 'next-intl';
+import { useTranslations } from 'next-intl';
 import type { PortalOrderSummary } from '@/types/customer-portal';
 
 type CustomerOrderSummaryCardsProps = {
@@ -38,35 +38,23 @@ const cards = [
   },
   {
     key: 'completedCount',
-    labelKey: 'completed',
+    labelKey: 'completedOrders',
     icon: <CheckCircleOutlined />,
   },
 ] as const;
 
-const getSummaryCopy = (locale: string) => {
-  const isVietnamese = locale === 'vi';
-
-  return {
-    quotations: isVietnamese ? 'Báo giá' : 'Quotations',
-    contracts: isVietnamese ? 'Hợp đồng' : 'Contracts',
-    proformaInvoices: isVietnamese ? 'Proforma Invoice' : 'Proforma Invoices',
-    orders: isVietnamese ? 'Đơn hàng' : 'Orders',
-    completed: isVietnamese ? 'Hoàn tất' : 'Completed',
-  };
-};
-
 export function CustomerOrderSummaryCards({
   summary,
 }: CustomerOrderSummaryCardsProps) {
-  const copy = getSummaryCopy(useLocale());
+  const t = useTranslations('CustomerPortal');
 
   return (
     <Row gutter={[16, 16]}>
       {cards.map((card) => (
-        <Col xs={24} sm={12} lg={8} xl={4} key={card.key}>
+        <Col xs={12} sm={12} lg={8} xl={4} key={card.key}>
           <Card variant="borderless">
             <Statistic
-              title={copy[card.labelKey]}
+              title={t(card.labelKey)}
               value={Number(summary?.[card.key] || 0)}
               prefix={card.icon}
             />

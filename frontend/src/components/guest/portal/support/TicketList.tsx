@@ -3,61 +3,39 @@ import { Button, Space, Table, Tag, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { MessageOutlined, TruckOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
-import { useLocale } from 'next-intl';
-import { SupportTicket } from '@/types/support.type';
+import { useTranslations } from 'next-intl';
+import type { SupportTicket, TicketPriority, TicketStatus } from '@/types/support.type';
 
 const { Text } = Typography;
 
-const statusColor: Record<string, string> = {
+const statusColor: Record<TicketStatus, string> = {
   OPEN: 'blue',
   IN_PROGRESS: 'processing',
+  WAITING_INTERNAL: 'processing',
   WAITING_BUYER: 'warning',
   RESOLVED: 'green',
   CLOSED: 'default',
 };
 
-const priorityColor: Record<string, string> = {
+const priorityColor: Record<TicketPriority, string> = {
   LOW: 'default',
   MEDIUM: 'blue',
   HIGH: 'orange',
   URGENT: 'red',
 };
 
-const getStatusLabel = (status: string, isVi: boolean): string => {
-  if (!isVi) return status.replace(/_/g, ' ');
-  const labels: Record<string, string> = {
-    OPEN: 'Đang mở',
-    IN_PROGRESS: 'Đang xử lý',
-    WAITING_BUYER: 'Chờ phản hồi',
-    RESOLVED: 'Đã xử lý',
-    CLOSED: 'Đã đóng',
-  };
-  return labels[status] || status;
-};
-
-const getPriorityLabel = (priority: string, isVi: boolean): string => {
-  if (!isVi) return priority;
-  const labels: Record<string, string> = {
-    LOW: 'Thấp',
-    MEDIUM: 'Trung bình',
-    HIGH: 'Cao',
-    URGENT: 'Khẩn cấp',
-  };
-  return labels[priority] || priority;
-};
-
 interface TicketListProps {
   tickets: SupportTicket[];
   loading: boolean;
-  onOpenDetail: (id: string) => void;
+  onOpenDetail: (_id: string) => void;
 }
 
 export default function TicketList({ tickets, loading, onOpenDetail }: TicketListProps) {
-  const locale = useLocale();
-  const isVi = locale === 'vi';
+  const t = useTranslations('PortalSupport');
+  const tCommon = useTranslations('SupportCommon');
   const columns: ColumnsType<SupportTicket> = [
     {
-      title: isVi ? 'Ticket' : 'Ticket',
+      title: t('list.ticket'),
       dataIndex: 'ticketNumber',
       render: (value: string, record) => (
         <Space orientation="vertical" size={2}>
@@ -74,36 +52,36 @@ export default function TicketList({ tickets, loading, onOpenDetail }: TicketLis
       ),
     },
     {
-      title: isVi ? 'Nhóm' : 'Category',
+      title: t('list.category'),
       dataIndex: 'category',
       width: 140,
-      render: (value: string) => <Tag>{value}</Tag>,
+      render: (value: SupportTicket['category']) => <Tag>{tCommon(`category.${value}`)}</Tag>,
     },
     {
-      title: isVi ? 'Ưu tiên' : 'Priority',
+      title: t('list.priority'),
       dataIndex: 'priority',
       width: 130,
-      render: (value: string) => <Tag color={priorityColor[value] || 'default'}>{getPriorityLabel(value, isVi)}</Tag>,
+      render: (value: SupportTicket['priority']) => <Tag color={priorityColor[value]}>{tCommon(`priority.${value}`)}</Tag>,
     },
     {
-      title: isVi ? 'Cập nhật' : 'Updated',
+      title: t('list.updated'),
       dataIndex: 'updatedAt',
       width: 170,
       render: (value: string) => dayjs(value).format('DD/MM/YYYY HH:mm'),
     },
     {
-      title: isVi ? 'Trạng thái' : 'Status',
+      title: t('list.status'),
       dataIndex: 'status',
       width: 150,
-      render: (value: string) => <Tag color={statusColor[value] || 'default'}>{getStatusLabel(value, isVi)}</Tag>,
+      render: (value: SupportTicket['status']) => <Tag color={statusColor[value]}>{tCommon(`customerStatus.${value}`)}</Tag>,
     },
     {
-      title: isVi ? 'Thao tác' : 'Action',
+      title: t('list.action'),
       align: 'right',
       width: 120,
       render: (_, record) => (
         <Button icon={<MessageOutlined />} onClick={() => onOpenDetail(record._id)}>
-          {isVi ? 'Mở' : 'Open'}
+          {t('actions.open')}
         </Button>
       ),
     },
@@ -117,7 +95,7 @@ export default function TicketList({ tickets, loading, onOpenDetail }: TicketLis
       columns={columns}
       pagination={{ pageSize: 8 }}
       scroll={{ x: 980 }}
-      locale={{ emptyText: isVi ? 'Chưa có ticket phù hợp' : 'No matching tickets' }}
+      locale={{ emptyText: t('list.emptyTitle') }}
     />
   );
 }

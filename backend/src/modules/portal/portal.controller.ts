@@ -22,6 +22,8 @@ import { ReviewPortalPaymentReceiptDto } from './dto/review-portal-payment-recei
 import { CreatePortalSupportTicketDto } from './dto/create-portal-support-ticket.dto';
 import { CreatePortalSupportMessageDto } from './dto/create-portal-support-message.dto';
 import { UpdatePortalSupportTicketStatusDto } from './dto/update-portal-support-ticket-status.dto';
+import { QueryPortalSupportTicketDto } from './dto/query-portal-support-ticket.dto';
+import { AssignPortalSupportTicketDto } from './dto/assign-portal-support-ticket.dto';
 
 @Controller('portal')
 export class PortalController {
@@ -138,68 +140,118 @@ export class PortalController {
 
   @Get('support/tickets/:_id')
   findSupportTicket(
-    @Param('_id') recordId: string,
+    @Param('_id') _id: string,
     @User() user?: AuthenticatedUser,
   ) {
-    return this.portalService.findSupportTicket(recordId, user);
+    return this.portalService.findSupportTicket(_id, user);
   }
 
   @Post('support/tickets/:_id/messages')
   addSupportMessage(
-    @Param('_id') recordId: string,
+    @Param('_id') _id: string,
     @Body() dto: CreatePortalSupportMessageDto,
     @User() user?: AuthenticatedUser,
   ) {
-    return this.portalService.addSupportMessage(recordId, dto, user);
+    return this.portalService.addSupportMessage(_id, dto, user);
   }
 
   @Patch('support/tickets/:_id/status')
   updateSupportTicketStatus(
-    @Param('_id') recordId: string,
+    @Param('_id') _id: string,
     @Body() dto: UpdatePortalSupportTicketStatusDto,
     @User() user?: AuthenticatedUser,
   ) {
-    return this.portalService.updateSupportTicketStatus(recordId, dto, user);
+    return this.portalService.updateSupportTicketStatus(_id, dto, user);
   }
 
   // --- ADMIN SUPPORT TICKETS API ---
 
   @Get('admin/support/tickets')
-  @Roles('ADMIN', 'SALES', 'MANAGER', 'LOGISTICS')
+  @Roles(
+    'ADMIN',
+    'MANAGER',
+    'SALES_EXPORT',
+    'SALES',
+    'LOGISTICS',
+    'ACCOUNTANT',
+    'CHIEF_ACCOUNTANT',
+  )
   adminFindSupportTickets(
-    @Query() query: QueryParams,
+    @Query() query: QueryPortalSupportTicketDto,
     @User() user?: AuthenticatedUser,
   ) {
     return this.portalService.adminFindSupportTickets(query, user);
   }
 
   @Get('admin/support/tickets/:_id')
-  @Roles('ADMIN', 'SALES', 'MANAGER', 'LOGISTICS')
+  @Roles(
+    'ADMIN',
+    'MANAGER',
+    'SALES_EXPORT',
+    'SALES',
+    'LOGISTICS',
+    'ACCOUNTANT',
+    'CHIEF_ACCOUNTANT',
+  )
   adminFindSupportTicket(
-    @Param('_id') recordId: string,
+    @Param('_id') _id: string,
     @User() user?: AuthenticatedUser,
   ) {
-    return this.portalService.adminFindSupportTicket(recordId, user);
+    return this.portalService.adminFindSupportTicket(_id, user);
   }
 
   @Post('admin/support/tickets/:_id/messages')
-  @Roles('ADMIN', 'SALES', 'MANAGER', 'LOGISTICS')
+  @Roles(
+    'ADMIN',
+    'MANAGER',
+    'SALES_EXPORT',
+    'SALES',
+    'LOGISTICS',
+    'ACCOUNTANT',
+    'CHIEF_ACCOUNTANT',
+  )
   adminAddSupportMessage(
-    @Param('_id') recordId: string,
+    @Param('_id') _id: string,
     @Body() dto: CreatePortalSupportMessageDto,
     @User() user?: AuthenticatedUser,
   ) {
-    return this.portalService.adminAddSupportMessage(recordId, dto, user);
+    return this.portalService.adminAddSupportMessage(_id, dto, user);
   }
 
   @Patch('admin/support/tickets/:_id/status')
-  @Roles('ADMIN', 'SALES', 'MANAGER', 'LOGISTICS')
+  @Roles(
+    'ADMIN',
+    'MANAGER',
+    'SALES_EXPORT',
+    'SALES',
+    'LOGISTICS',
+    'ACCOUNTANT',
+    'CHIEF_ACCOUNTANT',
+  )
   adminUpdateSupportTicketStatus(
-    @Param('_id') recordId: string,
+    @Param('_id') _id: string,
     @Body() dto: UpdatePortalSupportTicketStatusDto,
     @User() user?: AuthenticatedUser,
   ) {
-    return this.portalService.adminUpdateSupportTicketStatus(recordId, dto, user);
+    return this.portalService.adminUpdateSupportTicketStatus(_id, dto, user);
+  }
+
+  @Patch('admin/support/tickets/:_id/assignee')
+  @Roles(
+    'ADMIN',
+    'MANAGER',
+    'SALES_EXPORT',
+    'SALES',
+    'LOGISTICS',
+    'ACCOUNTANT',
+    'CHIEF_ACCOUNTANT',
+  )
+  adminAssignSupportTicket(
+    @Param('_id') _id: string,
+    @Body() dto: AssignPortalSupportTicketDto,
+    @User() user?: AuthenticatedUser,
+  ) {
+    return this.portalService.adminAssignSupportTicket(_id, dto, user);
   }
 
   @Get('notifications')

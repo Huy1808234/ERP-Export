@@ -66,6 +66,8 @@ import { ReviewPortalPaymentReceiptDto } from './dto/review-portal-payment-recei
 import { CreatePortalSupportTicketDto } from './dto/create-portal-support-ticket.dto';
 import { CreatePortalSupportMessageDto } from './dto/create-portal-support-message.dto';
 import { UpdatePortalSupportTicketStatusDto } from './dto/update-portal-support-ticket-status.dto';
+import { QueryPortalSupportTicketDto } from './dto/query-portal-support-ticket.dto';
+import { AssignPortalSupportTicketDto } from './dto/assign-portal-support-ticket.dto';
 import {
   PortalNotification,
   PortalNotificationSeverity,
@@ -87,8 +89,10 @@ import {
 } from './entities/portal-support-ticket.entity';
 import {
   PortalMessageAuthorType,
+  PortalMessageVisibility,
   PortalSupportMessage,
 } from './entities/portal-support-message.entity';
+import { normalizeRoleName } from '@/common/auth/role-catalog';
 import { RedisCacheService } from '@/common/cache/redis-cache.service';
 import { renderPdfBuffer } from '@/common/pdfmake-server.util';
 import {
@@ -103,7 +107,86 @@ import { CommercialInvoice } from '@/modules/commercial-invoices/entities/commer
 /**
  * Roles allowed for admin support ticket operations.
  */
-const ADMIN_SUPPORT_ROLES = ['ADMIN', 'SALES', 'MANAGER', 'LOGISTICS'] as const;
+const ADMIN_SUPPORT_ROLES = [
+  'ADMIN',
+  'MANAGER',
+  'SALES_EXPORT',
+  'LOGISTICS',
+  'ACCOUNTANT',
+  'CHIEF_ACCOUNTANT',
+] as const;
+const SUPPORT_STATUS_TRANSITIONS: Record<
+  PortalTicketStatus,
+  readonly PortalTicketStatus[]
+> = {
+  [PortalTicketStatus.OPEN]: [
+    PortalTicketStatus.IN_PROGRESS,
+    PortalTicketStatus.WAITING_INTERNAL,
+    PortalTicketStatus.WAITING_BUYER,
+    PortalTicketStatus.RESOLVED,
+    PortalTicketStatus.CLOSED,
+  ],
+  [PortalTicketStatus.IN_PROGRESS]: [
+    PortalTicketStatus.OPEN,
+    PortalTicketStatus.WAITING_INTERNAL,
+    PortalTicketStatus.WAITING_BUYER,
+    PortalTicketStatus.RESOLVED,
+    PortalTicketStatus.CLOSED,
+  ],
+  [PortalTicketStatus.WAITING_INTERNAL]: [
+    PortalTicketStatus.OPEN,
+    PortalTicketStatus.IN_PROGRESS,
+    PortalTicketStatus.WAITING_BUYER,
+    PortalTicketStatus.RESOLVED,
+    PortalTicketStatus.CLOSED,
+  ],
+  [PortalTicketStatus.WAITING_BUYER]: [
+    PortalTicketStatus.OPEN,
+    PortalTicketStatus.IN_PROGRESS,
+    PortalTicketStatus.RESOLVED,
+    PortalTicketStatus.CLOSED,
+  ],
+  [PortalTicketStatus.RESOLVED]: [
+    PortalTicketStatus.OPEN,
+    PortalTicketStatus.CLOSED,
+  ],
+  [PortalTicketStatus.CLOSED]: [PortalTicketStatus.OPEN],
+};
+const SUPPORT_SLA_TARGET_HOURS: Record<PortalTicketPriority, number> = {
+  [PortalTicketPriority.LOW]: 72,
+  [PortalTicketPriority.MEDIUM]: 48,
+  [PortalTicketPriority.HIGH]: 24,
+  [PortalTicketPriority.URGENT]: 8,
+};
+
+type SupportSlaStatus = 'ON_TRACK' | 'DUE_SOON' | 'BREACHED' | 'MET';
+
+type SupportSlaSnapshot = {
+  targetHours: number;
+  dueAt: string;
+  status: SupportSlaStatus;
+  remainingHours: number;
+  breached: boolean;
+};
+
+type SupportAgingSnapshot = {
+  ageHours: number;
+  ageDays: number;
+  lastActivityAgeHours: number;
+};
+
+type PortalSupportTicketResponse = PortalSupportTicket & {
+  sla: SupportSlaSnapshot;
+  aging: SupportAgingSnapshot;
+};
+
+type PortalSupportTicketListResponse = {
+  results: PortalSupportTicketResponse[];
+  totalItems: number;
+  totalPages: number;
+  current: number;
+  pageSize: number;
+};
 
 /**
  * Safely extracts role name from AuthenticatedUser.
@@ -125,17 +208,23 @@ function extractRoleName(user: AuthenticatedUser): string | null {
 }
 
 /**
- * Checks if user has any of the allowed admin roles.
+ * Checks if user has an allowed admin role.
  */
 function hasAdminRole(user: AuthenticatedUser): boolean {
   const userRole = extractRoleName(user);
   if (!userRole) return false;
-  return ADMIN_SUPPORT_ROLES.includes(userRole as typeof ADMIN_SUPPORT_ROLES[number]);
+  return ADMIN_SUPPORT_ROLES.includes(
+    normalizeRoleName(userRole) as (typeof ADMIN_SUPPORT_ROLES)[number],
+  );
 }
 
 type PortalBuyerUser = AuthenticatedUser & {
   username: string;
   partnerId: string;
+};
+
+type PortalSupportAdminUser = AuthenticatedUser & {
+  username: string;
 };
 
 type AgingBucket = 'CURRENT' | 'DUE_1_30' | 'DUE_31_60' | 'DUE_61_90' | 'OVERDUE_90';
@@ -369,6 +458,19 @@ export class PortalService {
     }
 
     return { ...user, username, partnerId };
+  }
+
+  private assertSupportAdmin(user?: AuthenticatedUser): PortalSupportAdminUser {
+    const username = user?.username?.trim();
+    if (!user || !username || !hasAdminRole(user)) {
+      throw new BadRequestException('Unauthorized access');
+    }
+
+    return { ...user, username };
+  }
+
+  private escapeIlikeSearchTerm(value: string): string {
+    return value.replace(/[\\%_]/g, '\\$&');
   }
 
   private async getBuyerPartner(buyer: PortalBuyerUser) {
@@ -2486,14 +2588,19 @@ export class PortalService {
     });
   }
 
-  async findSupportTicket(recordId: string, user?: AuthenticatedUser) {
+  async findSupportTicket(_id: string, user?: AuthenticatedUser) {
     const buyer = this.assertBuyer(user);
     const ticket = await this.ticketRepository.findOne({
-      where: { _id: recordId, buyerId: buyer.partnerId },
+      where: { _id, buyerId: buyer.partnerId },
       relations: ['shipment', 'messages'],
       order: { messages: { createdAt: 'ASC' } },
     });
     if (!ticket) throw new NotFoundException('Support ticket not found');
+    ticket.messages = (ticket.messages || []).filter(
+      (message) =>
+        !message.visibility ||
+        message.visibility === PortalMessageVisibility.PUBLIC,
+    );
     return ticket;
   }
 
@@ -2557,6 +2664,7 @@ export class PortalService {
         authorUsername: buyer.username,
         authorType: PortalMessageAuthorType.BUYER,
         message: dto.message.trim(),
+        visibility: PortalMessageVisibility.PUBLIC,
         attachments,
       }),
     );
@@ -2574,13 +2682,13 @@ export class PortalService {
   }
 
   async addSupportMessage(
-    recordId: string,
+    _id: string,
     dto: CreatePortalSupportMessageDto,
     user?: AuthenticatedUser,
   ) {
     const buyer = this.assertBuyer(user);
     const ticket = await this.ticketRepository.findOne({
-      where: { _id: recordId, buyerId: buyer.partnerId },
+      where: { _id, buyerId: buyer.partnerId },
     });
     if (!ticket) throw new NotFoundException('Support ticket not found');
     if (
@@ -2600,10 +2708,12 @@ export class PortalService {
         authorUsername: buyer.username,
         authorType: PortalMessageAuthorType.BUYER,
         message: dto.message.trim(),
+        visibility: PortalMessageVisibility.PUBLIC,
         attachments,
       }),
     );
 
+    this.assertSupportStatusTransition(ticket.status, PortalTicketStatus.OPEN);
     ticket.status = PortalTicketStatus.OPEN;
     ticket.lastMessageAt = new Date();
     ticket.auditTrail = [
@@ -2616,13 +2726,13 @@ export class PortalService {
   }
 
   async updateSupportTicketStatus(
-    recordId: string,
+    _id: string,
     dto: UpdatePortalSupportTicketStatusDto,
     user?: AuthenticatedUser,
   ) {
     const buyer = this.assertBuyer(user);
     const ticket = await this.ticketRepository.findOne({
-      where: { _id: recordId, buyerId: buyer.partnerId },
+      where: { _id, buyerId: buyer.partnerId },
     });
     if (!ticket) throw new NotFoundException('Support ticket not found');
     if (
@@ -2634,6 +2744,11 @@ export class PortalService {
     }
 
     const fromStatus = ticket.status;
+    if (fromStatus === dto.status) {
+      return this.findSupportTicket(ticket._id, buyer);
+    }
+
+    this.assertSupportStatusTransition(fromStatus, dto.status);
     ticket.status = dto.status;
     ticket.closedAt =
       dto.status === PortalTicketStatus.CLOSED ? new Date() : null;
@@ -2655,30 +2770,179 @@ export class PortalService {
 
   // --- ADMIN SUPPORT TICKETS API ---
 
-  async adminFindSupportTickets(query: QueryParams = {}, user?: AuthenticatedUser) {
-    if (!user || !hasAdminRole(user)) {
-      throw new BadRequestException('Unauthorized access');
+  private assertSupportStatusTransition(
+    fromStatus: PortalTicketStatus,
+    toStatus: PortalTicketStatus,
+  ): void {
+    if (fromStatus === toStatus) return;
+    const allowedTargets = SUPPORT_STATUS_TRANSITIONS[fromStatus] || [];
+    if (!allowedTargets.includes(toStatus)) {
+      throw new BadRequestException(
+        `Cannot change support ticket status from ${fromStatus} to ${toStatus}`,
+      );
+    }
+  }
+
+  private async assertAssignableSupportUser(
+    username?: string,
+  ): Promise<string | null> {
+    const normalizedUsername = username?.trim();
+    if (!normalizedUsername) return null;
+
+    const assignee = await this.userRepository.findOne({
+      where: { username: normalizedUsername, isActive: true },
+    });
+    if (!assignee) {
+      throw new BadRequestException('Assigned staff username is not active');
     }
 
-    const current = Number(query.current || 1);
-    const pageSize = Number(query.pageSize || 10);
-    const status = typeof query.status === 'string' ? query.status : undefined;
-    const search = typeof query.search === 'string' ? query.search.trim() : undefined;
+    const roleName = normalizeRoleName(assignee.roleName);
+    if (
+      !ADMIN_SUPPORT_ROLES.includes(
+        roleName as (typeof ADMIN_SUPPORT_ROLES)[number],
+      )
+    ) {
+      throw new BadRequestException(
+        'Assigned staff does not have support desk access',
+      );
+    }
 
-    const where: any = {};
-    if (status) where.status = status;
-    if (search) where.ticketNumber = search;
+    return assignee.username;
+  }
 
-    const [results, totalItems] = await this.ticketRepository.findAndCount({
-      where,
-      relations: ['buyer', 'shipment'],
-      order: { updatedAt: 'DESC' },
-      skip: (current - 1) * pageSize,
-      take: pageSize,
+  private getSupportTicketResponse(
+    ticket: PortalSupportTicket,
+  ): PortalSupportTicketResponse {
+    return Object.assign(ticket, {
+      sla: this.getSupportTicketSla(ticket),
+      aging: this.getSupportTicketAging(ticket),
     });
+  }
+
+  private getSupportTicketSla(ticket: PortalSupportTicket): SupportSlaSnapshot {
+    const targetHours = SUPPORT_SLA_TARGET_HOURS[ticket.priority];
+    const createdAt = ticket.createdAt;
+    const completedAt = ticket.closedAt;
+    const dueAt = new Date(createdAt.getTime() + targetHours * 60 * 60 * 1000);
+    const now = new Date();
+    const effectiveNow = completedAt || now;
+    const remainingHours = Math.ceil(
+      (dueAt.getTime() - effectiveNow.getTime()) / (60 * 60 * 1000),
+    );
+    const breached = remainingHours < 0;
+    const dueSoonThresholdHours = Math.max(4, Math.ceil(targetHours * 0.25));
+    const isCompleted = [
+      PortalTicketStatus.RESOLVED,
+      PortalTicketStatus.CLOSED,
+    ].includes(ticket.status);
+    const status: SupportSlaStatus = breached
+      ? 'BREACHED'
+      : isCompleted
+        ? 'MET'
+        : remainingHours <= dueSoonThresholdHours
+          ? 'DUE_SOON'
+          : 'ON_TRACK';
 
     return {
-      results,
+      targetHours,
+      dueAt: dueAt.toISOString(),
+      status,
+      remainingHours,
+      breached,
+    };
+  }
+
+  private getSupportTicketAging(ticket: PortalSupportTicket): SupportAgingSnapshot {
+    const now = new Date();
+    const resolvedAt = ticket.closedAt || now;
+    const ageHours = Math.max(
+      0,
+      Math.floor(
+        (resolvedAt.getTime() - ticket.createdAt.getTime()) / (60 * 60 * 1000),
+      ),
+    );
+    const lastActivityAt = ticket.lastMessageAt || ticket.updatedAt || ticket.createdAt;
+    const lastActivityAgeHours = Math.max(
+      0,
+      Math.floor((now.getTime() - lastActivityAt.getTime()) / (60 * 60 * 1000)),
+    );
+
+    return {
+      ageHours,
+      ageDays: Math.floor(ageHours / 24),
+      lastActivityAgeHours,
+    };
+  }
+
+  async adminFindSupportTickets(
+    query: QueryPortalSupportTicketDto = {},
+    user?: AuthenticatedUser,
+  ): Promise<PortalSupportTicketListResponse> {
+    this.assertSupportAdmin(user);
+
+    const current = query.current || 1;
+    const pageSize = query.pageSize || 10;
+    const qb = this.ticketRepository
+      .createQueryBuilder('ticket')
+      .leftJoinAndSelect('ticket.buyer', 'buyer')
+      .leftJoinAndSelect('ticket.shipment', 'shipment')
+      .orderBy('ticket.updatedAt', 'DESC')
+      .addOrderBy('ticket.createdAt', 'DESC')
+      .skip((current - 1) * pageSize)
+      .take(pageSize);
+
+    if (query.status) {
+      qb.andWhere('ticket.status = :status', { status: query.status });
+    }
+
+    if (query.category) {
+      qb.andWhere('ticket.category = :category', { category: query.category });
+    }
+
+    if (query.priority) {
+      qb.andWhere('ticket.priority = :priority', { priority: query.priority });
+    }
+
+    if (query.assignedToUsername) {
+      qb.andWhere('ticket."assignedToUsername" = :assignedToUsername', {
+        assignedToUsername: query.assignedToUsername,
+      });
+    }
+
+    if (query.search) {
+      const search = `%${this.escapeIlikeSearchTerm(query.search)}%`;
+      qb.andWhere(
+        new Brackets((subQb) => {
+          subQb
+            .where(`ticket."ticketNumber" ILIKE :search ESCAPE '\\'`, {
+              search,
+            })
+            .orWhere(`ticket.subject ILIKE :search ESCAPE '\\'`, {
+              search,
+            })
+            .orWhere(`ticket."createdByUsername" ILIKE :search ESCAPE '\\'`, {
+              search,
+            })
+            .orWhere(`buyer.name ILIKE :search ESCAPE '\\'`, {
+              search,
+            })
+            .orWhere(`shipment."shipmentNumber" ILIKE :search ESCAPE '\\'`, {
+              search,
+            })
+            .orWhere(`shipment."bookingNumber" ILIKE :search ESCAPE '\\'`, {
+              search,
+            })
+            .orWhere(`shipment."blNumber" ILIKE :search ESCAPE '\\'`, {
+              search,
+            });
+        }),
+      );
+    }
+
+    const [results, totalItems] = await qb.getManyAndCount();
+
+    return {
+      results: results.map((ticket) => this.getSupportTicketResponse(ticket)),
       totalItems,
       totalPages: Math.ceil(totalItems / pageSize),
       current,
@@ -2686,40 +2950,42 @@ export class PortalService {
     };
   }
 
-  async adminFindSupportTicket(recordId: string, user?: AuthenticatedUser) {
-    if (!user || !hasAdminRole(user)) {
-      throw new BadRequestException('Unauthorized access');
-    }
+  async adminFindSupportTicket(
+    _id: string,
+    user?: AuthenticatedUser,
+  ): Promise<PortalSupportTicketResponse> {
+    this.assertSupportAdmin(user);
 
     const ticket = await this.ticketRepository.findOne({
-      where: { _id: recordId },
+      where: { _id },
       relations: ['buyer', 'shipment', 'messages'],
       order: { messages: { createdAt: 'ASC' } },
     });
     if (!ticket) throw new NotFoundException('Support ticket not found');
-    return ticket;
+    return this.getSupportTicketResponse(ticket);
   }
 
   async adminAddSupportMessage(
-    recordId: string,
+    _id: string,
     dto: CreatePortalSupportMessageDto,
     user?: AuthenticatedUser,
-  ) {
-    if (!user || !hasAdminRole(user)) {
-      throw new BadRequestException('Unauthorized access');
-    }
+  ): Promise<PortalSupportMessage> {
+    const admin = this.assertSupportAdmin(user);
 
     const ticket = await this.ticketRepository.findOne({
-      where: { _id: recordId },
+      where: { _id },
     });
     if (!ticket) throw new NotFoundException('Support ticket not found');
+    const visibility = dto.visibility || PortalMessageVisibility.PUBLIC;
+    if (ticket.status === PortalTicketStatus.CLOSED) {
+      throw new BadRequestException('Cannot add messages to a closed ticket');
+    }
     if (
-      [PortalTicketStatus.RESOLVED, PortalTicketStatus.CLOSED].includes(
-        ticket.status,
-      )
+      ticket.status === PortalTicketStatus.RESOLVED &&
+      visibility === PortalMessageVisibility.PUBLIC
     ) {
       throw new BadRequestException(
-        'Cannot add messages to a resolved or closed ticket',
+        'Cannot add public replies to a resolved ticket',
       );
     }
 
@@ -2727,47 +2993,117 @@ export class PortalService {
     const message = await this.messageRepository.save(
       this.messageRepository.create({
         ticket_id: ticket._id,
-        authorUsername: user.username,
+        authorUsername: admin.username,
         authorType: PortalMessageAuthorType.STAFF,
         message: dto.message.trim(),
+        visibility,
         attachments,
       }),
     );
 
-    ticket.status = PortalTicketStatus.WAITING_BUYER;
+    if (visibility === PortalMessageVisibility.PUBLIC) {
+      this.assertSupportStatusTransition(
+        ticket.status,
+        PortalTicketStatus.WAITING_BUYER,
+      );
+      ticket.status = PortalTicketStatus.WAITING_BUYER;
+    }
     ticket.lastMessageAt = new Date();
     ticket.auditTrail = [
       ...(ticket.auditTrail || []),
-      this.ticketAudit('MESSAGE_ADDED', user.username || 'System', { note: dto.message }),
+      this.ticketAudit(
+        visibility === PortalMessageVisibility.INTERNAL
+          ? 'INTERNAL_NOTE_ADDED'
+          : 'MESSAGE_ADDED',
+        admin.username,
+        { note: dto.message },
+      ),
     ];
     await this.ticketRepository.save(ticket);
 
     return message;
   }
 
+  async adminAssignSupportTicket(
+    _id: string,
+    dto: AssignPortalSupportTicketDto,
+    user?: AuthenticatedUser,
+  ): Promise<PortalSupportTicketResponse> {
+    const admin = this.assertSupportAdmin(user);
+
+    const ticket = await this.ticketRepository.findOne({
+      where: { _id },
+    });
+    if (!ticket) throw new NotFoundException('Support ticket not found');
+    if (ticket.status === PortalTicketStatus.CLOSED) {
+      throw new BadRequestException('Cannot assign a closed support ticket');
+    }
+
+    const assigneeUsername = await this.assertAssignableSupportUser(
+      dto.assignedToUsername,
+    );
+    const fromAssigneeUsername = ticket.assignedToUsername;
+    const shouldMoveToInProgress =
+      Boolean(assigneeUsername) && ticket.status === PortalTicketStatus.OPEN;
+    if (fromAssigneeUsername === assigneeUsername && !shouldMoveToInProgress) {
+      return this.adminFindSupportTicket(ticket._id, user);
+    }
+
+    ticket.assignedToUsername = assigneeUsername;
+
+    if (shouldMoveToInProgress) {
+      this.assertSupportStatusTransition(
+        ticket.status,
+        PortalTicketStatus.IN_PROGRESS,
+      );
+      ticket.status = PortalTicketStatus.IN_PROGRESS;
+    }
+
+    ticket.auditTrail = [
+      ...(ticket.auditTrail || []),
+      this.ticketAudit(
+        assigneeUsername ? 'ASSIGNED' : 'UNASSIGNED',
+        admin.username,
+        {
+          fromAssigneeUsername,
+          toAssigneeUsername: assigneeUsername,
+          note: dto.note || null,
+        },
+      ),
+    ];
+    await this.ticketRepository.save(ticket);
+    return this.adminFindSupportTicket(ticket._id, user);
+  }
+
   async adminUpdateSupportTicketStatus(
-    recordId: string,
+    _id: string,
     dto: UpdatePortalSupportTicketStatusDto,
     user?: AuthenticatedUser,
   ) {
-    if (!user || !hasAdminRole(user)) {
-      throw new BadRequestException('Unauthorized access');
-    }
+    const admin = this.assertSupportAdmin(user);
 
     const ticket = await this.ticketRepository.findOne({
-      where: { _id: recordId },
+      where: { _id },
     });
     if (!ticket) throw new NotFoundException('Support ticket not found');
 
     const fromStatus = ticket.status;
+    if (fromStatus === dto.status) {
+      return this.adminFindSupportTicket(ticket._id, user);
+    }
+
+    this.assertSupportStatusTransition(fromStatus, dto.status);
     ticket.status = dto.status;
     ticket.closedAt =
-      dto.status === PortalTicketStatus.CLOSED || dto.status === PortalTicketStatus.RESOLVED ? new Date() : null;
+      dto.status === PortalTicketStatus.CLOSED ||
+      dto.status === PortalTicketStatus.RESOLVED
+        ? new Date()
+        : null;
     ticket.auditTrail = [
       ...(ticket.auditTrail || []),
       this.ticketAudit(
         dto.status === PortalTicketStatus.CLOSED ? 'CLOSED' : 'STATUS_CHANGED',
-        user.username || 'System',
+        admin.username,
         {
           fromStatus,
           toStatus: dto.status,

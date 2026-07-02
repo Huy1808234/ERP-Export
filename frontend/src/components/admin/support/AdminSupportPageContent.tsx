@@ -11,12 +11,14 @@ import {
   Form,
   Input,
   Row,
+  Segmented,
   Select,
   Space,
   Statistic,
   Table,
   Tag,
   Timeline,
+  Tooltip,
   Typography,
   theme,
 } from 'antd';
@@ -34,67 +36,66 @@ import {
   SendOutlined,
   TeamOutlined,
   TruckOutlined,
+  UserSwitchOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
+import { useTranslations } from 'next-intl';
 import AdminPageScroll from '@/components/layout/admin.page-scroll';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { PageState } from '@/components/ui/PageState';
 import { useAdminSupportTickets } from '@/hooks/useSupportTickets';
+import { useDebounce } from '@/hooks/useDebounce';
 import { supportService } from '@/services/support.service';
-import type { SupportTicket, TicketStatus } from '@/types/support.type';
+import type {
+  SupportTicket,
+  TicketCategory,
+  TicketPriority,
+  TicketStatus,
+} from '@/types/support.type';
 
 const { Text, Title } = Typography;
-
-type TicketFilterCategory = 'ALL' | 'QUALITY' | 'LOGISTICS' | 'FINANCE' | 'DOCUMENT' | 'OTHER';
-type TicketFilterPriority = 'ALL' | 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
 
 const statusColor: Record<TicketStatus, string> = {
   OPEN: 'blue',
   IN_PROGRESS: 'processing',
+  WAITING_INTERNAL: 'purple',
   WAITING_BUYER: 'warning',
   RESOLVED: 'green',
   CLOSED: 'default',
 };
 
-const priorityColor: Record<string, string> = {
+const priorityColor: Record<TicketPriority, string> = {
   LOW: 'default',
   MEDIUM: 'blue',
   HIGH: 'orange',
   URGENT: 'red',
 };
 
-const statusLabels: Record<TicketStatus, string> = {
-  OPEN: 'Open',
-  IN_PROGRESS: 'In progress',
-  WAITING_BUYER: 'Waiting buyer',
-  RESOLVED: 'Resolved',
-  CLOSED: 'Closed',
+const slaStatusColor: Record<NonNullable<SupportTicket['sla']>['status'], string> = {
+  ON_TRACK: 'green',
+  DUE_SOON: 'gold',
+  BREACHED: 'red',
+  MET: 'blue',
 };
 
 const getBuyerName = (ticket: SupportTicket): string => ticket.buyer?.name || ticket.buyer?.code || '-';
 
-const canReply = (ticket: SupportTicket | null): boolean => (
-  Boolean(ticket && !['RESOLVED', 'CLOSED'].includes(ticket.status))
+const canAddMessage = (ticket: SupportTicket | null): boolean => (
+  Boolean(ticket && ticket.status !== 'CLOSED')
 );
 
-const matchesText = (ticket: SupportTicket, search: string): boolean => {
-  const keyword = search.trim().toLowerCase();
-  if (!keyword) return true;
-
-  return [
-    ticket.ticketNumber,
-    ticket.subject,
-    ticket.category,
-    ticket.priority,
-    getBuyerName(ticket),
-    ticket.shipment?.shipmentNumber || '',
-    ticket.shipment?.bookingNumber || '',
-    ticket.shipment?.blNumber || '',
-  ].some((value) => value.toLowerCase().includes(keyword));
+const formatDuration = (hours?: number): string => {
+  if (typeof hours !== 'number') return '-';
+  if (hours < 24) return `${hours}h`;
+  const days = Math.floor(hours / 24);
+  const remainderHours = hours % 24;
+  return remainderHours > 0 ? `${days}d ${remainderHours}h` : `${days}d`;
 };
 
 export default function AdminSupportPageContent() {
   const { message } = App.useApp();
+  const t = useTranslations('AdminSupport');
+  const tCommon = useTranslations('SupportCommon');
   const { token } = theme.useToken();
   const [replyForm] = Form.useForm<{ message: string }>();
   const {
@@ -111,35 +112,58 @@ export default function AdminSupportPageContent() {
     setPagination,
     statusFilter,
     setStatusFilter,
+    searchFilter,
+    setSearchFilter,
+    categoryFilter,
+    setCategoryFilter,
+    priorityFilter,
+    setPriorityFilter,
+    assignedToUsernameFilter,
+    setAssignedToUsernameFilter,
   } = useAdminSupportTickets();
-  const [search, setSearch] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState<TicketFilterCategory>('ALL');
-  const [priorityFilter, setPriorityFilter] = useState<TicketFilterPriority>('ALL');
+  const [searchInput, setSearchInput] = useState(searchFilter);
+  const debouncedSearch = useDebounce(searchInput.trim(), 350);
+  const [assigneeFilterInput, setAssigneeFilterInput] = useState(assignedToUsernameFilter);
+  const debouncedAssigneeFilter = useDebounce(assigneeFilterInput.trim(), 350);
+  const [assigneeInput, setAssigneeInput] = useState('');
+  const [replyVisibility, setReplyVisibility] = useState<'PUBLIC' | 'INTERNAL'>('PUBLIC');
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     void fetchTickets();
   }, [fetchTickets]);
 
-  const filteredTickets = useMemo(() => (
-    tickets.filter((ticket) => {
-      const categoryMatched = categoryFilter === 'ALL' || ticket.category === categoryFilter;
-      const priorityMatched = priorityFilter === 'ALL' || ticket.priority === priorityFilter;
+  useEffect(() => {
+    setSearchFilter(debouncedSearch);
+    setPagination((prev) => ({ ...prev, current: 1 }));
+  }, [debouncedSearch, setPagination, setSearchFilter]);
 
-      return categoryMatched && priorityMatched && matchesText(ticket, search);
-    })
-  ), [categoryFilter, priorityFilter, search, tickets]);
+  useEffect(() => {
+    setAssignedToUsernameFilter(debouncedAssigneeFilter);
+    setPagination((prev) => ({ ...prev, current: 1 }));
+  }, [debouncedAssigneeFilter, setAssignedToUsernameFilter, setPagination]);
 
-  const hasLocalFilter = search.trim().length > 0 || categoryFilter !== 'ALL' || priorityFilter !== 'ALL';
+  useEffect(() => {
+    setAssigneeInput(activeTicket?.assignedToUsername || '');
+    setReplyVisibility(activeTicket?.status === 'RESOLVED' ? 'INTERNAL' : 'PUBLIC');
+  }, [activeTicket?._id, activeTicket?.assignedToUsername, activeTicket?.status]);
+
+  const hasServerFilter = Boolean(
+    searchFilter ||
+    statusFilter ||
+    categoryFilter ||
+    priorityFilter ||
+    assignedToUsernameFilter,
+  );
 
   const visibleStats = useMemo(() => {
-    const openCount = filteredTickets.filter((ticket) => ['OPEN', 'IN_PROGRESS'].includes(ticket.status)).length;
-    const waitingBuyerCount = filteredTickets.filter((ticket) => ticket.status === 'WAITING_BUYER').length;
-    const resolvedCount = filteredTickets.filter((ticket) => ['RESOLVED', 'CLOSED'].includes(ticket.status)).length;
-    const urgentCount = filteredTickets.filter((ticket) => ['HIGH', 'URGENT'].includes(ticket.priority)).length;
+    const openCount = tickets.filter((ticket) => ['OPEN', 'IN_PROGRESS', 'WAITING_INTERNAL'].includes(ticket.status)).length;
+    const waitingBuyerCount = tickets.filter((ticket) => ticket.status === 'WAITING_BUYER').length;
+    const breachedCount = tickets.filter((ticket) => ticket.sla?.breached).length;
+    const urgentCount = tickets.filter((ticket) => ['HIGH', 'URGENT'].includes(ticket.priority)).length;
 
-    return { openCount, waitingBuyerCount, resolvedCount, urgentCount };
-  }, [filteredTickets]);
+    return { openCount, waitingBuyerCount, breachedCount, urgentCount };
+  }, [tickets]);
 
   const handleTableChange = useCallback((tablePagination: TablePaginationConfig): void => {
     setPagination((prev) => ({
@@ -149,10 +173,20 @@ export default function AdminSupportPageContent() {
     }));
   }, [setPagination]);
 
-  const handleStatusFilterChange = useCallback((status?: string): void => {
+  const handleStatusFilterChange = useCallback((status?: TicketStatus): void => {
     setStatusFilter(status || '');
     setPagination((prev) => ({ ...prev, current: 1 }));
   }, [setPagination, setStatusFilter]);
+
+  const handleCategoryFilterChange = useCallback((category?: TicketCategory): void => {
+    setCategoryFilter(category || '');
+    setPagination((prev) => ({ ...prev, current: 1 }));
+  }, [setCategoryFilter, setPagination]);
+
+  const handlePriorityFilterChange = useCallback((priority?: TicketPriority): void => {
+    setPriorityFilter(priority || '');
+    setPagination((prev) => ({ ...prev, current: 1 }));
+  }, [setPagination, setPriorityFilter]);
 
   const handleOpenDetail = useCallback((ticket_id: string): void => {
     void fetchTicketDetail(ticket_id);
@@ -160,24 +194,63 @@ export default function AdminSupportPageContent() {
 
   const handleSendReply = async (values: { message: string }): Promise<void> => {
     if (!headers || !activeTicket) {
-      message.error('Cannot send reply. Authentication or ticket context is missing.');
+      message.error(t('feedback.missingContextReply'));
+      return;
+    }
+
+    setSubmitting(true);
+    const visibility = activeTicket.status === 'RESOLVED' ? 'INTERNAL' : replyVisibility;
+    try {
+      const res = await supportService.addAdminMessage(
+        activeTicket._id,
+        values.message.trim(),
+        headers,
+        visibility,
+      );
+      if (res.data) {
+        replyForm.resetFields();
+        await fetchTicketDetail(activeTicket._id);
+        await fetchTickets();
+        message.success(visibility === 'PUBLIC' ? t('feedback.replySent') : t('feedback.internalNoteAdded'));
+        return;
+      }
+
+      message.error(String(res.message || t('feedback.replyError')));
+    } catch {
+      message.error(t('feedback.replyError'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleAssignTicket = async (assignedToUsername: string | null): Promise<void> => {
+    if (!headers || !activeTicket) {
+      message.error(t('feedback.missingContextAssign'));
       return;
     }
 
     setSubmitting(true);
     try {
-      const res = await supportService.addAdminMessage(activeTicket._id, values.message.trim(), headers);
+      const note = assignedToUsername
+        ? `Assigned to ${assignedToUsername}`
+        : 'Assignee cleared';
+      const res = await supportService.assignAdminTicket(
+        activeTicket._id,
+        assignedToUsername,
+        headers,
+        note,
+      );
       if (res.data) {
-        replyForm.resetFields();
-        await fetchTicketDetail(activeTicket._id);
+        setActiveTicket(res.data);
+        setAssigneeInput(res.data.assignedToUsername || '');
         await fetchTickets();
-        message.success('Reply sent to buyer.');
+        message.success(assignedToUsername ? t('feedback.assignSuccess') : t('feedback.unassignSuccess'));
         return;
       }
 
-      message.error(String(res.message || 'Cannot send reply'));
+      message.error(String(res.message || t('feedback.assignError')));
     } catch {
-      message.error('Cannot send reply');
+      message.error(t('feedback.assignError'));
     } finally {
       setSubmitting(false);
     }
@@ -185,7 +258,7 @@ export default function AdminSupportPageContent() {
 
   const handleUpdateStatus = async (status: TicketStatus): Promise<void> => {
     if (!headers || !activeTicket) {
-      message.error('Cannot update status. Authentication or ticket context is missing.');
+      message.error(t('feedback.missingContextStatus'));
       return;
     }
 
@@ -196,13 +269,13 @@ export default function AdminSupportPageContent() {
       if (res.data) {
         setActiveTicket(res.data);
         await fetchTickets();
-        message.success(`Ticket marked as ${statusLabels[status]}.`);
+        message.success(t('feedback.statusSuccess', { status: tCommon(`status.${status}`) }));
         return;
       }
 
-      message.error(String(res.message || 'Cannot update ticket status'));
+      message.error(String(res.message || t('feedback.statusError')));
     } catch {
-      message.error('Cannot update ticket status');
+      message.error(t('feedback.statusError'));
     } finally {
       setSubmitting(false);
     }
@@ -210,7 +283,7 @@ export default function AdminSupportPageContent() {
 
   const columns: ColumnsType<SupportTicket> = [
     {
-      title: 'Ticket / Subject',
+      title: t('table.ticketSubject'),
       dataIndex: 'ticketNumber',
       width: 320,
       render: (value: string, record) => (
@@ -228,7 +301,7 @@ export default function AdminSupportPageContent() {
       ),
     },
     {
-      title: 'Buyer',
+      title: t('table.buyer'),
       width: 190,
       render: (_, record) => (
         <Space orientation="vertical" size={0}>
@@ -238,36 +311,68 @@ export default function AdminSupportPageContent() {
       ),
     },
     {
-      title: 'Category',
+      title: t('table.category'),
       dataIndex: 'category',
       width: 130,
-      render: (value: string) => <Tag>{value}</Tag>,
+      render: (value: TicketCategory) => <Tag>{value}</Tag>,
     },
     {
-      title: 'Priority',
+      title: t('table.priority'),
       dataIndex: 'priority',
       width: 120,
-      render: (value: string) => <Tag color={priorityColor[value] || 'default'}>{value}</Tag>,
+      render: (value: TicketPriority) => <Tag color={priorityColor[value]}>{tCommon(`priority.${value}`)}</Tag>,
     },
     {
-      title: 'Updated',
+      title: t('table.owner'),
+      dataIndex: 'assignedToUsername',
+      width: 150,
+      render: (value: string | null) => (
+        value ? <Tag icon={<UserSwitchOutlined />} color="blue">{value}</Tag> : <Text type="secondary">{t('table.unassigned')}</Text>
+      ),
+    },
+    {
+      title: t('table.sla'),
+      width: 150,
+      render: (_, record) => {
+        if (!record.sla) return <Text type="secondary">-</Text>;
+        return (
+          <Tooltip title={t('table.due', { date: dayjs(record.sla.dueAt).format('DD/MM/YYYY HH:mm') })}>
+            <Tag color={slaStatusColor[record.sla.status]}>{tCommon(`sla.${record.sla.status}`)}</Tag>
+          </Tooltip>
+        );
+      },
+    },
+    {
+      title: t('table.aging'),
+      width: 130,
+      render: (_, record) => (
+        <Space orientation="vertical" size={0}>
+          <Text>{formatDuration(record.aging?.ageHours)}</Text>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            {t('table.idle', { duration: formatDuration(record.aging?.lastActivityAgeHours) })}
+          </Text>
+        </Space>
+      ),
+    },
+    {
+      title: t('table.updated'),
       dataIndex: 'updatedAt',
       width: 170,
       render: (value: string) => dayjs(value).format('DD/MM/YYYY HH:mm'),
     },
     {
-      title: 'Status',
+      title: t('table.status'),
       dataIndex: 'status',
       width: 150,
-      render: (value: TicketStatus) => <Tag color={statusColor[value]}>{statusLabels[value]}</Tag>,
+      render: (value: TicketStatus) => <Tag color={statusColor[value]}>{tCommon(`status.${value}`)}</Tag>,
     },
     {
-      title: 'Action',
+      title: t('table.action'),
       align: 'right',
       width: 120,
       render: (_, record) => (
         <Button type="primary" ghost icon={<MessageOutlined />} onClick={() => handleOpenDetail(record._id)}>
-          View
+          {t('actions.view')}
         </Button>
       ),
     },
@@ -276,27 +381,28 @@ export default function AdminSupportPageContent() {
   return (
     <AdminPageScroll>
       <PageHeader
-        title="Support Desk"
-        description="Manage buyer support tickets, logistics claims, finance requests, and document issues."
+        title={t('title')}
+        description={t('description')}
         icon={<CustomerServiceOutlined />}
         extra={(
           <Space wrap>
-            <Select
+            <Select<TicketStatus>
               allowClear
-              placeholder="Status"
+              placeholder={t('filters.status')}
               value={statusFilter || undefined}
               onChange={handleStatusFilterChange}
               style={{ width: 170 }}
               options={[
-                { value: 'OPEN', label: 'Open' },
-                { value: 'IN_PROGRESS', label: 'In progress' },
-                { value: 'WAITING_BUYER', label: 'Waiting buyer' },
-                { value: 'RESOLVED', label: 'Resolved' },
-                { value: 'CLOSED', label: 'Closed' },
+                { value: 'OPEN', label: tCommon('status.OPEN') },
+                { value: 'IN_PROGRESS', label: tCommon('status.IN_PROGRESS') },
+                { value: 'WAITING_INTERNAL', label: tCommon('status.WAITING_INTERNAL') },
+                { value: 'WAITING_BUYER', label: tCommon('status.WAITING_BUYER') },
+                { value: 'RESOLVED', label: tCommon('status.RESOLVED') },
+                { value: 'CLOSED', label: tCommon('status.CLOSED') },
               ]}
             />
             <Button icon={<ReloadOutlined />} loading={isLoading} onClick={() => void fetchTickets()}>
-              Refresh
+              {t('actions.refresh')}
             </Button>
           </Space>
         )}
@@ -306,22 +412,22 @@ export default function AdminSupportPageContent() {
         <Row gutter={[16, 16]}>
           <Col xs={24} sm={12} xl={6}>
             <Card variant="borderless">
-              <Statistic title="Open / in progress" value={visibleStats.openCount} prefix={<InboxOutlined />} styles={{ content: { color: token.colorPrimary } }} />
+              <Statistic title={t('stats.open')} value={visibleStats.openCount} prefix={<InboxOutlined />} styles={{ content: { color: token.colorPrimary } }} />
             </Card>
           </Col>
           <Col xs={24} sm={12} xl={6}>
             <Card variant="borderless">
-              <Statistic title="Waiting buyer" value={visibleStats.waitingBuyerCount} prefix={<ClockCircleOutlined />} styles={{ content: { color: token.colorWarning } }} />
+              <Statistic title={t('stats.waitingBuyer')} value={visibleStats.waitingBuyerCount} prefix={<ClockCircleOutlined />} styles={{ content: { color: token.colorWarning } }} />
             </Card>
           </Col>
           <Col xs={24} sm={12} xl={6}>
             <Card variant="borderless">
-              <Statistic title="Resolved / closed" value={visibleStats.resolvedCount} prefix={<CheckCircleOutlined />} styles={{ content: { color: token.colorSuccess } }} />
+              <Statistic title={t('stats.slaBreached')} value={visibleStats.breachedCount} prefix={<CheckCircleOutlined />} styles={{ content: { color: token.colorError } }} />
             </Card>
           </Col>
           <Col xs={24} sm={12} xl={6}>
             <Card variant="borderless">
-              <Statistic title="High / urgent" value={visibleStats.urgentCount} prefix={<ExclamationCircleOutlined />} styles={{ content: { color: token.colorError } }} />
+              <Statistic title={t('stats.urgent')} value={visibleStats.urgentCount} prefix={<ExclamationCircleOutlined />} styles={{ content: { color: token.colorError } }} />
             </Card>
           </Col>
         </Row>
@@ -330,8 +436,8 @@ export default function AdminSupportPageContent() {
           title={(
             <Space>
               <CustomerServiceOutlined style={{ color: token.colorPrimary }} />
-              <span>Support tickets</span>
-              <Tag>{filteredTickets.length}/{pagination.total}</Tag>
+              <span>{t('table.title')}</span>
+              <Tag>{tickets.length}/{pagination.total}</Tag>
             </Space>
           )}
           variant="borderless"
@@ -341,50 +447,60 @@ export default function AdminSupportPageContent() {
               <Input
                 allowClear
                 prefix={<SearchOutlined />}
-                placeholder="Search ticket, buyer, shipment..."
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
+                placeholder={t('filters.search')}
+                value={searchInput}
+                onChange={(event) => setSearchInput(event.target.value)}
                 style={{ width: 280 }}
               />
-              <Select<TicketFilterCategory>
-                value={categoryFilter}
-                onChange={setCategoryFilter}
+              <Select<TicketCategory>
+                allowClear
+                placeholder={t('filters.category')}
+                value={categoryFilter || undefined}
+                onChange={handleCategoryFilterChange}
                 style={{ width: 145 }}
                 options={[
-                  { value: 'ALL', label: 'Category' },
-                  { value: 'LOGISTICS', label: 'LOGISTICS' },
-                  { value: 'FINANCE', label: 'FINANCE' },
-                  { value: 'DOCUMENT', label: 'DOCUMENT' },
-                  { value: 'QUALITY', label: 'QUALITY' },
-                  { value: 'OTHER', label: 'OTHER' },
+                  { value: 'LOGISTICS', label: tCommon('category.LOGISTICS') },
+                  { value: 'FINANCE', label: tCommon('category.FINANCE') },
+                  { value: 'DOCUMENT', label: tCommon('category.DOCUMENT') },
+                  { value: 'QUALITY', label: tCommon('category.QUALITY') },
+                  { value: 'OTHER', label: tCommon('category.OTHER') },
                 ]}
               />
-              <Select<TicketFilterPriority>
-                value={priorityFilter}
-                onChange={setPriorityFilter}
+              <Select<TicketPriority>
+                allowClear
+                placeholder={t('filters.priority')}
+                value={priorityFilter || undefined}
+                onChange={handlePriorityFilterChange}
                 style={{ width: 135 }}
                 options={[
-                  { value: 'ALL', label: 'Priority' },
-                  { value: 'LOW', label: 'LOW' },
-                  { value: 'MEDIUM', label: 'MEDIUM' },
-                  { value: 'HIGH', label: 'HIGH' },
-                  { value: 'URGENT', label: 'URGENT' },
+                  { value: 'LOW', label: tCommon('priority.LOW') },
+                  { value: 'MEDIUM', label: tCommon('priority.MEDIUM') },
+                  { value: 'HIGH', label: tCommon('priority.HIGH') },
+                  { value: 'URGENT', label: tCommon('priority.URGENT') },
                 ]}
+              />
+              <Input
+                allowClear
+                prefix={<UserSwitchOutlined />}
+                placeholder={t('filters.assignee')}
+                value={assigneeFilterInput}
+                onChange={(event) => setAssigneeFilterInput(event.target.value)}
+                style={{ width: 190 }}
               />
             </Space>
           )}
         >
           <div style={{ padding: 16 }}>
             <PageState loading={isLoading} error={error} empty={false} onRetry={() => void fetchTickets()}>
-              {filteredTickets.length > 0 ? (
+              {tickets.length > 0 ? (
                 <Table<SupportTicket>
                   rowKey="_id"
                   loading={isLoading}
-                  dataSource={filteredTickets}
+                  dataSource={tickets}
                   columns={columns}
                   pagination={{
                     ...pagination,
-                    total: hasLocalFilter ? filteredTickets.length : pagination.total,
+                    total: pagination.total,
                     showSizeChanger: true,
                   }}
                   onChange={handleTableChange}
@@ -395,8 +511,10 @@ export default function AdminSupportPageContent() {
                   image={Empty.PRESENTED_IMAGE_SIMPLE}
                   description={(
                     <Space orientation="vertical" size={4}>
-                      <Text strong>No matching support tickets</Text>
-                      <Text type="secondary">Try another status, category, priority, or search keyword.</Text>
+                      <Text strong>{t('table.emptyTitle')}</Text>
+                      <Text type="secondary">
+                        {hasServerFilter ? t('table.emptyFiltered') : t('table.emptyDefault')}
+                      </Text>
                     </Space>
                   )}
                 />
@@ -407,30 +525,35 @@ export default function AdminSupportPageContent() {
       </Space>
 
       <Drawer
-        title={activeTicket ? `${activeTicket.ticketNumber} - ${activeTicket.subject}` : 'Ticket'}
+        title={activeTicket ? `${activeTicket.ticketNumber} - ${activeTicket.subject}` : t('detail.ticketFallback')}
         open={Boolean(activeTicket)}
         onClose={() => setActiveTicket(null)}
         size={760}
         extra={activeTicket ? (
           <Space wrap>
-            {!['RESOLVED', 'CLOSED'].includes(activeTicket.status) ? (
+            {!['IN_PROGRESS', 'RESOLVED', 'CLOSED'].includes(activeTicket.status) ? (
               <Button loading={submitting} onClick={() => void handleUpdateStatus('IN_PROGRESS')}>
-                Start
+                {t('actions.start')}
+              </Button>
+            ) : null}
+            {!['WAITING_INTERNAL', 'RESOLVED', 'CLOSED'].includes(activeTicket.status) ? (
+              <Button loading={submitting} onClick={() => void handleUpdateStatus('WAITING_INTERNAL')}>
+                {t('actions.waitingInternal')}
               </Button>
             ) : null}
             {!['RESOLVED', 'CLOSED'].includes(activeTicket.status) ? (
               <Button type="primary" loading={submitting} onClick={() => void handleUpdateStatus('RESOLVED')}>
-                Mark resolved
+                {t('actions.markResolved')}
               </Button>
             ) : null}
-            {activeTicket.status === 'RESOLVED' ? (
+            {['RESOLVED', 'CLOSED'].includes(activeTicket.status) ? (
               <Button loading={submitting} onClick={() => void handleUpdateStatus('OPEN')}>
-                Reopen
+                {t('actions.reopen')}
               </Button>
             ) : null}
             {activeTicket.status !== 'CLOSED' ? (
               <Button danger loading={submitting} onClick={() => void handleUpdateStatus('CLOSED')}>
-                Close
+                {t('actions.close')}
               </Button>
             ) : null}
           </Space>
@@ -440,11 +563,29 @@ export default function AdminSupportPageContent() {
           <Space orientation="vertical" size={16} style={{ width: '100%' }}>
             <Card size="small" variant="borderless" style={{ background: token.colorFillAlter }}>
               <Space size="large" wrap>
-                <div><Text type="secondary">Status: </Text><Tag color={statusColor[activeTicket.status]}>{statusLabels[activeTicket.status]}</Tag></div>
-                <div><Text type="secondary">Priority: </Text><Tag color={priorityColor[activeTicket.priority] || 'default'}>{activeTicket.priority}</Tag></div>
-                <div><Text type="secondary">Category: </Text><Text>{activeTicket.category}</Text></div>
-                <div><Text type="secondary">Buyer: </Text><Text strong>{getBuyerName(activeTicket)}</Text></div>
-                <div><Text type="secondary">Created: </Text><Text>{dayjs(activeTicket.createdAt).format('DD/MM/YYYY HH:mm')}</Text></div>
+                <div><Text type="secondary">{t('detail.status')} </Text><Tag color={statusColor[activeTicket.status]}>{tCommon(`status.${activeTicket.status}`)}</Tag></div>
+                <div><Text type="secondary">{t('detail.priority')} </Text><Tag color={priorityColor[activeTicket.priority]}>{tCommon(`priority.${activeTicket.priority}`)}</Tag></div>
+                <div>
+                  <Text type="secondary">{t('detail.owner')} </Text>
+                  {activeTicket.assignedToUsername ? (
+                    <Tag icon={<UserSwitchOutlined />} color="blue">{activeTicket.assignedToUsername}</Tag>
+                  ) : (
+                    <Text type="secondary">{t('table.unassigned')}</Text>
+                  )}
+                </div>
+                {activeTicket.sla ? (
+                  <div>
+                    <Text type="secondary">{t('detail.sla')} </Text>
+                    <Tag color={slaStatusColor[activeTicket.sla.status]}>{tCommon(`sla.${activeTicket.sla.status}`)}</Tag>
+                    <Text type="secondary">{t('table.due', { date: dayjs(activeTicket.sla.dueAt).format('DD/MM/YYYY HH:mm') })}</Text>
+                  </div>
+                ) : null}
+                {activeTicket.aging ? (
+                  <div><Text type="secondary">{t('detail.aging')} </Text><Text>{formatDuration(activeTicket.aging.ageHours)}</Text></div>
+                ) : null}
+                <div><Text type="secondary">{t('detail.category')} </Text><Text>{tCommon(`category.${activeTicket.category}`)}</Text></div>
+                <div><Text type="secondary">{t('detail.buyer')} </Text><Text strong>{getBuyerName(activeTicket)}</Text></div>
+                <div><Text type="secondary">{t('detail.created')} </Text><Text>{dayjs(activeTicket.createdAt).format('DD/MM/YYYY HH:mm')}</Text></div>
               </Space>
               {activeTicket.shipment?.shipmentNumber ? (
                 <div style={{ marginTop: 12 }}>
@@ -455,25 +596,59 @@ export default function AdminSupportPageContent() {
               ) : null}
             </Card>
 
-            <Title level={5}>Conversation</Title>
+            <Card size="small" title={t('detail.ownership')} variant="borderless" style={{ background: token.colorFillAlter }}>
+              <Space.Compact style={{ width: '100%' }}>
+                <Input
+                  value={assigneeInput}
+                  onChange={(event) => setAssigneeInput(event.target.value)}
+                  placeholder={t('detail.staffUsername')}
+                  prefix={<UserSwitchOutlined />}
+                  disabled={submitting || activeTicket.status === 'CLOSED'}
+                />
+                <Button
+                  type="primary"
+                  loading={submitting}
+                  disabled={activeTicket.status === 'CLOSED'}
+                  onClick={() => void handleAssignTicket(assigneeInput.trim() || null)}
+                >
+                  {t('actions.assign')}
+                </Button>
+                <Button
+                  loading={submitting}
+                  disabled={activeTicket.status === 'CLOSED' || !activeTicket.assignedToUsername}
+                  onClick={() => void handleAssignTicket(null)}
+                >
+                  {t('actions.clear')}
+                </Button>
+              </Space.Compact>
+            </Card>
+
+            <Title level={5}>{t('detail.conversation')}</Title>
             {isDetailLoading ? (
               <Card loading />
             ) : activeTicket.messages && activeTicket.messages.length > 0 ? (
               <Timeline
                 items={activeTicket.messages.map((item) => ({
                   color: item.authorType === 'STAFF' ? 'green' : 'blue',
-                  dot: item.authorType === 'STAFF'
+                  icon: item.authorType === 'STAFF'
                     ? <CustomerServiceOutlined style={{ fontSize: 16 }} />
                     : <TeamOutlined style={{ fontSize: 16 }} />,
-                  children: (
+                  content: (
                     <div>
                       <div style={{ marginBottom: 6 }}>
-                        <Text strong>{item.authorType === 'STAFF' ? 'Support team' : 'Buyer'} </Text>
+                        <Text strong>{item.authorType === 'STAFF' ? t('detail.supportTeam') : t('detail.buyerLabel')} </Text>
                         <Text type="secondary">({item.authorUsername}) - {dayjs(item.createdAt).format('DD/MM/YYYY HH:mm')}</Text>
+                        {item.visibility === 'INTERNAL' ? (
+                          <Tag color="purple" style={{ marginInlineStart: 8 }}>{t('detail.internalNote')}</Tag>
+                        ) : null}
                       </div>
                       <div
                         style={{
-                          background: item.authorType === 'STAFF' ? token.colorSuccessBg : token.colorPrimaryBg,
+                          background: item.visibility === 'INTERNAL'
+                            ? token.colorWarningBg
+                            : item.authorType === 'STAFF'
+                              ? token.colorSuccessBg
+                              : token.colorPrimaryBg,
                           border: `1px solid ${token.colorBorderSecondary}`,
                           borderRadius: 8,
                           padding: '10px 12px',
@@ -496,11 +671,29 @@ export default function AdminSupportPageContent() {
                 }))}
               />
             ) : (
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No messages yet" />
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('detail.noMessages')} />
             )}
 
-            {canReply(activeTicket) ? (
-              <Card size="small" title="Reply to buyer">
+            {canAddMessage(activeTicket) ? (
+              <Card
+                size="small"
+                title={replyVisibility === 'PUBLIC' ? t('detail.replyToBuyer') : t('detail.internalNote')}
+                extra={(
+                  <Segmented<'PUBLIC' | 'INTERNAL'>
+                    size="small"
+                    value={replyVisibility}
+                    onChange={setReplyVisibility}
+                    options={[
+                      {
+                        value: 'PUBLIC',
+                        label: t('detail.publicReply'),
+                        disabled: activeTicket.status === 'RESOLVED',
+                      },
+                      { value: 'INTERNAL', label: t('detail.internalNote') },
+                    ]}
+                  />
+                )}
+              >
                 <Form form={replyForm} layout="vertical" onFinish={handleSendReply}>
                   <Form.Item
                     name="message"
@@ -509,26 +702,31 @@ export default function AdminSupportPageContent() {
                         validator: (_: unknown, value?: string) => (
                           typeof value === 'string' && value.trim().length > 0
                             ? Promise.resolve()
-                            : Promise.reject(new Error('Please enter a reply message'))
+                            : Promise.reject(new Error(t('detail.messageRequired')))
                         ),
                       },
                     ]}
                   >
-                    <Input.TextArea rows={4} maxLength={3000} showCount placeholder="Type your reply to the buyer..." />
+                    <Input.TextArea
+                      rows={4}
+                      maxLength={3000}
+                      showCount
+                      placeholder={replyVisibility === 'PUBLIC'
+                        ? t('detail.replyPlaceholder')
+                        : t('detail.internalPlaceholder')}
+                    />
                   </Form.Item>
                   <Button type="primary" htmlType="submit" icon={<SendOutlined />} loading={submitting}>
-                    Send reply
+                    {replyVisibility === 'PUBLIC' ? t('actions.sendReply') : t('actions.addInternalNote')}
                   </Button>
                 </Form>
               </Card>
             ) : (
               <Card size="small" style={{ textAlign: 'center', background: token.colorFillAlter }}>
-                <Text type="secondary">This ticket is {statusLabels[activeTicket.status].toLowerCase()}. New replies are disabled.</Text>
-                {activeTicket.status === 'RESOLVED' ? (
-                  <div style={{ marginTop: 12 }}>
-                    <Button onClick={() => void handleUpdateStatus('OPEN')}>Reopen ticket</Button>
-                  </div>
-                ) : null}
+                <Text type="secondary">{t('detail.closedHint')}</Text>
+                <div style={{ marginTop: 12 }}>
+                  <Button onClick={() => void handleUpdateStatus('OPEN')}>{t('actions.reopen')}</Button>
+                </div>
               </Card>
             )}
           </Space>

@@ -10,19 +10,20 @@ import { useRouter } from '@/i18n/routing';
 import { useParams } from 'next/navigation';
 
 const { Title, Text } = Typography;
+type Translator = ReturnType<typeof useTranslations>;
 
-function timeAgo(dateString: string, locale: string): string {
+function timeAgo(dateString: string, locale: string, t: Translator): string {
   const date = new Date(dateString);
   const now = new Date();
   const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
   
-  if (diffInSeconds < 60) return locale === 'vi' ? 'Vừa xong' : 'Just now';
+  if (diffInSeconds < 60) return t('justNow');
   const diffInMinutes = Math.floor(diffInSeconds / 60);
-  if (diffInMinutes < 60) return locale === 'vi' ? `${diffInMinutes} phút trước` : `${diffInMinutes} mins ago`;
+  if (diffInMinutes < 60) return t('minutesAgo', { count: diffInMinutes });
   const diffInHours = Math.floor(diffInMinutes / 60);
-  if (diffInHours < 24) return locale === 'vi' ? `${diffInHours} giờ trước` : `${diffInHours} hours ago`;
+  if (diffInHours < 24) return t('hoursAgo', { count: diffInHours });
   const diffInDays = Math.floor(diffInHours / 24);
-  if (diffInDays < 30) return locale === 'vi' ? `${diffInDays} ngày trước` : `${diffInDays} days ago`;
+  if (diffInDays < 30) return t('daysAgo', { count: diffInDays });
   
   return date.toLocaleDateString(locale === 'vi' ? 'vi-VN' : 'en-US');
 }
@@ -60,25 +61,25 @@ export default function NotificationsPage() {
 
   return (
     <Card
-      title={<Title level={4} style={{ margin: 0 }}>{t.has('notifications') ? t('notifications') : 'Tất cả thông báo'}</Title>}
+      title={<Title level={4} style={{ margin: 0 }}>{t('notifications')}</Title>}
       extra={
         <Space>
           <Button icon={<SyncOutlined />} onClick={refreshNotifications}>
-            {t.has('refresh') ? t('refresh') : 'Làm mới'}
+            {t('refresh')}
           </Button>
           <Button 
             icon={<CheckOutlined />} 
             onClick={markAllAsRead} 
             disabled={!notifications.some(n => !n.isRead)}
           >
-            {t.has('markAllRead') ? t('markAllRead') : 'Đọc hết'}
+            {t('markAllRead')}
           </Button>
         </Space>
       }
       style={{ margin: 24 }}
     >
       {notifications.length === 0 ? (
-        <Empty description={t.has('noNotifications') ? t('noNotifications') : 'Không có thông báo nào'} style={{ padding: '32px 0' }} />
+        <Empty description={t('noNotifications')} style={{ padding: '32px 0' }} />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column' }}>
           {notifications.map((item) => (
@@ -104,7 +105,7 @@ export default function NotificationsPage() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4, gap: 12 }}>
                   <Text strong>{item.title}</Text>
                   <Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
-                    {timeAgo(item.createdAt, locale)}
+                    {timeAgo(item.createdAt, locale, t)}
                   </Text>
                 </div>
                 <div>
@@ -122,4 +123,3 @@ export default function NotificationsPage() {
     </Card>
   );
 }
-

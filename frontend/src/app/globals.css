@@ -721,3 +721,43 @@ html:not(.dark) .text-yellow-400 {
     animation: none !important;
   }
 }
+
+/* =========================================================
+   Shipment tracking tabs - 5 equal columns, wrap on mobile
+   ========================================================= */
+.shipment-tracking-tabs {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0;
+}
+
+.shipment-tracking-tab:last-child {
+  border-right: 0 !important;
+}
+
+.shipment-tracking-tab:hover {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+html.dark .shipment-tracking-tab:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+@media (max-width: 768px) {
+  .shipment-tracking-tab {
+    font-size: 11px !important;
+    padding: 6px 4px !important;
+    min-height: 48px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .shipment-tracking-tabs {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+  .shipment-tracking-tab {
+    font-size: 10px !important;
+    padding: 4px 2px !important;
+    min-height: 44px !important;
+  }
+}

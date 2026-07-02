@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, App, Button, Card, Input, Select, Space, Tabs } from 'antd';
 import { ReloadOutlined, SearchOutlined } from '@ant-design/icons';
-import { useLocale } from 'next-intl';
+import { useTranslations } from 'next-intl';
 import PageBanner from '@/components/guest/PageBanner';
 import { useCustomerCommercialDocuments } from '@/hooks/useCustomerPortal';
 import type {
@@ -30,46 +30,9 @@ const statusValues = [
   'PAID',
 ] as const;
 
-const getOrdersCopy = (locale: string) => {
-  const isVietnamese = locale === 'vi';
-
-  return {
-    title: isVietnamese ? 'Báo giá & Đơn hàng' : 'Commercial Orders',
-    subtitle: isVietnamese
-      ? 'Theo dõi báo giá, hợp đồng, Proforma Invoice, thanh toán và giao hàng trong vòng đời thương mại.'
-      : 'Track quotations, contracts, proforma invoices, payment and shipment progress across the customer lifecycle.',
-    portal: 'Portal',
-    orders: isVietnamese ? 'Đơn hàng' : 'Orders',
-    all: isVietnamese ? 'Tất cả' : 'All',
-    quotations: isVietnamese ? 'Báo giá' : 'Quotations',
-    contracts: isVietnamese ? 'Hợp đồng' : 'Contracts',
-    proformaInvoices: 'Proforma Invoice',
-    retry: isVietnamese ? 'Tải lại' : 'Retry',
-    refresh: isVietnamese ? 'Làm mới' : 'Refresh',
-    searchPlaceholder: isVietnamese ? 'Tìm theo mã chứng từ hoặc trạng thái' : 'Search document number or status',
-    filterStatus: isVietnamese ? 'Lọc trạng thái' : 'Filter status',
-    unableToLoad: isVietnamese ? 'Không tải được danh sách chứng từ thương mại' : 'Unable to load commercial documents',
-    pdfDownloaded: isVietnamese ? 'Đã tải PDF' : 'PDF downloaded',
-    documentAccepted: isVietnamese ? 'Đã chấp nhận chứng từ' : 'Document accepted',
-    documentRejected: isVietnamese ? 'Đã từ chối chứng từ' : 'Document rejected',
-    revisionRequestSent: isVietnamese ? 'Đã gửi yêu cầu chỉnh sửa' : 'Revision request sent',
-    statuses: {
-      SENT: isVietnamese ? 'Đã gửi' : 'SENT',
-      ACCEPTED: isVietnamese ? 'Đã chấp nhận' : 'ACCEPTED',
-      REJECTED: isVietnamese ? 'Đã từ chối' : 'REJECTED',
-      EXPIRED: isVietnamese ? 'Hết hạn' : 'EXPIRED',
-      PENDING_BUYER_SIGNATURE: isVietnamese ? 'Chờ buyer ký' : 'PENDING_BUYER_SIGNATURE',
-      BUYER_SIGNED: isVietnamese ? 'Buyer đã ký' : 'BUYER_SIGNED',
-      CONFIRMED: isVietnamese ? 'Đã xác nhận' : 'CONFIRMED',
-      SHIPPED: isVietnamese ? 'Đã giao hàng' : 'SHIPPED',
-      PAID: isVietnamese ? 'Đã thanh toán' : 'PAID',
-    } as Record<string, string>,
-  };
-};
-
 export function CustomerOrdersPageContent() {
-  const locale = useLocale();
-  const copy = getOrdersCopy(locale);
+  const t = useTranslations('CustomerPortal');
+  const tCommon = useTranslations('Common');
   const { message } = App.useApp();
   const {
     documents,
@@ -125,7 +88,7 @@ export function CustomerOrdersPageContent() {
       result = await downloadQuotationPdf(document);
     }
     if (result.success) {
-      message.success(copy.pdfDownloaded);
+      message.success(t('pdfDownloaded'));
     } else if (result.message) {
       message.error(result.message);
     }
@@ -141,7 +104,7 @@ export function CustomerOrdersPageContent() {
   const handleAccept = async (recordId: string) => {
     const result = await acceptQuotation(recordId);
     if (result.success) {
-      message.success(copy.documentAccepted);
+      message.success(t('quotationAccepted'));
       await refreshAfterAction();
     } else if (result.message) {
       message.error(result.message);
@@ -151,7 +114,7 @@ export function CustomerOrdersPageContent() {
   const handleReject = async (recordId: string, reason: string) => {
     const result = await rejectQuotation(recordId, reason);
     if (result.success) {
-      message.success(copy.documentRejected);
+      message.success(t('quotationRejected'));
       await refreshAfterAction();
     } else if (result.message) {
       message.error(result.message);
@@ -161,7 +124,7 @@ export function CustomerOrdersPageContent() {
   const handleRequestRevision = async (recordId: string, reason: string) => {
     const result = await requestRevision(recordId, reason);
     if (result.success) {
-      message.success(copy.revisionRequestSent);
+      message.success(t('revisionRequestSent'));
       await refreshAfterAction();
     } else if (result.message) {
       message.error(result.message);
@@ -169,25 +132,25 @@ export function CustomerOrdersPageContent() {
   };
 
   const tabItems: Array<{ key: DocumentTab; label: string }> = [
-    { key: 'ALL', label: copy.all },
-    { key: 'QUOTATION', label: copy.quotations },
-    { key: 'SALES_CONTRACT', label: copy.contracts },
-    { key: 'PROFORMA_INVOICE', label: copy.proformaInvoices },
-    { key: 'ORDER', label: copy.orders },
+    { key: 'ALL', label: t('allDocuments') },
+    { key: 'QUOTATION', label: t('quotations') },
+    { key: 'SALES_CONTRACT', label: t('contracts') },
+    { key: 'PROFORMA_INVOICE', label: t('proformaInvoices') },
+    { key: 'ORDER', label: t('orders') },
   ];
   const statusOptions = statusValues.map((status) => ({
     value: status,
-    label: copy.statuses[status] || status,
+    label: t(`documentStatuses.${status}`),
   }));
 
   return (
     <div style={{ margin: '-48px -48px 0 -48px' }}>
       <PageBanner
-        title={copy.title}
-        subtitle={copy.subtitle}
+        title={t('ordersTitle')}
+        subtitle={t('ordersSubtitle')}
         height="260px"
         offset={false}
-        breadcrumbs={[{ title: copy.portal, href: '/portal' }, { title: copy.orders }]}
+        breadcrumbs={[{ title: t('portalLabel'), href: '/portal' }, { title: t('orders') }]}
         imageUrl="https://images.unsplash.com/photo-1454165833267-028ec48467b8?auto=format&fit=crop&q=80&w=2500"
       />
 
@@ -199,9 +162,9 @@ export function CustomerOrdersPageContent() {
             <Alert
               type="error"
               showIcon
-              title={copy.unableToLoad}
+              title={t('unableToLoadCommercialDocuments')}
               description={error}
-              action={<Button onClick={() => void loadDocuments()}>{copy.retry}</Button>}
+              action={<Button onClick={() => void loadDocuments()}>{tCommon('retry')}</Button>}
             />
           ) : null}
 
@@ -209,7 +172,7 @@ export function CustomerOrdersPageContent() {
             variant="borderless"
             extra={
               <Button icon={<ReloadOutlined />} onClick={() => void loadDocuments()}>
-                {copy.refresh}
+                {t('refresh')}
               </Button>
             }
           >
@@ -239,12 +202,12 @@ export function CustomerOrdersPageContent() {
                       current: 1,
                     }));
                   }}
-                  placeholder={copy.searchPlaceholder}
+                  placeholder={t('searchOrdersPlaceholder')}
                   style={{ width: 340 }}
                 />
                 <Select
                   allowClear
-                  placeholder={copy.filterStatus}
+                  placeholder={t('filterStatus')}
                   value={query.status}
                   options={statusOptions}
                   style={{ width: 240 }}

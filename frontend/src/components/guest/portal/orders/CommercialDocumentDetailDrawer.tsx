@@ -40,7 +40,7 @@ import {
   PaperClipOutlined,
   ReloadOutlined,
 } from '@ant-design/icons';
-import { useLocale } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { useTheme } from '@/context/theme.context';
 import type {
   CustomerAuditLogItem,
@@ -117,122 +117,152 @@ type CommercialDocumentDetailDrawerProps = {
   onRequestSigning?: (recordId: string, signerEmail?: string) => Promise<{ success: boolean; signingUrl?: string; message?: string }>;
 };
 
-const getDrawerCopy = (locale: string) => {
-  const isVietnamese = locale === 'vi';
+type Translate = (key: string, values?: Record<string, string | number>) => string;
 
-  return {
-    commercialDocument: isVietnamese ? 'Chứng từ thương mại' : 'Commercial document',
-    downloadPdf: isVietnamese ? 'Tải PDF' : 'Download PDF',
-    exportPdf: isVietnamese ? 'Xuất Invoice PDF' : 'Export Invoice PDF',
-    requestRevision: isVietnamese ? 'Yêu cầu chỉnh sửa' : 'Request revision',
-    reject: isVietnamese ? 'Từ chối' : 'Reject',
-    accept: isVietnamese ? 'Chấp nhận' : 'Accept',
-    acceptQuotationTitle: isVietnamese ? 'Chấp nhận báo giá {documentNumber}?' : 'Accept quotation {documentNumber}?',
-    acceptQuotationContent: isVietnamese
-      ? 'Xác nhận các điều khoản thương mại và cho phép sales tiếp tục vòng đời chứng từ.'
-      : 'This confirms the commercial terms and allows sales to continue the lifecycle.',
-    selectDocument: isVietnamese ? 'Chọn một chứng từ để xem chi tiết' : 'Select a document to view details',
-    expired: isVietnamese ? 'Hết hạn' : 'Expired',
-    expiredAlertTitle: isVietnamese ? 'Báo giá đã hết hạn' : 'Quotation has expired',
-    expiredAlertDescription: isVietnamese
-      ? 'Bạn không thể chấp nhận hoặc từ chối báo giá này. Hãy yêu cầu sales phát hành bản báo giá mới.'
-      : 'You can no longer accept or reject this quotation. Request sales to issue an updated quotation.',
-    unavailableAction: isVietnamese ? 'Thao tác chưa khả dụng' : 'Action unavailable',
-    quotationOnlyPdf: isVietnamese ? 'Chỉ báo giá mới có bản PDF để tải' : 'PDF download is only available for quotations',
-    signNow: isVietnamese ? 'Ký hợp đồng ngay' : 'Sign contract now',
-    signNowDescription: isVietnamese
-      ? 'Mã OTP sẽ được gửi đến email của bạn để xác thực trước khi ký.'
-      : 'An OTP will be sent to your email for verification before signing.',
-    signatureActions: isVietnamese ? 'Thao tác ký' : 'Signing actions',
-    documentDate: isVietnamese ? 'Ngày chứng từ' : 'Document date',
-    expiry: isVietnamese ? 'Hết hạn' : 'Expiry',
-    currency: isVietnamese ? 'Tiền tệ' : 'Currency',
-    paymentTerms: isVietnamese ? 'Điều khoản thanh toán' : 'Payment terms',
-    terms: isVietnamese ? 'Điều khoản' : 'Terms',
-    financials: isVietnamese ? 'Giá trị thương mại' : 'Commercial value',
-    totalValue: isVietnamese ? 'Tổng giá trị' : 'Total value',
-    updatedAt: isVietnamese ? 'Cập nhật lần cuối' : 'Last updated',
-    lineItems: isVietnamese ? 'Dòng hàng' : 'Line items',
-    product: isVietnamese ? 'Sản phẩm' : 'Product',
-    qty: isVietnamese ? 'Số lượng' : 'Qty',
-    unitPrice: isVietnamese ? 'Đơn giá' : 'Unit Price',
-    amount: isVietnamese ? 'Thành tiền' : 'Amount',
-    noLineItems: isVietnamese ? 'Chưa có dòng hàng' : 'No line items',
-    commercialSummary: isVietnamese ? 'Tổng hợp thương mại' : 'Commercial summary',
-    subtotal: isVietnamese ? 'Tạm tính' : 'Subtotal',
-    total: isVietnamese ? 'Tổng cộng' : 'Total',
-    attachments: isVietnamese ? 'Tệp đính kèm' : 'Attachments',
-    open: isVietnamese ? 'Mở' : 'Open',
-    noAttachments: isVietnamese ? 'Chưa có tệp đính kèm' : 'No attachments',
-    timeline: isVietnamese ? 'Timeline' : 'Timeline',
-    auditLogs: isVietnamese ? 'Nhật ký audit' : 'Audit logs',
-    auditLogHint: isVietnamese ? 'Lưu vết thực thi hệ thống và thay đổi dữ liệu.' : 'System execution and data-change trail.',
-    noAuditLogs: isVietnamese ? 'Chưa có nhật ký audit' : 'No audit logs yet',
-    system: isVietnamese ? 'hệ thống' : 'system',
-    rejectQuotation: isVietnamese ? 'Từ chối báo giá' : 'Reject quotation',
-    requestQuotationRevision: isVietnamese ? 'Yêu cầu chỉnh sửa báo giá' : 'Request quotation revision',
-    reasonPlaceholder: isVietnamese ? 'Nhập lý do rõ ràng để sales xử lý tiếp' : 'Enter a clear reason for sales follow-up',
-    documentTypes: {
-      QUOTATION: isVietnamese ? 'Báo giá' : 'Quotation',
-      SALES_CONTRACT: isVietnamese ? 'Hợp đồng' : 'Sales Contract',
-      PROFORMA_INVOICE: 'Proforma Invoice',
-      COMMERCIAL_INVOICE: 'Commercial Invoice',
-      ORDER: isVietnamese ? 'Đơn hàng' : 'Order',
-    } satisfies Record<CustomerCommercialDocument['documentType'], string>,
-    buyerInfo: isVietnamese ? 'Thông tin buyer' : 'Buyer info',
-    buyerName: isVietnamese ? 'Tên buyer' : 'Buyer name',
-    buyerCountry: isVietnamese ? 'Quốc gia' : 'Country',
-    deliveryDate: isVietnamese ? 'Ngày giao hàng' : 'Delivery date',
-    notes: isVietnamese ? 'Ghi chú' : 'Notes',
-    totalAmountVnd: isVietnamese ? 'Tổng (VND)' : 'Total (VND)',
-    signatureStatus: isVietnamese ? 'Trạng thái ký' : 'Signature status',
-    pendingSignature: isVietnamese ? 'Chờ ký' : 'Pending signature',
-    signed: isVietnamese ? 'Đã ký' : 'Signed',
-    statuses: {
-      SENT: isVietnamese ? 'Đã gửi' : 'SENT',
-      ACCEPTED: isVietnamese ? 'Đã chấp nhận' : 'ACCEPTED',
-      REJECTED: isVietnamese ? 'Đã từ chối' : 'REJECTED',
-      EXPIRED: isVietnamese ? 'Hết hạn' : 'EXPIRED',
-      PENDING_BUYER_SIGNATURE: isVietnamese ? 'Chờ buyer ký' : 'PENDING_BUYER_SIGNATURE',
-      BUYER_SIGNED: isVietnamese ? 'Buyer đã ký' : 'BUYER_SIGNED',
-      CONFIRMED: isVietnamese ? 'Đã xác nhận' : 'CONFIRMED',
-      SHIPPED: isVietnamese ? 'Đã giao hàng' : 'SHIPPED',
-      PAID: isVietnamese ? 'Đã thanh toán' : 'PAID',
-    } as Record<string, string>,
-    lifecycleStages: {
-      Quotation: isVietnamese ? 'Báo giá' : 'Quotation',
-      Accepted: isVietnamese ? 'Đã chấp nhận' : 'Accepted',
-      Rejected: isVietnamese ? 'Đã từ chối' : 'Rejected',
-      Expired: isVietnamese ? 'Hết hạn' : 'Expired',
-      'Sales Contract': isVietnamese ? 'Hợp đồng' : 'Sales Contract',
-      'Proforma Invoice': 'Proforma Invoice',
-      Payment: isVietnamese ? 'Thanh toán' : 'Payment',
-      Shipment: isVietnamese ? 'Giao hàng' : 'Shipment',
-      Completed: isVietnamese ? 'Hoàn tất' : 'Completed',
-    } as Record<string, string>,
-    disabledReasons: {
-      'Quotation has expired': isVietnamese ? 'Báo giá đã hết hạn' : 'Quotation has expired',
-      'Action is not available in current status': isVietnamese
-        ? 'Thao tác không khả dụng ở trạng thái hiện tại'
-        : 'Action is not available in current status',
-      'Read-only commercial document': isVietnamese ? 'Chứng từ chỉ được xem' : 'Read-only commercial document',
-    } as Record<string, string>,
-    timelineLabels: {
-      Quotation: isVietnamese ? 'Báo giá' : 'Quotation',
-      'Quotation issued': isVietnamese ? 'Đã phát hành báo giá' : 'Quotation issued',
-      'Sales Contract': isVietnamese ? 'Hợp đồng' : 'Sales Contract',
-      'Proforma Invoice': 'Proforma Invoice',
-      Payment: isVietnamese ? 'Thanh toán' : 'Payment',
-      Shipment: isVietnamese ? 'Giao hàng' : 'Shipment',
-      Completed: isVietnamese ? 'Hoàn tất' : 'Completed',
-    } as Record<string, string>,
-    timelineDescriptions: {
-      'Payment received': isVietnamese ? 'Đã nhận thanh toán' : 'Payment received',
-    } as Record<string, string>,
-  };
-};
+const buildDrawerCopy = (t: Translate) => ({
+  commercialDocument: t('documentDetail.commercialDocument'),
+  downloadPdf: t('documentDetail.downloadPdf'),
+  exportPdf: t('documentDetail.exportPdf'),
+  requestRevision: t('documentDetail.requestRevision'),
+  reject: t('documentDetail.reject'),
+  accept: t('documentDetail.accept'),
+  acceptQuotationTitle: (documentNumber: string) => t('documentDetail.acceptQuotationTitle', { documentNumber }),
+  acceptQuotationContent: t('documentDetail.acceptQuotationContent'),
+  selectDocument: t('documentDetail.selectDocument'),
+  expired: t('ordersTable.expired'),
+  expiredAlertTitle: t('documentDetail.expiredAlertTitle'),
+  expiredAlertDescription: t('documentDetail.expiredAlertDescription'),
+  unavailableAction: t('documentDetail.unavailableAction'),
+  quotationOnlyPdf: t('documentDetail.quotationOnlyPdf'),
+  signNow: t('documentDetail.signNow'),
+  signNowDescription: t('documentDetail.signNowDescription'),
+  signatureActions: t('documentDetail.signatureActions'),
+  documentDate: t('documentDetail.documentDate'),
+  expiry: t('documentDetail.expiry'),
+  currency: t('documentDetail.currency'),
+  paymentTerms: t('documentDetail.paymentTerms'),
+  terms: t('documentDetail.terms'),
+  financials: t('documentDetail.financials'),
+  totalValue: t('documentDetail.totalValue'),
+  updatedAt: t('documentDetail.updatedAt'),
+  lineItems: t('documentDetail.lineItems'),
+  product: t('documentDetail.product'),
+  qty: t('documentDetail.qty'),
+  unitPrice: t('documentDetail.unitPrice'),
+  amount: t('documentDetail.amount'),
+  noLineItems: t('documentDetail.noLineItems'),
+  commercialSummary: t('documentDetail.commercialSummary'),
+  subtotal: t('documentDetail.subtotal'),
+  total: t('documentDetail.total'),
+  attachments: t('documentDetail.attachments'),
+  open: t('documentDetail.open'),
+  noAttachments: t('documentDetail.noAttachments'),
+  timeline: t('documentDetail.timeline'),
+  auditLogs: t('documentDetail.auditLogs'),
+  auditLogHint: t('documentDetail.auditLogHint'),
+  noAuditLogs: t('documentDetail.noAuditLogs'),
+  system: t('documentDetail.system'),
+  rejectQuotation: t('documentDetail.rejectQuotation'),
+  requestQuotationRevision: t('documentDetail.requestQuotationRevision'),
+  reasonPlaceholder: t('documentDetail.reasonPlaceholder'),
+  documentTypes: {
+    QUOTATION: t('documentTypes.QUOTATION'),
+    SALES_CONTRACT: t('documentTypes.SALES_CONTRACT'),
+    PROFORMA_INVOICE: t('documentTypes.PROFORMA_INVOICE'),
+    COMMERCIAL_INVOICE: t('documentTypes.COMMERCIAL_INVOICE'),
+    ORDER: t('documentTypes.ORDER'),
+  } satisfies Record<CustomerCommercialDocument['documentType'], string>,
+  buyerInfo: t('documentDetail.buyerInfo'),
+  buyerName: t('documentDetail.buyerName'),
+  buyerCountry: t('documentDetail.buyerCountry'),
+  deliveryDate: t('documentDetail.deliveryDate'),
+  notes: t('documentDetail.notes'),
+  totalAmountVnd: t('documentDetail.totalAmountVnd'),
+  signatureStatus: t('documentDetail.signatureStatus'),
+  pendingSignature: t('pendingSignature'),
+  signed: t('documentDetail.signed'),
+  statuses: {
+    SENT: t('documentStatuses.SENT'),
+    ACCEPTED: t('documentStatuses.ACCEPTED'),
+    REJECTED: t('documentStatuses.REJECTED'),
+    EXPIRED: t('documentStatuses.EXPIRED'),
+    PENDING_BUYER_SIGNATURE: t('documentStatuses.PENDING_BUYER_SIGNATURE'),
+    BUYER_SIGNED: t('documentStatuses.BUYER_SIGNED'),
+    CONFIRMED: t('documentStatuses.CONFIRMED'),
+    SHIPPED: t('documentStatuses.SHIPPED'),
+    PAID: t('documentStatuses.PAID'),
+  } as Record<string, string>,
+  lifecycleStages: {
+    Quotation: t('lifecycleStages.Quotation'),
+    Accepted: t('lifecycleStages.Accepted'),
+    Rejected: t('lifecycleStages.Rejected'),
+    Expired: t('lifecycleStages.Expired'),
+    'Sales Contract': t('lifecycleStages.Sales Contract'),
+    'Proforma Invoice': t('lifecycleStages.Proforma Invoice'),
+    Payment: t('lifecycleStages.Payment'),
+    Shipment: t('lifecycleStages.Shipment'),
+    Completed: t('lifecycleStages.Completed'),
+  } as Record<string, string>,
+  disabledReasons: {
+    'Quotation has expired': t('documentDetail.disabledReasons.quotationExpired'),
+    'Action is not available in current status': t('documentDetail.disabledReasons.actionUnavailable'),
+    'Read-only commercial document': t('documentDetail.disabledReasons.readOnly'),
+  } as Record<string, string>,
+  timelineLabels: {
+    Quotation: t('lifecycleStages.Quotation'),
+    'Quotation issued': t('documentDetail.timelineLabels.quotationIssued'),
+    'Sales Contract': t('lifecycleStages.Sales Contract'),
+    'Proforma Invoice': t('lifecycleStages.Proforma Invoice'),
+    Payment: t('lifecycleStages.Payment'),
+    Shipment: t('lifecycleStages.Shipment'),
+    Completed: t('lifecycleStages.Completed'),
+  } as Record<string, string>,
+  timelineDescriptions: {
+    'Payment received': t('documentDetail.timelineDescriptions.paymentReceived'),
+  } as Record<string, string>,
+  signing: {
+    unableOpenPortal: t('documentDetail.signing.unableOpenPortal'),
+    otpSent: t('documentDetail.signing.otpSent'),
+    otpSendFailedTryAgain: t('documentDetail.signing.otpSendFailedTryAgain'),
+    otpSendFailed: t('documentDetail.signing.otpSendFailed'),
+    otpSixDigits: t('documentDetail.signing.otpSixDigits'),
+    otpVerified: t('documentDetail.signing.otpVerified'),
+    invalidOtp: t('documentDetail.signing.invalidOtp'),
+    contractSigned: t('documentDetail.signing.contractSigned'),
+    signingFailed: t('documentDetail.signing.signingFailed'),
+    contractDetails: t('documentDetail.signing.contractDetails'),
+    buyer: t('documentDetail.signing.buyer'),
+    country: t('documentDetail.signing.country'),
+    totalValue: t('documentDetail.signing.totalValue'),
+    deliveryDate: t('documentDetail.signing.deliveryDate'),
+    paymentTermsShort: t('documentDetail.signing.paymentTermsShort'),
+    otpWillBeSentTo: t('documentDetail.signing.otpWillBeSentTo'),
+    sendingOtp: t('documentDetail.signing.sendingOtp'),
+    verifyOtp: t('documentDetail.signing.verifyOtp'),
+    sign: t('documentDetail.signing.sign'),
+    complete: t('documentDetail.signing.complete'),
+    enterOtp: t('documentDetail.signing.enterOtp'),
+    otpExpiredTitle: t('documentDetail.signing.otpExpiredTitle'),
+    otpExpiredDescription: t('documentDetail.signing.otpExpiredDescription'),
+    enterSixDigitOtp: t('documentDetail.signing.enterSixDigitOtp'),
+    verify: t('documentDetail.signing.verify'),
+    waitSeconds: (seconds: number) => t('documentDetail.signing.waitSeconds', { seconds }),
+    resendOtp: t('documentDetail.signing.resendOtp'),
+    signContract: t('documentDetail.signing.signContract'),
+    consentText: t('documentDetail.signing.consentText'),
+    signerName: t('documentDetail.signing.signerName'),
+    signerNameRequired: t('documentDetail.signing.signerNameRequired'),
+    consent: t('documentDetail.signing.consent'),
+    consentRequired: t('documentDetail.signing.consentRequired'),
+    confirmContractSigning: t('documentDetail.signing.confirmContractSigning'),
+    updateContactEmail: t('documentDetail.signing.updateContactEmail'),
+    continue: t('documentDetail.signing.continue'),
+    emailRequiredTitle: t('documentDetail.signing.emailRequiredTitle'),
+    emailPlaceholder: t('documentDetail.signing.emailPlaceholder'),
+  },
+});
 
-type DrawerCopy = ReturnType<typeof getDrawerCopy>;
+type DrawerCopy = ReturnType<typeof buildDrawerCopy>;
 
 type DateFormatMode = 'date' | 'dateTime';
 
@@ -489,8 +519,9 @@ export function CommercialDocumentDetailDrawer({
 }: CommercialDocumentDetailDrawerProps) {
   const { modal, message } = App.useApp();
   const locale = useLocale();
+  const t = useTranslations('CustomerPortal');
   const { isDark } = useTheme();
-  const copy = getDrawerCopy(locale);
+  const copy = buildDrawerCopy(t);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [revisionOpen, setRevisionOpen] = useState(false);
   const [reason, setReason] = useState('');
@@ -563,7 +594,7 @@ export function CommercialDocumentDetailDrawer({
           setMissingEmailOpen(true);
           return;
         }
-        setSigningNotice({ type: 'error', text: result.message || 'Unable to open signing portal' });
+        setSigningNotice({ type: 'error', text: result.message || copy.signing.unableOpenPortal });
         return;
       }
       setMissingEmailOpen(false);
@@ -586,10 +617,10 @@ export function CommercialDocumentDetailDrawer({
             setSigningSession((prev) => prev ? { ...prev, invitation: { ...prev.invitation, otpExpiresAt: otpRes.data!.expiresAt } } : prev);
             setOtpResendCooldown(60);
             setSigningStep(1);
-            message.success(locale === 'vi' ? 'Mã OTP đã được gửi đến email của bạn.' : 'OTP sent to your email.');
+            message.success(copy.signing.otpSent);
           }
         } catch {
-          message.error(locale === 'vi' ? 'Gửi OTP thất bại. Vui lòng thử lại.' : 'Failed to send OTP. Please try again.');
+          message.error(copy.signing.otpSendFailedTryAgain);
         } finally {
           setOtpSending(false);
         }
@@ -611,10 +642,10 @@ export function CommercialDocumentDetailDrawer({
         setSigningSession((prev) => prev ? { ...prev, invitation: { ...prev.invitation, otpExpiresAt: res.data!.expiresAt } } : prev);
         setOtpResendCooldown(60);
         setSigningStep(1);
-        message.success(locale === 'vi' ? 'Mã OTP đã được gửi đến email của bạn.' : 'OTP sent to your email.');
+        message.success(copy.signing.otpSent);
       }
     } catch {
-      message.error(locale === 'vi' ? 'Gửi OTP thất bại.' : 'Failed to send OTP.');
+      message.error(copy.signing.otpSendFailed);
     } finally {
       setOtpResending(false);
     }
@@ -622,7 +653,7 @@ export function CommercialDocumentDetailDrawer({
 
   const handleVerifyOtp = async () => {
     if (!otp.trim() || otp.length !== 6) {
-      message.error(locale === 'vi' ? 'Mã OTP phải gồm 6 chữ số.' : 'OTP must be 6 digits.');
+      message.error(copy.signing.otpSixDigits);
       return;
     }
     if (!signingToken) return;
@@ -637,9 +668,9 @@ export function CommercialDocumentDetailDrawer({
       if (res?.data) {
         setSigningSession(res.data);
         setSigningStep(2);
-        message.success(locale === 'vi' ? 'OTP xác minh thành công.' : 'OTP verified.');
+        message.success(copy.signing.otpVerified);
       } else {
-        message.error(typeof res?.message === 'string' ? res.message : (locale === 'vi' ? 'OTP không hợp lệ.' : 'Invalid OTP.'));
+        message.error(typeof res?.message === 'string' ? res.message : copy.signing.invalidOtp);
       }
     } finally {
       setSigningLoading(false);
@@ -661,11 +692,11 @@ export function CommercialDocumentDetailDrawer({
         },
       });
       if (res?.data) {
-        message.success(locale === 'vi' ? 'Hợp đồng đã được ký thành công!' : 'Contract signed successfully!');
+        message.success(copy.signing.contractSigned);
         setSigningModalOpen(false);
         setSigningStep(0);
       } else {
-        message.error(typeof res?.message === 'string' ? res.message : (locale === 'vi' ? 'Ký thất bại.' : 'Signing failed.'));
+        message.error(typeof res?.message === 'string' ? res.message : copy.signing.signingFailed);
       }
     } finally {
       setSigning(false);
@@ -695,7 +726,7 @@ export function CommercialDocumentDetailDrawer({
   const handleAccept = () => {
     if (!document) return;
     modal.confirm({
-      title: copy.acceptQuotationTitle.replace('{documentNumber}', document.documentNumber),
+      title: copy.acceptQuotationTitle(document.documentNumber),
       content: copy.acceptQuotationContent,
       okText: copy.accept,
       onOk: () => onAccept(document._id),
@@ -877,6 +908,12 @@ export function CommercialDocumentDetailDrawer({
                 {formatMoney(document.totalAmount, document.currency, locale)}
               </Title>
             </Space>
+            {document.totalAmountVnd && (
+              <Space orientation="vertical" size={2}>
+                <Text type="secondary">{copy.totalAmountVnd}</Text>
+                <Text>{formatMoney(document.totalAmountVnd, 'VND', locale)}</Text>
+              </Space>
+            )}
             <Space orientation="vertical" size={2}>
               <Text type="secondary">{copy.updatedAt}</Text>
               <Text>{formatDate(document.updatedAt, locale, 'dateTime')}</Text>
@@ -1081,7 +1118,7 @@ export function CommercialDocumentDetailDrawer({
               title={
                 <Space>
                   <FileTextOutlined />
-                  <span>{locale === 'vi' ? 'Chi tiết hợp đồng' : 'Contract Details'}</span>
+                  <span>{copy.signing.contractDetails}</span>
                 </Space>
               }
               extra={
@@ -1092,44 +1129,38 @@ export function CommercialDocumentDetailDrawer({
               }
             >
               <Descriptions column={2} bordered size="small">
-                <Descriptions.Item label={locale === 'vi' ? 'Buyer' : 'Buyer'}>
+                <Descriptions.Item label={copy.signing.buyer}>
                   <Text strong>{signingSession.contract.buyerName || '-'}</Text>
                 </Descriptions.Item>
-                <Descriptions.Item label={locale === 'vi' ? 'Quốc gia' : 'Country'}>
+                <Descriptions.Item label={copy.signing.country}>
                   {signingSession.contract.buyerCountry || '-'}
                 </Descriptions.Item>
                 <Descriptions.Item label="Incoterm">
                   <Tag color="magenta">{signingSession.contract.incoterm}</Tag>
                 </Descriptions.Item>
-                <Descriptions.Item label={locale === 'vi' ? 'Tiền tệ' : 'Currency'}>
+                <Descriptions.Item label={copy.currency}>
                   {signingSession.contract.currencyCode}
                 </Descriptions.Item>
-                <Descriptions.Item label={locale === 'vi' ? 'Tổng giá trị' : 'Total Value'} span={2}>
+                <Descriptions.Item label={copy.signing.totalValue} span={2}>
                   <Text strong style={{ fontSize: 16 }}>
-                    {new Intl.NumberFormat('en-US', {
-                      style: 'currency',
-                      currency: signingSession.contract.currencyCode || 'USD',
-                    }).format(signingSession.contract.totalAmount || 0)}
+                    {formatMoney(signingSession.contract.totalAmount || 0, signingSession.contract.currencyCode || 'USD', locale)}
                   </Text>
                   {signingSession.contract.totalAmountVnd > 0 && (
                     <Text type="secondary" style={{ marginLeft: 12 }}>
-                      ({new Intl.NumberFormat('vi-VN', {
-                        style: 'currency',
-                        currency: 'VND',
-                      }).format(signingSession.contract.totalAmountVnd)})
+                      ({formatMoney(signingSession.contract.totalAmountVnd, 'VND', locale)})
                     </Text>
                   )}
                 </Descriptions.Item>
-                <Descriptions.Item label={locale === 'vi' ? 'Ngày giao hàng' : 'Delivery Date'}>
+                <Descriptions.Item label={copy.signing.deliveryDate}>
                   {formatDate(signingSession.contract.deliveryDate, locale)}
                 </Descriptions.Item>
-                <Descriptions.Item label={locale === 'vi' ? 'Điều khoản TT' : 'Payment Terms'}>
+                <Descriptions.Item label={copy.signing.paymentTermsShort}>
                   {signingSession.contract.paymentTerms || '-'}
                 </Descriptions.Item>
               </Descriptions>
               {signingSession.contract.notes && (
                 <div style={{ marginTop: 12 }}>
-                  <Text type="secondary">{locale === 'vi' ? 'Ghi chú' : 'Notes'}:</Text>
+                  <Text type="secondary">{copy.notes}:</Text>
                   <div style={{
                     padding: 12,
                     background: isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.02)',
@@ -1150,20 +1181,20 @@ export function CommercialDocumentDetailDrawer({
               title={
                 <Space>
                   <FileTextOutlined />
-                  <span>{locale === 'vi' ? 'Dòng hàng' : 'Line Items'}</span>
+                  <span>{copy.lineItems}</span>
                   <Tag>{signingSession.contract.items.length}</Tag>
                 </Space>
               }
               size="small"
             >
-              <Table
+              <Table<SigningItem>
                 dataSource={signingSession.contract.items}
                 rowKey="_id"
                 size="small"
                 pagination={false}
                 columns={[
                   {
-                    title: locale === 'vi' ? 'Sản phẩm' : 'Product',
+                    title: copy.product,
                     key: 'product',
                     render: (_, record) => (
                       <Space orientation="vertical" size={0}>
@@ -1173,32 +1204,26 @@ export function CommercialDocumentDetailDrawer({
                     ),
                   },
                   {
-                    title: locale === 'vi' ? 'Số lượng' : 'Qty',
+                    title: copy.qty,
                     dataIndex: 'quantity',
                     key: 'quantity',
                     align: 'center',
                   },
                   {
-                    title: locale === 'vi' ? 'Đơn giá' : 'Unit Price',
+                    title: copy.unitPrice,
                     dataIndex: 'unitPrice',
                     key: 'unitPrice',
                     align: 'right',
-                    render: (value: number) => new Intl.NumberFormat('en-US', {
-                      style: 'currency',
-                      currency: signingSession.contract.currencyCode || 'USD',
-                    }).format(value),
+                    render: (value: number) => formatMoney(value, signingSession.contract.currencyCode || 'USD', locale),
                   },
                   {
-                    title: locale === 'vi' ? 'Thành tiền' : 'Total',
+                    title: copy.total,
                     dataIndex: 'totalPrice',
                     key: 'totalPrice',
                     align: 'right',
                     render: (value: number) => (
                       <Text strong>
-                        {new Intl.NumberFormat('en-US', {
-                          style: 'currency',
-                          currency: signingSession.contract.currencyCode || 'USD',
-                        }).format(value)}
+                        {formatMoney(value, signingSession.contract.currencyCode || 'USD', locale)}
                       </Text>
                     ),
                   },
@@ -1215,9 +1240,7 @@ export function CommercialDocumentDetailDrawer({
               type="info"
               showIcon
               icon={<MailOutlined />}
-              title={
-                locale === 'vi' ? 'Mã OTP sẽ được gửi đến:' : 'OTP will be sent to:'
-              }
+              title={copy.signing.otpWillBeSentTo}
               description={<Text code>{signingSession.invitation.signerEmailMasked}</Text>}
             />
           )}
@@ -1227,9 +1250,7 @@ export function CommercialDocumentDetailDrawer({
             <Card>
               <Space orientation="vertical" size={12} style={{ width: '100%' }} align="center">
                 <Spin indicator={<MailOutlined style={{ fontSize: 32, color: '#1890ff' }} spin />} />
-                <Text>
-                  {locale === 'vi' ? 'Đang gửi mã OTP...' : 'Sending OTP...'}
-                </Text>
+                <Text>{copy.signing.sendingOtp}</Text>
               </Space>
             </Card>
           )}
@@ -1238,9 +1259,9 @@ export function CommercialDocumentDetailDrawer({
             current={signingStep}
             size="small"
             items={[
-              { title: locale === 'vi' ? 'Xác minh OTP' : 'Verify OTP', icon: <LockOutlined /> },
-              { title: locale === 'vi' ? 'Ký kết' : 'Sign', icon: <FileProtectOutlined /> },
-              { title: locale === 'vi' ? 'Hoàn tất' : 'Complete', icon: <CheckCircleOutlined /> },
+              { title: copy.signing.verifyOtp, icon: <LockOutlined /> },
+              { title: copy.signing.sign, icon: <FileProtectOutlined /> },
+              { title: copy.signing.complete, icon: <CheckCircleOutlined /> },
             ]}
           />
 
@@ -1251,7 +1272,7 @@ export function CommercialDocumentDetailDrawer({
               title={
                 <Space>
                   <LockOutlined />
-                  {locale === 'vi' ? 'Nhập mã OTP' : 'Enter OTP'}
+                  {copy.signing.enterOtp}
                 </Space>
               }
               extra={
@@ -1268,10 +1289,8 @@ export function CommercialDocumentDetailDrawer({
               {isOtpExpired ? (
                 <Alert
                   type="warning"
-                  title={locale === 'vi' ? 'Mã OTP đã hết hạn' : 'OTP has expired'}
-                  description={locale === 'vi'
-                    ? 'Vui lòng nhấn "Gửi lại mã OTP" để nhận mã mới.'
-                    : 'Please request a new OTP below.'}
+                  title={copy.signing.otpExpiredTitle}
+                  description={copy.signing.otpExpiredDescription}
                 />
               ) : null}
               <Space.Compact style={{ width: '100%', marginTop: 12 }}>
@@ -1279,7 +1298,7 @@ export function CommercialDocumentDetailDrawer({
                   value={otp}
                   onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
                   maxLength={6}
-                  placeholder={locale === 'vi' ? 'Nhập mã 6 số' : 'Enter 6-digit OTP'}
+                  placeholder={copy.signing.enterSixDigitOtp}
                   size="large"
                   style={{ fontSize: 18, letterSpacing: 8, textAlign: 'center' }}
                 />
@@ -1289,7 +1308,7 @@ export function CommercialDocumentDetailDrawer({
                   onClick={handleVerifyOtp}
                   size="large"
                 >
-                  {locale === 'vi' ? 'Xác minh' : 'Verify'}
+                  {copy.signing.verify}
                 </Button>
               </Space.Compact>
               <Divider style={{ margin: '12px 0' }} />
@@ -1302,8 +1321,8 @@ export function CommercialDocumentDetailDrawer({
                 style={{ padding: 0, height: 'auto' }}
               >
                 {otpResendCooldown > 0
-                  ? (locale === 'vi' ? `Đợi ${otpResendCooldown}s` : `Wait ${otpResendCooldown}s`)
-                  : (locale === 'vi' ? 'Gửi lại mã OTP' : 'Resend OTP')}
+                  ? copy.signing.waitSeconds(otpResendCooldown)
+                  : copy.signing.resendOtp}
               </Button>
             </Card>
           )}
@@ -1314,7 +1333,7 @@ export function CommercialDocumentDetailDrawer({
               title={
                 <Space>
                   <FileProtectOutlined />
-                  {locale === 'vi' ? 'Ký hợp đồng' : 'Sign contract'}
+                  {copy.signing.signContract}
                 </Space>
               }
             >
@@ -1324,22 +1343,20 @@ export function CommercialDocumentDetailDrawer({
                 onFinish={handleSignSubmit}
                 disabled={signing}
                 initialValues={{
-                  consentText: locale === 'vi'
-                    ? 'Tôi xác nhận rằng tôi được ủy quyền ký hợp đồng này và đồng ý với các điều khoản thương mại.'
-                    : 'I confirm that I am authorized to sign this contract and agree to its commercial terms.',
+                  consentText: copy.signing.consentText,
                 }}
               >
                 <Form.Item
-                  label={locale === 'vi' ? 'Tên người ký' : 'Signer name'}
+                  label={copy.signing.signerName}
                   name="signerName"
-                  rules={[{ required: true, message: locale === 'vi' ? 'Tên người ký là bắt buộc.' : 'Signer name is required.' }]}
+                  rules={[{ required: true, message: copy.signing.signerNameRequired }]}
                 >
                   <Input />
                 </Form.Item>
                 <Form.Item
-                  label={locale === 'vi' ? 'Xác nhận đồng ý' : 'Consent'}
+                  label={copy.signing.consent}
                   name="consentText"
-                  rules={[{ required: true, message: locale === 'vi' ? 'Bạn phải đồng ý để tiếp tục ký.' : 'You must agree to proceed with signing.' }]}
+                  rules={[{ required: true, message: copy.signing.consentRequired }]}
                 >
                   <Input.TextArea rows={3} />
                 </Form.Item>
@@ -1351,7 +1368,7 @@ export function CommercialDocumentDetailDrawer({
                   size="large"
                   icon={<CheckCircleOutlined />}
                 >
-                  {locale === 'vi' ? 'Xác nhận ký hợp đồng' : 'Confirm contract signing'}
+                  {copy.signing.confirmContractSigning}
                 </Button>
               </Form>
             </Card>
@@ -1360,21 +1377,21 @@ export function CommercialDocumentDetailDrawer({
       </Modal>
 
       <Modal
-        title={locale === 'vi' ? 'Cập nhật Email liên hệ' : 'Update Contact Email'}
+        title={copy.signing.updateContactEmail}
         open={missingEmailOpen}
         onCancel={() => setMissingEmailOpen(false)}
         onOk={() => void handleRequestSigning(missingEmail)}
-        okText={locale === 'vi' ? 'Tiếp tục' : 'Continue'}
+        okText={copy.signing.continue}
         okButtonProps={{ disabled: !missingEmail.includes('@') }}
       >
         <Alert
           type="info"
-          title={locale === 'vi' ? 'Hệ thống cần email của bạn để gửi mã xác thực OTP phục vụ quá trình ký số bảo mật.' : 'An email is required to send the OTP for secure signing.'}
+          title={copy.signing.emailRequiredTitle}
           style={{ marginBottom: 16 }}
         />
         <Input
           type="email"
-          placeholder={locale === 'vi' ? 'Nhập địa chỉ email của bạn' : 'Enter your email address'}
+          placeholder={copy.signing.emailPlaceholder}
           value={missingEmail}
           onChange={(e) => setMissingEmail(e.target.value)}
         />
