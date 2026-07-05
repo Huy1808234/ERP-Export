@@ -1,0 +1,20 @@
+{
+  "missingInVi": [
+    "Quotation.notifications.updateSuccess",
+    "Quotation.notifications.numberLabel",
+    "Quotation.notifications.atLeastOneItem",
+    "Quotation.notifications.cifError",
+    "Quotation.notifications.cifDetail",
+    "Quotation.notifications.cfrError",
+    "Quotation.notifications.cfrDetail",
+    "Quotation.notifications.doorError",
+    "Quotation.notifications.doorDetail"
+  ],
+  "missingInEn": [
+    "Sidebar.items.inventoryAdjustments",
+    "Sidebar.items.inventoryPeriodSnapshots",
+    "Quotation.create.notifications",
+    "CustomerPortal.documentDetail.signing.continue",
+    "CustomerPortal.paymentAdvice.submitSwift"
+  ]
+}

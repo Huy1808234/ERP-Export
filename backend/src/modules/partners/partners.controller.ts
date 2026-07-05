@@ -11,7 +11,6 @@ import {
   Query,
   Request,
   Res,
-  UseGuards,
 } from '@nestjs/common';
 import * as express from 'express';
 import { Roles } from '@/decorator/customize'; // Giữ nguyên decorator của bạn
@@ -31,8 +30,11 @@ export class PartnersController {
 
   @Get('export')
   @Roles('ADMIN', 'MANAGER', 'SALES_EXPORT', 'PURCHASING', 'ACCOUNTANT')
-  async exportExcel(@Query() query: any, @Res() res: express.Response) {
-    const buffer = await this.partnersService.exportExcel(query);
+  async exportExcel(
+    @Query() query: Record<string, unknown>,
+    @Res() res: express.Response,
+  ) {
+    const buffer = (await this.partnersService.exportExcel(query)) as Buffer;
 
     res.set({
       'Content-Type':
@@ -57,13 +59,18 @@ export class PartnersController {
     // Sử dụng DefaultValuePipe và ParseIntPipe để an toàn tuyệt đối
     @Query('current', new DefaultValuePipe(1), ParseIntPipe) current: number,
     @Query('pageSize', new DefaultValuePipe(10), ParseIntPipe) pageSize: number,
-    @Query() query: any, // Nhận toàn bộ filter còn lại dưới dạng Object
+    @Query() query: Record<string, unknown>, // Nhận toàn bộ filter còn lại dưới dạng Object
   ) {
     // Xóa current và pageSize ra khỏi query object để tránh truyền query rác vào TypeORM
-    delete query.current;
-    delete query.pageSize;
+    const queryWithoutPagination = { ...query };
+    delete queryWithoutPagination.current;
+    delete queryWithoutPagination.pageSize;
 
-    return this.partnersService.findAll(query, current, pageSize);
+    return this.partnersService.findAll(
+      queryWithoutPagination,
+      current,
+      pageSize,
+    );
   }
 
   @Get(':_id/history')
@@ -83,10 +90,14 @@ export class PartnersController {
   update(
     @Param('_id') recordId: string,
     @Body() updatePartnerDto: UpdatePartnerDto,
-    @Request() req: any,
+    @Request()
+    req: express.Request & {
+      user?: { role?: { name?: string } | string };
+    },
   ) {
     // Lấy tên Role từ object Role của User (AuthGuard bóc tách từ JWT)
-    const userRole = req.user?.role?.name || req.user?.role;
+    const role = req.user?.role;
+    const userRole = typeof role === 'object' ? role?.name : role;
 
     // Pass role xuống Service để check logic "Cấp hạn mức tín dụng cho khách hàng HIGH RISK"
     return this.partnersService.update(recordId, updatePartnerDto, userRole);

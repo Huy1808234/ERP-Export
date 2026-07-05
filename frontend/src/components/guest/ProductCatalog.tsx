@@ -1,12 +1,11 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Row, Col, Card, Typography, Button, Space, Tag, Skeleton, Select, Input, Modal, Form, message } from "antd";
+import { Row, Col, Typography, Button, Space, Select, Input, Modal, Form, message } from "antd";
 import { 
   ArrowRightOutlined, 
   ShoppingOutlined,
-  HeartOutlined,
-  EyeOutlined,
   SearchOutlined
 } from "@ant-design/icons";
 import { motion } from "framer-motion";

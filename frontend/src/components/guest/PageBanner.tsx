@@ -1,11 +1,11 @@
 "use client";
 
 import React from "react";
-import { Typography, Breadcrumb, Space } from "antd";
+import { Typography, Breadcrumb } from "antd";
 import { motion } from "framer-motion";
 import { Link } from "@/i18n/routing";
 
-const { Title, Text } = Typography;
+const { Title } = Typography;
 
 interface PageBannerProps {
   title: string;

@@ -1,12 +1,12 @@
+/* eslint-disable @next/next/no-img-element */
 "use client";
 
 import React from "react";
 import { Row, Col, Typography, Button, Space, Card } from "antd";
-import { CheckCircleOutlined, GlobalOutlined, TeamOutlined } from "@ant-design/icons";
 import { motion } from "framer-motion";
 import PageBanner from "./PageBanner";
 
-const { Title, Paragraph, Text } = Typography;
+const { Title, Text } = Typography;
 
 export function AboutSection() {
   return (

@@ -1,14 +1,13 @@
+/* eslint-disable @next/next/no-img-element */
 "use client";
 
 import React from "react";
-import { Modal, Row, Col, Typography, Tag, Divider, Descriptions, Button, Badge } from "antd";
+import { Modal, Row, Col, Typography, Tag, Divider, Descriptions, Button } from "antd";
 import { 
   GlobalOutlined, 
   BoxPlotOutlined, 
   InfoCircleOutlined, 
-  ShoppingCartOutlined,
-  ColumnWidthOutlined,
-  DashboardOutlined
+  ShoppingCartOutlined
 } from "@ant-design/icons";
 
 const { Title, Text, Paragraph } = Typography;
