@@ -175,6 +175,18 @@ const UserTable = () => {
     await refreshUsers();
   };
 
+  const openActivateConfirm = (record: UserRow) => {
+    Modal.confirm({
+      title: 'Xác nhận kích hoạt tài khoản',
+      content: 'Bạn có chắc chắn muốn kích hoạt lại tài khoản này không?',
+      okText: 'Kích hoạt',
+      cancelText: t('confirm.cancel'),
+      onOk: async () => {
+        await handleUpdateUser(record._id, { isActive: true });
+      },
+    });
+  };
+
   const openDeactivateConfirm = (record: UserRow) => {
     let reason = '';
 
@@ -323,13 +335,13 @@ const UserTable = () => {
               }}
             />
           </Tooltip>
-          <Tooltip title={record.isActive ? t('actions.delete') : t('status.inactive')}>
+          <Tooltip title={record.isActive ? t('actions.delete') : 'Kích hoạt'}>
             <Button
               type="text"
-              danger
-              icon={<DeleteOutlined />}
-              disabled={!record.isActive || record.username === currentUsername}
-              onClick={() => openDeactivateConfirm(record)}
+              danger={record.isActive}
+              icon={record.isActive ? <DeleteOutlined /> : <CheckCircleOutlined style={{ color: '#52c41a' }} />}
+              disabled={record.username === currentUsername}
+              onClick={() => record.isActive ? openDeactivateConfirm(record) : openActivateConfirm(record)}
             />
           </Tooltip>
         </Space>
